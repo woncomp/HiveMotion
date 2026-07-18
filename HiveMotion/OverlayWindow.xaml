@@ -1,0 +1,51 @@
+<Window x:Class="HiveMotion.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="HiveMotion"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        WindowStartupLocation="CenterScreen"
+        Width="800"
+        Height="600"
+        ResizeMode="NoResize"
+        SnapsToDevicePixels="True">
+
+    <Window.Resources>
+        <!-- Global resources are defined in App.xaml -->
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid"
+          Background="Transparent"
+          HorizontalAlignment="Stretch"
+          VerticalAlignment="Stretch">
+
+        <!-- Background dim -->
+        <Border x:Name="DimOverlay"
+               Background="#CC000000"
+               Opacity="0">
+            <Border.Triggers>
+                <EventTrigger RoutedEvent="Loaded">
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                             From="0" To="1"
+                                             Duration="0:0:0.2" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </EventTrigger>
+            </Border.Triggers>
+        </Border>
+
+        <ContentControl x:Name="ViewHost"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+
+    </Grid>
+</Window>
