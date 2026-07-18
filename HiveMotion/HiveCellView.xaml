@@ -49,15 +49,15 @@
                 <PathGeometry Figures="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z" />
             </Grid.Clip>
 
-            <!-- 应用图标居中(启动/未启动一致) -->
+            <!-- 应用图标:靠近六边形中心 -->
             <Image x:Name="AppIcon" Width="48" Height="48"
                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                   Margin="0,0,0,40" Opacity="0.9"
+                   Margin="0,0,0,6" Opacity="0.9"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    Stretch="Uniform" />
             <TextBlock x:Name="FallbackGlyph" Visibility="Collapsed"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Margin="0,0,0,40" FontSize="30" FontWeight="Bold" Foreground="#66FFFFFF" />
+                       Margin="0,0,0,6" FontSize="30" FontWeight="Bold" Foreground="#66FFFFFF" />
 
             <!-- 底部压暗,保证文字可读 -->
             <Path Data="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z">
@@ -79,10 +79,16 @@
                     </RadialGradientBrush>
                 </Ellipse.Fill>
             </Ellipse>
+
+            <!-- 名称紧跟图标下方,位于六边形腹部宽区(裁剪在六边形内,不溢出) -->
+            <TextBlock x:Name="CaptionText"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Margin="0,70,0,0" FontSize="11" Foreground="#F2FFFFFF"
+                       TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="100" />
         </Grid>
 
-        <!-- 蜂蜜滴键帽:上移并略微超出六边形边缘 -->
-        <Border VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,2,0,0"
+        <!-- 蜂蜜滴键帽 -->
+        <Border VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,12,0,0"
                 MinWidth="27" Height="27" Padding="6,0"
                 CornerRadius="8" BorderThickness="1" BorderBrush="#B3FFE9B0"
                 RenderTransformOrigin="0.5,0.5">
@@ -99,12 +105,6 @@
             <TextBlock x:Name="KeyText" Text="A" FontSize="13" FontWeight="ExtraBold"
                        Foreground="#3D2C00" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
-
-        <!-- 图标下方:运行中显示窗口标题,未启动显示应用名 -->
-        <TextBlock x:Name="CaptionText" VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                   Margin="0,0,0,21" FontSize="11" Foreground="#F2FFFFFF"
-                   TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="92"
-                   IsHitTestVisible="False" />
         </Grid>
 
         <!-- 悬停提亮(放在缓存层之外:透明度动画只是廉价混合,不会击穿位图缓存) -->
