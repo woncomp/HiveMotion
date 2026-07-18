@@ -11,8 +11,7 @@
         ShowActivated="False"
         ResizeMode="NoResize"
         WindowStartupLocation="Manual"
-        Left="0" Top="0"
-        SnapsToDevicePixels="True">
+        Left="0" Top="0">
     <Grid x:Name="RootGrid">
         <local:TaskGridView x:Name="TaskGrid" />
     </Grid>

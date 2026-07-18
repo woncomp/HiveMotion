@@ -5,7 +5,8 @@
              Background="Transparent"
              Cursor="Hand"
              FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei">
-    <Grid x:Name="CellRoot">
+    <Grid>
+        <Grid x:Name="CellRoot">
         <!-- 位图缓存:阴影/渐变一次性光栅化,滑动/缩放/淡出不触发逐帧重绘(修复拖影与卡顿) -->
         <Grid.CacheMode>
             <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
@@ -53,11 +54,7 @@
                    HorizontalAlignment="Center" VerticalAlignment="Center"
                    Margin="0,0,0,26" Opacity="0.9"
                    RenderOptions.BitmapScalingMode="HighQuality"
-                   Stretch="Uniform">
-                <Image.RenderTransform>
-                    <ScaleTransform x:Name="IconScale" CenterX="24" CenterY="24" ScaleX="1" ScaleY="1" />
-                </Image.RenderTransform>
-            </Image>
+                   Stretch="Uniform" />
             <TextBlock x:Name="FallbackGlyph" Visibility="Collapsed"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Margin="0,0,0,26" FontSize="30" FontWeight="Bold" Foreground="#66FFFFFF" />
@@ -82,11 +79,6 @@
                     </RadialGradientBrush>
                 </Ellipse.Fill>
             </Ellipse>
-
-            <!-- 悬停提亮 -->
-            <Path x:Name="HoverGlow" Opacity="0"
-                  Data="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z"
-                  Fill="#12FFFFFF" />
         </Grid>
 
         <!-- 蜂蜜滴键帽 -->
@@ -104,9 +96,6 @@
             <Border.Effect>
                 <DropShadowEffect Color="#F5B301" Opacity="0.55" BlurRadius="10" ShadowDepth="2" />
             </Border.Effect>
-            <Border.RenderTransform>
-                <ScaleTransform x:Name="KeycapScale" ScaleX="1" ScaleY="1" />
-            </Border.RenderTransform>
             <TextBlock x:Name="KeyText" Text="A" FontSize="13" FontWeight="ExtraBold"
                        Foreground="#3D2C00" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
@@ -118,5 +107,11 @@
             <TextBlock x:Name="AppNameText" FontSize="9" Foreground="#CCF5C542"
                        TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="90" />
         </StackPanel>
+        </Grid>
+
+        <!-- 悬停提亮(放在缓存层之外:透明度动画只是廉价混合,不会击穿位图缓存) -->
+        <Path x:Name="HoverGlow" Opacity="0" IsHitTestVisible="False"
+              Data="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z"
+              Fill="#12FFFFFF" />
     </Grid>
 </UserControl>

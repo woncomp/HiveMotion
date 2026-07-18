@@ -50,13 +50,11 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
 
     private void SetHover(bool hover)
     {
+        // Only the root scale (cached-texture op) and the external glow overlay animate;
+        // nothing inside the bitmap-cached grid changes, so the cache survives the animation.
         double scale = hover ? 1.06 : 1.0;
         SplineAnimate(HoverScaleTransform, ScaleTransform.ScaleXProperty, scale, 300);
         SplineAnimate(HoverScaleTransform, ScaleTransform.ScaleYProperty, scale, 300);
-        SplineAnimate(IconScale, ScaleTransform.ScaleXProperty, hover ? 1.1 : 1.0, 300);
-        SplineAnimate(IconScale, ScaleTransform.ScaleYProperty, hover ? 1.1 : 1.0, 300);
-        SplineAnimate(KeycapScale, ScaleTransform.ScaleXProperty, hover ? 1.1 : 1.0, 300);
-        SplineAnimate(KeycapScale, ScaleTransform.ScaleYProperty, hover ? 1.1 : 1.0, 300);
         SplineAnimate(HoverGlow, OpacityProperty, hover ? 1.0 : 0.0, 300);
     }
 
