@@ -5,6 +5,9 @@
     <Grid x:Name="Root" SizeChanged="OnRootSizeChanged">
         <!-- 桌面截图 + 高斯模糊(还原演示的 backdrop blur) -->
         <Image x:Name="BackdropImage" Stretch="Fill" IsHitTestVisible="False">
+            <Image.CacheMode>
+                <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
+            </Image.CacheMode>
             <Image.Effect>
                 <BlurEffect Radius="16" RenderingBias="Performance" />
             </Image.Effect>
@@ -60,6 +63,9 @@
                         Width="460" MaxHeight="340" CornerRadius="16"
                         Background="#E614161D" BorderBrush="#47F5B301" BorderThickness="1"
                         Visibility="Collapsed" Opacity="0">
+                    <Border.CacheMode>
+                        <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
+                    </Border.CacheMode>
                     <Border.Effect>
                         <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="32" ShadowDepth="12" />
                     </Border.Effect>

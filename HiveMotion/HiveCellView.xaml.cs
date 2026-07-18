@@ -79,6 +79,19 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         SplineAnimate(this, OpacityProperty, searching ? 0.6 : 1.0, 420, delay);
     }
 
+    /// <summary>Clear search transforms instantly, without scheduling animations.</summary>
+    public void ResetSearchTransforms()
+    {
+        ShiftTransform.BeginAnimation(TranslateTransform.XProperty, null);
+        SearchScaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        SearchScaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        BeginAnimation(OpacityProperty, null);
+        ShiftTransform.X = 0;
+        SearchScaleTransform.ScaleX = 1;
+        SearchScaleTransform.ScaleY = 1;
+        Opacity = 1;
+    }
+
     private static void SplineAnimate(IAnimatable target, DependencyProperty property, double to, double durationMs, double delayMs = 0)
     {
         var animation = new DoubleAnimationUsingKeyFrames

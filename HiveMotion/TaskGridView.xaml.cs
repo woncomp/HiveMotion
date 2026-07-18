@@ -126,7 +126,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         ResultPanel.Opacity = 0;
         ResultPanel.Visibility = Visibility.Collapsed;
         foreach (var view in _cellViews)
-            view.SetSearching(false);
+            view.ResetSearchTransforms();
     }
 
     public void AppendSearchChar(char c)

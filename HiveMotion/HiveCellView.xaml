@@ -6,6 +6,10 @@
              Cursor="Hand"
              FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei">
     <Grid x:Name="CellRoot">
+        <!-- 位图缓存:阴影/渐变一次性光栅化,滑动/缩放/淡出不触发逐帧重绘(修复拖影与卡顿) -->
+        <Grid.CacheMode>
+            <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
+        </Grid.CacheMode>
         <Grid.Effect>
             <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="22" ShadowDepth="10" Direction="90" RenderingBias="Quality" />
         </Grid.Effect>
