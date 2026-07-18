@@ -39,7 +39,7 @@ public sealed class TrayIconManager : IDisposable
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = LoadAppIcon(),
             Text = "HiveMotion",
             Visible = true,
             ContextMenuStrip = _contextMenu
@@ -48,6 +48,25 @@ public sealed class TrayIconManager : IDisposable
         {
             // no-op in MVP
         };
+    }
+
+    private static System.Drawing.Icon LoadAppIcon()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (path != null)
+            {
+                var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                if (icon != null)
+                    return icon;
+            }
+        }
+        catch
+        {
+            // fall through to the stock icon
+        }
+        return SystemIcons.Application;
     }
 
     public void Dispose()
