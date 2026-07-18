@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 
 namespace HiveMotion;
@@ -7,8 +8,7 @@ namespace HiveMotion;
 public enum OverlayState
 {
     Hidden,
-    MainMenu,
-    SubMenu
+    TaskGrid
 }
 
 public partial class App : System.Windows.Application
@@ -19,12 +19,13 @@ public partial class App : System.Windows.Application
 
     private GlobalKeyboardHook? _keyboardHook;
     private OverlayWindow? _overlayWindow;
-    private WindowManager? _windowManager;
     private TrayIconManager? _trayIconManager;
     private AutoStartManager? _autoStartManager;
+    private WindowScanner? _windowScanner;
+    private CellAssigner? _cellAssigner;
 
     private OverlayState _state = OverlayState.Hidden;
-    private IReadOnlyList<WindowItem> _currentSubMenuItems = new List<WindowItem>();
+    private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -37,28 +38,27 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var appItem = new AppItem
-        {
-            Key = 'N',
-            ProcessName = "notepad",
-            ExecutablePath = "notepad.exe",
-            DisplayName = "记事本",
-            IconGlyph = "📝"
-        };
-
-        _autoStartManager = new AutoStartManager();
-        _windowManager = new WindowManager(appItem);
-        _overlayWindow = new OverlayWindow(appItem);
+        var config = AppConfig.Default;
+        _windowScanner = new WindowScanner(config.PriorityProcessNames);
+        _cellAssigner = new CellAssigner(config);
+        _overlayWindow = new OverlayWindow();
+        _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
+        _overlayWindow.CloseRequested += (_, _) => CloseOverlay();
         _overlayWindow.Hide();
 
+        _autoStartManager = new AutoStartManager();
         _trayIconManager = new TrayIconManager(_autoStartManager);
         _trayIconManager.ExitRequested += (_, _) => Shutdown();
 
         _keyboardHook = new GlobalKeyboardHook();
         _keyboardHook.WinTabPressed += OnWinTabPressed;
         _keyboardHook.EscapePressed += OnEscapePressed;
-        _keyboardHook.AppKeyPressed += OnAppKeyPressed;
-        _keyboardHook.NumberKeyPressed += OnNumberKeyPressed;
+        _keyboardHook.CellKeyPressed += OnCellKeyPressed;
+        _keyboardHook.SearchRequested += OnSearchRequested;
+        _keyboardHook.SearchCharTyped += OnSearchCharTyped;
+        _keyboardHook.SearchBackspace += (_, _) => _overlayWindow.SearchBackspace();
+        _keyboardHook.SearchSubmit += (_, _) => _overlayWindow.SubmitSearch();
+        _keyboardHook.SearchArrow += (_, delta) => _overlayWindow.MoveSearchHighlight(delta);
         _keyboardHook.Start();
     }
 
@@ -77,90 +77,91 @@ public partial class App : System.Windows.Application
 
     private void OnWinTabPressed(object? sender, EventArgs e)
     {
-        switch (_state)
-        {
-            case OverlayState.Hidden:
-                _state = OverlayState.MainMenu;
-                _keyboardHook!.ShouldInterceptWinTab = false;
-                _keyboardHook.ShouldInterceptAppKey = true;
-                _keyboardHook.ShouldInterceptNumberKeys = false;
-                _overlayWindow!.ShowMainMenu();
-                break;
+        if (_state == OverlayState.Hidden)
+            OpenTaskGrid();
+        else
+            CloseOverlay();
+    }
 
-            case OverlayState.MainMenu:
-            case OverlayState.SubMenu:
-                HideOverlay();
-                break;
-        }
+    private void OpenTaskGrid()
+    {
+        IReadOnlyList<HiveCell> cells = Array.Empty<HiveCell>();
+        Dispatcher.Invoke(() =>
+        {
+            var windows = _windowScanner!.Scan();
+            cells = _cellAssigner!.Assign(windows);
+            _currentCells = cells;
+        });
+
+        _state = OverlayState.TaskGrid;
+        _keyboardHook!.OverlayOpen = true;
+        _keyboardHook.Searching = false;
+        _overlayWindow!.ShowTaskGrid(cells);
     }
 
     private void OnEscapePressed(object? sender, EventArgs e)
     {
-        switch (_state)
-        {
-            case OverlayState.MainMenu:
-                HideOverlay();
-                break;
-
-            case OverlayState.SubMenu:
-                _state = OverlayState.MainMenu;
-                _keyboardHook!.ShouldInterceptAppKey = true;
-                _keyboardHook.ShouldInterceptNumberKeys = false;
-                _overlayWindow!.ShowMainMenu();
-                break;
-        }
-    }
-
-    private void OnAppKeyPressed(object? sender, char key)
-    {
-        if (_state != OverlayState.MainMenu || key != 'N')
+        if (_state != OverlayState.TaskGrid)
             return;
 
-        var windows = _windowManager!.FindWindows();
-
-        if (windows.Count == 0)
+        if (_keyboardHook!.Searching)
         {
-            _windowManager.Launch();
-            HideOverlay();
-        }
-        else if (windows.Count == 1)
-        {
-            _windowManager.ActivateWindow(windows[0].Handle);
-            HideOverlay();
+            _keyboardHook.Searching = false;
+            _overlayWindow!.ExitSearch();
         }
         else
         {
-            _currentSubMenuItems = windows;
-            _state = OverlayState.SubMenu;
-            _keyboardHook!.ShouldInterceptAppKey = false;
-            _keyboardHook.ShouldInterceptNumberKeys = true;
-            _overlayWindow!.ShowSubMenu(windows);
+            CloseOverlay();
         }
     }
 
-    private void OnNumberKeyPressed(object? sender, int number)
+    private void OnCellKeyPressed(object? sender, char key)
     {
-        if (_state != OverlayState.SubMenu)
+        if (_state != OverlayState.TaskGrid)
             return;
 
-        foreach (var item in _currentSubMenuItems)
-        {
-            if (item.Index == number)
-            {
-                _windowManager!.ActivateWindow(item.Handle);
-                HideOverlay();
-                return;
-            }
-        }
+        var cell = _currentCells.FirstOrDefault(c => c.Letter == key);
+        if (cell != null)
+            ActivateCell(cell);
     }
 
-    private void HideOverlay()
+    private void OnSearchRequested(object? sender, EventArgs e)
+    {
+        if (_state != OverlayState.TaskGrid || _keyboardHook!.Searching)
+            return;
+        _keyboardHook.Searching = true;
+        _overlayWindow!.EnterSearch();
+    }
+
+    private void OnSearchCharTyped(object? sender, char c)
+    {
+        if (_state != OverlayState.TaskGrid)
+            return;
+        _overlayWindow!.AppendSearchChar(c);
+    }
+
+    private void ActivateCell(HiveCell cell)
+    {
+        if (cell.IsRunning)
+        {
+            WindowManager.ActivateWindow(cell.WindowHandle);
+        }
+        else if (cell.Preset != null)
+        {
+            WindowManager.Launch(cell.Preset.ExecutablePath);
+        }
+        CloseOverlay();
+    }
+
+    private void CloseOverlay()
     {
         _state = OverlayState.Hidden;
-        _keyboardHook!.ShouldInterceptWinTab = true;
-        _keyboardHook.ShouldInterceptAppKey = false;
-        _keyboardHook.ShouldInterceptNumberKeys = false;
+        if (_keyboardHook != null)
+        {
+            _keyboardHook.OverlayOpen = false;
+            _keyboardHook.Searching = false;
+        }
         _overlayWindow!.HideOverlay();
-        _currentSubMenuItems = new List<WindowItem>();
+        _currentCells = new List<HiveCell>();
     }
 }

@@ -1,89 +1,136 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 
 namespace HiveMotion;
 
 public partial class OverlayWindow : Window
 {
-    private readonly MainMenuView _mainMenuView = new();
-    private readonly SubMenuView _subMenuView = new();
-    private readonly AppItem _appItem;
-
-    public OverlayWindow(AppItem appItem)
+    public OverlayWindow()
     {
-        _appItem = appItem ?? throw new ArgumentNullException(nameof(appItem));
         InitializeComponent();
-        _mainMenuView.DataContext = appItem;
-        Loaded += OnLoaded;
+        Width = SystemParameters.PrimaryScreenWidth;
+        Height = SystemParameters.PrimaryScreenHeight;
+
+        TaskGrid.CellChosen += (_, cell) => CellChosen?.Invoke(this, cell);
+        TaskGrid.CloseRequested += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    public event EventHandler<HiveCell>? CellChosen;
+    public event EventHandler? CloseRequested;
+
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        // Remove WS_EX_APPWINDOW to hide from Alt+Tab; keep tool window style.
+        base.OnSourceInitialized(e);
         var helper = new WindowInteropHelper(this);
+
+        // Hide from Alt+Tab and never steal activation from the window we are switching away from.
         int exStyle = NativeMethods.GetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE);
-        exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW) & ~NativeMethods.WS_EX_APPWINDOW;
+        exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE) & ~NativeMethods.WS_EX_APPWINDOW;
         NativeMethods.SetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE, exStyle);
+
+        TryEnableAcrylic(helper.Handle);
     }
 
-    public void ShowMainMenu()
+    /// <summary>Frosted backdrop like the demo's blur(52px) layer; a dim border inside the view is the fallback tint.</summary>
+    private static void TryEnableAcrylic(IntPtr hwnd)
+    {
+        try
+        {
+            var policy = new NativeMethods.AccentPolicy
+            {
+                AccentState = NativeMethods.AccentState.EnableAcrylicBlurBehind,
+                AccentFlags = 0,
+                GradientColor = 0x20101A26, // ABGR: faint honey-blue tint over the blurred desktop
+                AnimationId = 0
+            };
+
+            int size = Marshal.SizeOf(policy);
+            IntPtr policyPtr = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.StructureToPtr(policy, policyPtr, false);
+                var data = new NativeMethods.WindowCompositionAttributeData
+                {
+                    Attribute = NativeMethods.WCA_ACCENT_POLICY,
+                    Data = policyPtr,
+                    SizeOfData = size
+                };
+                NativeMethods.SetWindowCompositionAttribute(hwnd, ref data);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(policyPtr);
+            }
+        }
+        catch
+        {
+            // Older Windows without acrylic: the view's own dim layer still renders correctly.
+        }
+    }
+
+    public void ShowTaskGrid(IReadOnlyList<HiveCell> cells)
     {
         Dispatcher.BeginInvoke(() =>
         {
-            ViewHost.Content = _mainMenuView;
+            // Capture the desktop BEFORE showing so the frosted-glass layer sees the real screen.
+            TaskGrid.SetBackdrop(CaptureBlurredBackdrop());
+            TaskGrid.SetCells(cells);
             Show();
-            Opacity = 1;
         });
     }
 
-    public void ShowSubMenu(IEnumerable<WindowItem> windows)
+    private static System.Windows.Media.ImageSource? CaptureBlurredBackdrop()
     {
-        Dispatcher.BeginInvoke(() =>
+        System.Drawing.Bitmap? full = null;
+        System.Drawing.Bitmap? small = null;
+        IntPtr hBitmap = IntPtr.Zero;
+        try
         {
-            _subMenuView.SetItems(windows);
-            ViewHost.Content = _subMenuView;
-            _subMenuView.PlayAnimation();
-        });
+            var bounds = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+            full = new System.Drawing.Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = System.Drawing.Graphics.FromImage(full))
+                g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+
+            // Quarter-size + stretch gives most of the blur; the view adds a BlurEffect on top.
+            small = new System.Drawing.Bitmap(bounds.Width / 4, bounds.Height / 4, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = System.Drawing.Graphics.FromImage(small))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(full, 0, 0, small.Width, small.Height);
+            }
+
+            hBitmap = small.GetHbitmap(System.Drawing.Color.FromArgb(0));
+            var source = Imaging.CreateBitmapSourceFromHBitmap(
+                hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
+            return source;
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            if (hBitmap != IntPtr.Zero)
+                NativeMethods.DeleteObject(hBitmap);
+            full?.Dispose();
+            small?.Dispose();
+        }
     }
+
+    public void EnterSearch() => Dispatcher.BeginInvoke(TaskGrid.EnterSearch);
+    public void ExitSearch() => Dispatcher.BeginInvoke(TaskGrid.ExitSearch);
+    public void AppendSearchChar(char c) => Dispatcher.BeginInvoke(() => TaskGrid.AppendSearchChar(c));
+    public void SearchBackspace() => Dispatcher.BeginInvoke(TaskGrid.SearchBackspace);
+    public void MoveSearchHighlight(int delta) => Dispatcher.BeginInvoke(() => TaskGrid.MoveSearchHighlight(delta));
+    public void SubmitSearch() => Dispatcher.BeginInvoke(TaskGrid.SubmitSearch);
 
     public void HideOverlay()
     {
-        Dispatcher.BeginInvoke(() =>
-        {
-            var storyboard = new Storyboard();
-            var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(150));
-            Storyboard.SetTarget(fade, this);
-            Storyboard.SetTargetProperty(fade, new PropertyPath(OpacityProperty));
-            storyboard.Children.Add(fade);
-            storyboard.Completed += (_, _) =>
-            {
-                ViewHost.Content = null;
-                Hide();
-            };
-            storyboard.Begin();
-        });
-    }
-
-    public new void Hide()
-    {
-        Dispatcher.BeginInvoke(() =>
-        {
-            ViewHost.Content = null;
-            base.Hide();
-            Opacity = 1;
-        });
-    }
-
-    public void ShowOverlay()
-    {
-        Dispatcher.BeginInvoke(() =>
-        {
-            Show();
-            Opacity = 1;
-        });
+        Dispatcher.BeginInvoke(Hide);
     }
 }
