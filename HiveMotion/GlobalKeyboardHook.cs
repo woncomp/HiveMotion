@@ -5,6 +5,8 @@ using System.Threading;
 
 namespace HiveMotion;
 
+/// <summary>Global low-level keyboard hook. Its only job is intercepting Win+Tab;
+/// every other key goes to the overlay window itself once it has real focus.</summary>
 public sealed class GlobalKeyboardHook : IDisposable
 {
     private const uint InjectedExtraInfo = 0x484D4F54; // 'HMOT': marks our own synthetic chord key
@@ -17,24 +19,7 @@ public sealed class GlobalKeyboardHook : IDisposable
     private NativeMethods.LowLevelKeyboardProc? _hookProc;
     private bool _disposed;
 
-    /// <summary>Overlay is visible: letters / space / esc are consumed by us.</summary>
-    public bool OverlayOpen { get; set; }
-
-    /// <summary>Search box is active: typed characters edit the query instead of jumping to cells.</summary>
-    public bool Searching { get; set; }
-
     public event EventHandler? WinTabPressed;
-    public event EventHandler? EscapePressed;
-    /// <summary>A cell hotkey (A-Z) while the overlay is open and not searching.</summary>
-    public event EventHandler<char>? CellKeyPressed;
-    /// <summary>Space pressed while the overlay is open and not searching: enter search mode.</summary>
-    public event EventHandler? SearchRequested;
-    /// <summary>A character typed while searching.</summary>
-    public event EventHandler<char>? SearchCharTyped;
-    public event EventHandler? SearchBackspace;
-    public event EventHandler? SearchSubmit;
-    /// <summary>Arrow key while searching: -1 = up, +1 = down.</summary>
-    public event EventHandler<int>? SearchArrow;
 
     public void Start()
     {
@@ -125,91 +110,20 @@ public sealed class GlobalKeyboardHook : IDisposable
             return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         int vk = (int)kbd.vkCode;
+        if (vk != NativeMethods.VK_TAB)
+            return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         bool winDown = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LWIN) & 0x8000) != 0 ||
                        (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RWIN) & 0x8000) != 0;
-
-        if (vk == NativeMethods.VK_TAB && winDown)
-        {
-            if (isDown)
-            {
-                WinTabPressed?.Invoke(this, EventArgs.Empty);
-                InjectBenignChordKey();
-            }
-            return (IntPtr)1;
-        }
-
-        if (!OverlayOpen)
+        if (!winDown)
             return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
-        // Key-ups for keys we swallow must be swallowed too, or apps see orphan key-ups.
-        bool handled;
-        if (vk == NativeMethods.VK_ESCAPE)
+        if (isDown)
         {
-            handled = true;
-            if (isDown)
-                EscapePressed?.Invoke(this, EventArgs.Empty);
+            WinTabPressed?.Invoke(this, EventArgs.Empty);
+            InjectBenignChordKey();
         }
-        else if (Searching)
-        {
-            handled = true;
-            switch (vk)
-            {
-                case >= NativeMethods.VK_A and <= NativeMethods.VK_Z:
-                    if (isDown) SearchCharTyped?.Invoke(this, (char)('a' + vk - NativeMethods.VK_A));
-                    break;
-                case >= NativeMethods.VK_0 and <= NativeMethods.VK_9:
-                    if (isDown) SearchCharTyped?.Invoke(this, (char)('0' + vk - NativeMethods.VK_0));
-                    break;
-                case >= NativeMethods.VK_NUMPAD0 and <= NativeMethods.VK_NUMPAD9:
-                    if (isDown) SearchCharTyped?.Invoke(this, (char)('0' + vk - NativeMethods.VK_NUMPAD0));
-                    break;
-                case NativeMethods.VK_SPACE:
-                    if (isDown) SearchCharTyped?.Invoke(this, ' ');
-                    break;
-                case NativeMethods.VK_OEM_MINUS:
-                    if (isDown) SearchCharTyped?.Invoke(this, '-');
-                    break;
-                case NativeMethods.VK_OEM_PERIOD:
-                    if (isDown) SearchCharTyped?.Invoke(this, '.');
-                    break;
-                case NativeMethods.VK_BACK:
-                    if (isDown) SearchBackspace?.Invoke(this, EventArgs.Empty);
-                    break;
-                case NativeMethods.VK_RETURN:
-                    if (isDown) SearchSubmit?.Invoke(this, EventArgs.Empty);
-                    break;
-                case NativeMethods.VK_UP:
-                    if (isDown) SearchArrow?.Invoke(this, -1);
-                    break;
-                case NativeMethods.VK_DOWN:
-                    if (isDown) SearchArrow?.Invoke(this, +1);
-                    break;
-                default:
-                    handled = false;
-                    break;
-            }
-        }
-        else if (vk is >= NativeMethods.VK_A and <= NativeMethods.VK_Z)
-        {
-            handled = true;
-            if (isDown)
-                CellKeyPressed?.Invoke(this, (char)('A' + vk - NativeMethods.VK_A));
-        }
-        else if (vk == NativeMethods.VK_SPACE)
-        {
-            handled = true;
-            if (isDown)
-                SearchRequested?.Invoke(this, EventArgs.Empty);
-        }
-        else
-        {
-            handled = false;
-        }
-
-        return handled
-            ? (IntPtr)1
-            : NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+        return (IntPtr)1;
     }
 
     public void Dispose()

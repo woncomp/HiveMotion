@@ -12,6 +12,7 @@ using ColorConverter = System.Windows.Media.ColorConverter;
 using Cursors = System.Windows.Input.Cursors;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Orientation = System.Windows.Controls.Orientation;
 using Point = System.Windows.Point;
 
@@ -82,9 +83,6 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             return;
         _searching = true;
         HidePreview();
-        _query = string.Empty;
-        QueryText.Text = string.Empty;
-        QueryPlaceholder.Visibility = Visibility.Visible;
 
         BarIdle.Visibility = Visibility.Collapsed;
         BarSearch.Visibility = Visibility.Visible;
@@ -92,13 +90,19 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         SpaceBarRidge.Opacity = 1;
         EscHintText.Text = "退 出 搜 索";
 
+        SearchInput.Text = string.Empty;
         RebuildResults();
         ResultPanel.Visibility = Visibility.Visible;
         SplineAnimate(ResultPanel, UIElement.OpacityProperty, 1, 400);
         SplineAnimate(ResultPanelSlide, TranslateTransform.YProperty, 0, 400);
 
         foreach (var view in _cellViews)
+        {
+            view.IsHitTestVisible = false;
             view.SetSearching(true);
+        }
+
+        SearchInput.Focus();
     }
 
     public void ExitSearch()
@@ -107,6 +111,13 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             return;
         _searching = false;
 
+        // Return keyboard focus to the window itself: with null focus (ClearFocus)
+        // no routed key events fire at all and the grid hotkeys go dead.
+        var window = Window.GetWindow(this);
+        if (window != null)
+            Keyboard.Focus(window);
+
+        SearchInput.Text = string.Empty;
         BarSearch.Visibility = Visibility.Collapsed;
         BarIdle.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
@@ -123,14 +134,17 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         }), System.Windows.Threading.DispatcherPriority.Background);
 
         foreach (var view in _cellViews)
+        {
+            view.IsHitTestVisible = true;
             view.SetSearching(false);
+        }
     }
 
     private void ExitSearchImmediate()
     {
         _searching = false;
         _query = string.Empty;
-        QueryText.Text = string.Empty;
+        SearchInput.Text = string.Empty;
         BarSearch.Visibility = Visibility.Collapsed;
         BarIdle.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
@@ -140,27 +154,71 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         ResultPanel.Opacity = 0;
         ResultPanel.Visibility = Visibility.Collapsed;
         foreach (var view in _cellViews)
+        {
+            view.IsHitTestVisible = true;
             view.ResetSearchTransforms();
+        }
     }
 
-    public void AppendSearchChar(char c)
+    private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (!_searching)
-            return;
-        _query += c;
-        QueryText.Text = _query;
-        QueryPlaceholder.Visibility = Visibility.Collapsed;
-        RebuildResults();
-    }
-
-    public void SearchBackspace()
-    {
-        if (!_searching || _query.Length == 0)
-            return;
-        _query = _query.Substring(0, _query.Length - 1);
-        QueryText.Text = _query;
+        _query = SearchInput.Text;
         QueryPlaceholder.Visibility = _query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        RebuildResults();
+        if (_searching)
+            RebuildResults();
+    }
+
+    private void OnSearchInputPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Down:
+                MoveSearchHighlight(+1);
+                e.Handled = true;
+                break;
+            case Key.Up:
+                MoveSearchHighlight(-1);
+                e.Handled = true;
+                break;
+            case Key.Enter:
+                SubmitSearch();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                ExitSearch();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>Key handling for the plain-grid mode (routed here from the overlay window).</summary>
+    public void HandleWindowKeyDown(KeyEventArgs e)
+    {
+        if (_searching || e.Handled)
+            return;
+
+        if (e.Key == Key.Escape)
+        {
+            CloseRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Space)
+        {
+            EnterSearch();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key is >= Key.A and <= Key.Z)
+        {
+            char letter = (char)('A' + (e.Key - Key.A));
+            var cell = _cells.FirstOrDefault(c => c.Letter == letter);
+            if (cell != null)
+            {
+                CellChosen?.Invoke(this, cell);
+                e.Handled = true;
+            }
+        }
     }
 
     public void MoveSearchHighlight(int delta)
@@ -360,25 +418,37 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             TextTrimming = TextTrimming.CharacterEllipsis
         };
 
-        var subtitle = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-        subtitle.Children.Add(new TextBlock
+        var subtitle = new TextBlock
         {
             Text = cell.AppName,
             FontSize = 11,
-            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#66FFFFFF"))
-        });
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#66FFFFFF")),
+            Margin = new Thickness(0, 2, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+
+        var texts = new StackPanel { Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        texts.Children.Add(title);
+        texts.Children.Add(subtitle);
+
+        // 状态放在最右边:运行中 / 未运行
+        var status = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
         if (cell.IsRunning)
         {
-            subtitle.Children.Add(new Border
+            status.Children.Add(new Border
             {
                 Width = 6,
                 Height = 6,
                 CornerRadius = new CornerRadius(3),
                 Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5B301")),
-                Margin = new Thickness(8, 0, 4, 0),
+                Margin = new Thickness(0, 0, 5, 0),
                 VerticalAlignment = VerticalAlignment.Center
             });
-            subtitle.Children.Add(new TextBlock
+            status.Children.Add(new TextBlock
             {
                 Text = "运 行 中",
                 FontSize = 11,
@@ -388,48 +458,14 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         }
         else
         {
-            subtitle.Children.Add(new TextBlock
+            status.Children.Add(new TextBlock
             {
-                Text = "· 未 运 行 , 选 择 以 启 动",
+                Text = "未 运 行",
                 FontSize = 11,
                 Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4DFFFFFF")),
-                Margin = new Thickness(6, 0, 0, 0)
+                VerticalAlignment = VerticalAlignment.Center
             });
         }
-
-        var texts = new StackPanel { Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
-        texts.Children.Add(title);
-        texts.Children.Add(subtitle);
-
-        var keycap = new Border
-        {
-            Width = 24,
-            Height = 24,
-            CornerRadius = new CornerRadius(6),
-            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFE9B0")),
-            BorderThickness = new Thickness(1),
-            VerticalAlignment = VerticalAlignment.Center,
-            Background = new LinearGradientBrush
-            {
-                StartPoint = new Point(0.4, 0),
-                EndPoint = new Point(0.6, 1),
-                GradientStops = new GradientStopCollection
-                {
-                    new GradientStop((Color)ColorConverter.ConvertFromString("#FFE6A3"), 0),
-                    new GradientStop((Color)ColorConverter.ConvertFromString("#F5B301"), 0.6),
-                    new GradientStop((Color)ColorConverter.ConvertFromString("#D99300"), 1)
-                }
-            },
-            Child = new TextBlock
-            {
-                Text = cell.Letter.ToString(),
-                FontSize = 12,
-                FontWeight = FontWeights.ExtraBold,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#3D2C00")),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -437,11 +473,11 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(iconBorder, 0);
         Grid.SetColumn(texts, 1);
-        Grid.SetColumn(keycap, 2);
+        Grid.SetColumn(status, 2);
         grid.Children.Add(bar);
         grid.Children.Add(iconBorder);
         grid.Children.Add(texts);
-        grid.Children.Add(keycap);
+        grid.Children.Add(status);
 
         var root = new Border
         {
@@ -500,7 +536,10 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void OnBackdropClick(object sender, MouseButtonEventArgs e)
     {
-        CloseRequested?.Invoke(this, EventArgs.Empty);
+        if (_searching)
+            ExitSearch();
+        else
+            CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSpaceBarClick(object sender, MouseButtonEventArgs e)

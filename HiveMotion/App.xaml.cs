@@ -26,6 +26,7 @@ public partial class App : System.Windows.Application
 
     private OverlayState _state = OverlayState.Hidden;
     private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
+    private IntPtr _previousForeground;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -43,7 +44,7 @@ public partial class App : System.Windows.Application
         _cellAssigner = new CellAssigner(config);
         _overlayWindow = new OverlayWindow();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
-        _overlayWindow.CloseRequested += (_, _) => CloseOverlay();
+        _overlayWindow.CloseRequested += (_, _) => CloseOverlay(restoreFocus: true);
         _overlayWindow.Hide();
 
         _autoStartManager = new AutoStartManager();
@@ -52,13 +53,6 @@ public partial class App : System.Windows.Application
 
         _keyboardHook = new GlobalKeyboardHook();
         _keyboardHook.WinTabPressed += OnWinTabPressed;
-        _keyboardHook.EscapePressed += OnEscapePressed;
-        _keyboardHook.CellKeyPressed += OnCellKeyPressed;
-        _keyboardHook.SearchRequested += OnSearchRequested;
-        _keyboardHook.SearchCharTyped += OnSearchCharTyped;
-        _keyboardHook.SearchBackspace += (_, _) => _overlayWindow.SearchBackspace();
-        _keyboardHook.SearchSubmit += (_, _) => _overlayWindow.SubmitSearch();
-        _keyboardHook.SearchArrow += (_, delta) => _overlayWindow.MoveSearchHighlight(delta);
         _keyboardHook.Start();
     }
 
@@ -77,79 +71,32 @@ public partial class App : System.Windows.Application
 
     private void OnWinTabPressed(object? sender, EventArgs e)
     {
-        // The low-level hook drops events whose callback outlives its timeout, which let
-        // Win+Tab fall through to the system Task View. Swallow the key instantly (callback
-        // returns immediately) and do the scanning / preview capture off the hook thread.
-        bool opening = _state == OverlayState.Hidden;
-        if (opening && _keyboardHook != null)
-        {
-            _keyboardHook.OverlayOpen = true;
-            _keyboardHook.Searching = false;
-        }
-
+        // Never block the hook callback: marshal to the UI thread immediately.
         Dispatcher.BeginInvoke(() =>
         {
-            if (opening)
+            if (_state == OverlayState.Hidden)
                 OpenTaskGrid();
             else
-                CloseOverlay();
+                CloseOverlay(restoreFocus: true);
         });
     }
 
     private void OpenTaskGrid()
     {
+        _previousForeground = NativeMethods.GetForegroundWindow();
+
         var windows = _windowScanner!.Scan();
         var cells = _cellAssigner!.Assign(windows);
         _currentCells = cells;
         _state = OverlayState.TaskGrid;
-        _keyboardHook!.OverlayOpen = true;
-        _keyboardHook.Searching = false;
         _overlayWindow!.ShowTaskGrid(cells);
-    }
-
-    private void OnEscapePressed(object? sender, EventArgs e)
-    {
-        if (_state != OverlayState.TaskGrid)
-            return;
-
-        if (_keyboardHook!.Searching)
-        {
-            _keyboardHook.Searching = false;
-            _overlayWindow!.ExitSearch();
-        }
-        else
-        {
-            CloseOverlay();
-        }
-    }
-
-    private void OnCellKeyPressed(object? sender, char key)
-    {
-        if (_state != OverlayState.TaskGrid)
-            return;
-
-        var cell = _currentCells.FirstOrDefault(c => c.Letter == key);
-        if (cell != null)
-            ActivateCell(cell);
-    }
-
-    private void OnSearchRequested(object? sender, EventArgs e)
-    {
-        if (_state != OverlayState.TaskGrid || _keyboardHook!.Searching)
-            return;
-        _keyboardHook.Searching = true;
-        _overlayWindow!.EnterSearch();
-    }
-
-    private void OnSearchCharTyped(object? sender, char c)
-    {
-        if (_state != OverlayState.TaskGrid)
-            return;
-        _overlayWindow!.AppendSearchChar(c);
     }
 
     private void ActivateCell(HiveCell cell)
     {
+        // A deliberate switch, not a cancel: focus goes to the chosen window, not back.
+        _previousForeground = IntPtr.Zero;
+
         if (cell.IsRunning)
         {
             WindowManager.ActivateWindow(cell.WindowHandle);
@@ -158,18 +105,24 @@ public partial class App : System.Windows.Application
         {
             WindowManager.Launch(cell.Preset.ExecutablePath);
         }
-        CloseOverlay();
+        CloseOverlay(restoreFocus: false);
     }
 
-    private void CloseOverlay()
+    private void CloseOverlay(bool restoreFocus)
     {
         _state = OverlayState.Hidden;
-        if (_keyboardHook != null)
-        {
-            _keyboardHook.OverlayOpen = false;
-            _keyboardHook.Searching = false;
-        }
         _overlayWindow!.HideOverlay();
         _currentCells = new List<HiveCell>();
+
+        if (restoreFocus && _previousForeground != IntPtr.Zero)
+        {
+            var target = _previousForeground;
+            _previousForeground = IntPtr.Zero;
+            Dispatcher.BeginInvoke(() => WindowManager.ActivateWindow(target));
+        }
+        else
+        {
+            _previousForeground = IntPtr.Zero;
+        }
     }
 }

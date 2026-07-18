@@ -17,6 +17,7 @@ public partial class OverlayWindow : Window
 
         TaskGrid.CellChosen += (_, cell) => CellChosen?.Invoke(this, cell);
         TaskGrid.CloseRequested += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
+        KeyDown += (_, e) => TaskGrid.HandleWindowKeyDown(e);
     }
 
     public event EventHandler<HiveCell>? CellChosen;
@@ -27,9 +28,9 @@ public partial class OverlayWindow : Window
         base.OnSourceInitialized(e);
         var helper = new WindowInteropHelper(this);
 
-        // Hide from Alt+Tab and never steal activation from the window we are switching away from.
+        // Hide from Alt+Tab but take real keyboard focus when shown (IME + default editing work).
         int exStyle = NativeMethods.GetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE);
-        exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE) & ~NativeMethods.WS_EX_APPWINDOW;
+        exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW) & ~NativeMethods.WS_EX_APPWINDOW;
         NativeMethods.SetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE, exStyle);
 
         TaskGrid.OverlayHwnd = helper.Handle;
@@ -113,6 +114,9 @@ public partial class OverlayWindow : Window
             TaskGrid.SetBackdrop(CaptureBlurredBackdrop());
             TaskGrid.SetCells(cells);
             Show();
+            // Plain Activate() is denied for a background process; the attach-input recipe is not.
+            WindowManager.ActivateWindow(TaskGrid.OverlayHwnd);
+            Focus();
         });
     }
 
@@ -157,13 +161,6 @@ public partial class OverlayWindow : Window
             small?.Dispose();
         }
     }
-
-    public void EnterSearch() => Dispatcher.BeginInvoke(TaskGrid.EnterSearch);
-    public void ExitSearch() => Dispatcher.BeginInvoke(TaskGrid.ExitSearch);
-    public void AppendSearchChar(char c) => Dispatcher.BeginInvoke(() => TaskGrid.AppendSearchChar(c));
-    public void SearchBackspace() => Dispatcher.BeginInvoke(TaskGrid.SearchBackspace);
-    public void MoveSearchHighlight(int delta) => Dispatcher.BeginInvoke(() => TaskGrid.MoveSearchHighlight(delta));
-    public void SubmitSearch() => Dispatcher.BeginInvoke(TaskGrid.SubmitSearch);
 
     public void HideOverlay()
     {

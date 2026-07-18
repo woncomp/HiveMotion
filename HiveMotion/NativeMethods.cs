@@ -15,23 +15,9 @@ internal static class NativeMethods
     public const int WM_QUIT = 0x0012;
     public const int WM_GETICON = 0x007F;
 
-    public const int VK_BACK = 0x08;
     public const int VK_TAB = 0x09;
-    public const int VK_RETURN = 0x0D;
-    public const int VK_SPACE = 0x20;
-    public const int VK_UP = 0x26;
-    public const int VK_DOWN = 0x28;
-    public const int VK_0 = 0x30;
-    public const int VK_9 = 0x39;
-    public const int VK_A = 0x41;
-    public const int VK_Z = 0x5A;
     public const int VK_LWIN = 0x5B;
     public const int VK_RWIN = 0x5C;
-    public const int VK_NUMPAD0 = 0x60;
-    public const int VK_NUMPAD9 = 0x69;
-    public const int VK_OEM_MINUS = 0xBD;
-    public const int VK_OEM_PERIOD = 0xBE;
-    public const int VK_ESCAPE = 0x1B;
 
     public const int ICON_SMALL = 0;
     public const int ICON_BIG = 1;
