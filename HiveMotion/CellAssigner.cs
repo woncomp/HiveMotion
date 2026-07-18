@@ -43,7 +43,6 @@ public sealed class CellAssigner
                 cell.WindowHandle = match.Handle;
                 cell.Title = match.Title;
                 cell.Icon = match.Icon;
-                cell.Preview = match.Preview;
                 placed.Add(match);
             }
             else

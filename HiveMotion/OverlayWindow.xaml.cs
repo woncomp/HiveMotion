@@ -31,6 +31,8 @@ public partial class OverlayWindow : Window
         int exStyle = NativeMethods.GetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE);
         exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE) & ~NativeMethods.WS_EX_APPWINDOW;
         NativeMethods.SetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE, exStyle);
+
+        TaskGrid.OverlayHwnd = helper.Handle;
     }
 
     /// <summary>Three separable box-blur passes approximate a Gaussian; radius in pixels.</summary>
@@ -165,6 +167,10 @@ public partial class OverlayWindow : Window
 
     public void HideOverlay()
     {
-        Dispatcher.BeginInvoke(Hide);
+        Dispatcher.BeginInvoke(() =>
+        {
+            TaskGrid.ResetPreview();
+            Hide();
+        });
     }
 }

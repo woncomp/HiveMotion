@@ -125,25 +125,16 @@
             </Canvas>
         </StackPanel>
 
-        <!-- 悬浮窗口预览:在蜂巢区域正上方,所有程序共用这一个位置(置于顶层) -->
+        <!-- 悬浮窗口预览:在蜂巢区域正上方,所有程序共用这一个位置(置于顶层);画面与边缘齐平 -->
         <Border x:Name="HoverPreview" HorizontalAlignment="Center" VerticalAlignment="Top"
-                Margin="0,28,0,0" MaxWidth="600" MaxHeight="380"
-                Padding="6" CornerRadius="12"
-                Background="#E614161D" BorderBrush="#59F5B301" BorderThickness="1"
+                Margin="0,28,0,0"
+                CornerRadius="6" BorderBrush="#59F5B301" BorderThickness="1"
+                Background="#E614161D"
                 Opacity="0" IsHitTestVisible="False">
-            <Border.CacheMode>
-                <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
-            </Border.CacheMode>
             <Border.Effect>
                 <DropShadowEffect Color="Black" Opacity="0.55" BlurRadius="30" ShadowDepth="14" />
             </Border.Effect>
-            <Border.RenderTransform>
-                <TranslateTransform x:Name="HoverPreviewSlide" Y="10" />
-            </Border.RenderTransform>
-            <Border CornerRadius="8" ClipToBounds="True">
-                <Image x:Name="HoverPreviewImage" Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality" />
-            </Border>
+            <Border x:Name="HoverPreviewViewport" CornerRadius="5" Background="Transparent" />
         </Border>
 
         <!-- 底部提示 -->

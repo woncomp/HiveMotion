@@ -11,8 +11,6 @@ public sealed class RunningWindow
     public string AppName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public ImageSource? Icon { get; set; }
-    /// <summary>Static snapshot of the window contents; null when capture failed or minimized.</summary>
-    public ImageSource? Preview { get; set; }
     /// <summary>Position in the user-configured priority queue; lower picks a cell first.</summary>
     public int Priority { get; set; } = 100;
     /// <summary>Top-level z-order index from EnumWindows (0 = foreground-most).</summary>

@@ -105,39 +105,6 @@ public partial class App : System.Windows.Application
         _keyboardHook!.OverlayOpen = true;
         _keyboardHook.Searching = false;
         _overlayWindow!.ShowTaskGrid(cells);
-        CapturePreviewsAsync(windows, cells);
-    }
-
-    /// <summary>Window snapshots are slow (PrintWindow per window): capture them in the
-    /// background after the grid is already on screen, and patch the cells in place.</summary>
-    private void CapturePreviewsAsync(IReadOnlyList<RunningWindow> windows, IReadOnlyList<HiveCell> cells)
-    {
-        var byHandle = new Dictionary<IntPtr, HiveCell>();
-        foreach (var cell in cells)
-        {
-            if (cell.IsRunning)
-                byHandle[cell.WindowHandle] = cell;
-        }
-        var handles = new List<IntPtr>();
-        foreach (var window in windows)
-            handles.Add(window.Handle);
-
-        System.Threading.Tasks.Task.Run(() =>
-        {
-            foreach (var handle in handles)
-            {
-                if (_state != OverlayState.TaskGrid)
-                    return;
-                var preview = PreviewCapturer.Capture(handle);
-                if (preview == null)
-                    continue;
-                Dispatcher.BeginInvoke(() =>
-                {
-                    if (_state == OverlayState.TaskGrid && byHandle.TryGetValue(handle, out var cell))
-                        cell.Preview = preview;
-                });
-            }
-        });
     }
 
     private void OnEscapePressed(object? sender, EventArgs e)

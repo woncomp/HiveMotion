@@ -27,6 +27,11 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private int _highlight;
     private bool _searching;
     private bool _previewVisible;
+    private double _previewMaxH = 320;
+    private readonly DwmThumbnailPreview _dwmPreview = new();
+
+    /// <summary>HWND of the owning overlay window; the DWM thumbnail draws into it.</summary>
+    public IntPtr OverlayHwnd { get; set; }
 
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
@@ -64,9 +69,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         }
 
         _previewVisible = false;
+        _dwmPreview.Hide();
         HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
         HoverPreview.Opacity = 0;
-        HoverPreviewImage.Source = null;
 
         ExitSearchImmediate();
     }
@@ -76,6 +81,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (_searching)
             return;
         _searching = true;
+        HidePreview();
         _query = string.Empty;
         QueryText.Text = string.Empty;
         QueryPlaceholder.Visibility = Visibility.Visible;
@@ -173,29 +179,87 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void ShowPreview(HiveCell cell)
     {
-        if (!cell.IsRunning || cell.Preview == null)
+        if (_searching || !cell.IsRunning || OverlayHwnd == IntPtr.Zero)
         {
             HidePreview();
             return;
         }
 
+        var (contentW, contentH) = GetWindowContentSize(cell.WindowHandle);
+        if (contentW <= 0)
+        {
+            HidePreview();
+            return;
+        }
+
+        double availW = Root.ActualWidth * 0.45;
+        double availH = _previewMaxH;
+        double scale = Math.Min(availW / contentW, availH / contentH);
+        HoverPreviewViewport.Width = contentW * scale;
+        HoverPreviewViewport.Height = contentH * scale;
+
         bool wasVisible = _previewVisible;
-        HoverPreviewImage.Source = cell.Preview;
         _previewVisible = true;
         if (!wasVisible)
+            SplineAnimate(HoverPreview, UIElement.OpacityProperty, 1, 160);
+
+        // Attach the thumbnail once the frame's new size has been arranged.
+        var handle = cell.WindowHandle;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => AttachThumbnail(handle)));
+    }
+
+    private void AttachThumbnail(IntPtr sourceHwnd)
+    {
+        if (!_previewVisible || OverlayHwnd == IntPtr.Zero)
+            return;
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var topLeft = HoverPreviewViewport.PointToScreen(new Point(0, 0));
+        var rect = new NativeMethods.RECT
         {
-            SplineAnimate(HoverPreview, UIElement.OpacityProperty, 1, 200);
-            SplineAnimate(HoverPreviewSlide, TranslateTransform.YProperty, 0, 200);
-        }
+            Left = (int)Math.Round(topLeft.X),
+            Top = (int)Math.Round(topLeft.Y),
+            Right = (int)Math.Round(topLeft.X + HoverPreviewViewport.ActualWidth * dpi.DpiScaleX),
+            Bottom = (int)Math.Round(topLeft.Y + HoverPreviewViewport.ActualHeight * dpi.DpiScaleY)
+        };
+        _dwmPreview.Show(OverlayHwnd, sourceHwnd, rect);
     }
 
     private void HidePreview()
     {
+        _dwmPreview.Hide();
         if (!_previewVisible)
             return;
         _previewVisible = false;
-        SplineAnimate(HoverPreview, UIElement.OpacityProperty, 0, 160);
-        SplineAnimate(HoverPreviewSlide, TranslateTransform.YProperty, 10, 160);
+        SplineAnimate(HoverPreview, UIElement.OpacityProperty, 0, 140);
+    }
+
+    public void ResetPreview() => HidePreview();
+
+    /// <summary>Aspect source for fitting the preview: restore rect for minimized windows, client rect otherwise.</summary>
+    private static (double w, double h) GetWindowContentSize(IntPtr hwnd)
+    {
+        if (NativeMethods.IsIconic(hwnd))
+        {
+            var placement = new NativeMethods.WINDOWPLACEMENT { length = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.WINDOWPLACEMENT>() };
+            if (NativeMethods.GetWindowPlacement(hwnd, ref placement))
+            {
+                double w = placement.rcNormalPosition.Right - placement.rcNormalPosition.Left;
+                double h = placement.rcNormalPosition.Bottom - placement.rcNormalPosition.Top;
+                if (w > 40 && h > 40)
+                    return (w, h);
+            }
+        }
+
+        if (NativeMethods.GetClientRect(hwnd, out var client))
+        {
+            double w = client.Right - client.Left;
+            double h = client.Bottom - client.Top;
+            if (w > 40 && h > 40)
+                return (w, h);
+        }
+        return (0, 0);
     }
 
     private void RebuildResults()
@@ -430,7 +494,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         double gridScale = Math.Min(1, Math.Min(w * 0.92 / 1470, h * 0.52 / 460));
         double gridAreaHeight = 460 * gridScale + 28 + 48;
         double topSpace = (h - gridAreaHeight) / 2;
-        HoverPreview.MaxHeight = Math.Clamp(topSpace - 48, 160, 320);
+        _previewMaxH = Math.Clamp(topSpace - 48, 160, 320);
         HoverPreview.MaxWidth = w * 0.45;
     }
 
