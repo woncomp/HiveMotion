@@ -4,6 +4,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace HiveMotion;
 
@@ -12,12 +14,24 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
     private HiveCell? _cell;
 
     public event EventHandler<HiveCell>? Clicked;
+    public event EventHandler<HiveCell>? Hovered;
+    public event EventHandler<HiveCell>? Unhovered;
 
     public HiveCellView()
     {
         InitializeComponent();
-        MouseEnter += (_, _) => SetHover(true);
-        MouseLeave += (_, _) => SetHover(false);
+        MouseEnter += (_, _) =>
+        {
+            SetHover(true);
+            if (_cell != null)
+                Hovered?.Invoke(this, _cell);
+        };
+        MouseLeave += (_, _) =>
+        {
+            SetHover(false);
+            if (_cell != null)
+                Unhovered?.Invoke(this, _cell);
+        };
         MouseLeftButtonUp += (_, e) =>
         {
             if (_cell != null)
@@ -30,8 +44,13 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
     {
         _cell = cell;
         KeyText.Text = cell.Letter.ToString();
-        TitleText.Text = cell.Title;
-        AppNameText.Text = cell.IsRunning ? cell.AppName : "点 击 启 动";
+
+        // 图标下方:运行中显示窗口标题,未启动显示应用名
+        CaptionText.Text = cell.IsRunning ? cell.Title : cell.AppName;
+        CaptionText.Foreground = cell.IsRunning
+            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F2FFFFFF"))
+            : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCF5C542"));
+        CaptionText.FontSize = cell.IsRunning ? 11 : 10;
 
         if (cell.Icon != null)
         {

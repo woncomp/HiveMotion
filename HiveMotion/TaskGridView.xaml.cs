@@ -26,6 +26,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private string _query = string.Empty;
     private int _highlight;
     private bool _searching;
+    private bool _previewVisible;
 
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
@@ -53,12 +54,19 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             var view = new HiveCellView();
             view.SetCell(cell);
             view.Clicked += (_, chosen) => CellChosen?.Invoke(this, chosen);
+            view.Hovered += (_, hovered) => ShowPreview(hovered);
+            view.Unhovered += (_, _) => HidePreview();
             var center = KeyGrid.CenterOf(cell.Letter);
             Canvas.SetLeft(view, center.X - KeyGrid.HexW / 2);
             Canvas.SetTop(view, center.Y - KeyGrid.HexH / 2);
             HexCanvas.Children.Add(view);
             _cellViews.Add(view);
         }
+
+        _previewVisible = false;
+        HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
+        HoverPreview.Opacity = 0;
+        HoverPreviewImage.Source = null;
 
         ExitSearchImmediate();
     }
@@ -161,6 +169,33 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (!_searching || _results.Count == 0)
             return;
         CellChosen?.Invoke(this, _results[Math.Clamp(_highlight, 0, _results.Count - 1)]);
+    }
+
+    private void ShowPreview(HiveCell cell)
+    {
+        if (!cell.IsRunning || cell.Preview == null)
+        {
+            HidePreview();
+            return;
+        }
+
+        bool wasVisible = _previewVisible;
+        HoverPreviewImage.Source = cell.Preview;
+        _previewVisible = true;
+        if (!wasVisible)
+        {
+            SplineAnimate(HoverPreview, UIElement.OpacityProperty, 1, 200);
+            SplineAnimate(HoverPreviewSlide, TranslateTransform.YProperty, 0, 200);
+        }
+    }
+
+    private void HidePreview()
+    {
+        if (!_previewVisible)
+            return;
+        _previewVisible = false;
+        SplineAnimate(HoverPreview, UIElement.OpacityProperty, 0, 160);
+        SplineAnimate(HoverPreviewSlide, TranslateTransform.YProperty, 10, 160);
     }
 
     private void RebuildResults()
@@ -386,8 +421,17 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void OnRootSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        HiveBox.MaxWidth = Root.ActualWidth * 0.92;
-        HiveBox.MaxHeight = Root.ActualHeight * 0.52;
+        double w = Root.ActualWidth;
+        double h = Root.ActualHeight;
+        HiveBox.MaxWidth = w * 0.92;
+        HiveBox.MaxHeight = h * 0.52;
+
+        // Keep the hover preview inside the empty band above the hive, never over the cells.
+        double gridScale = Math.Min(1, Math.Min(w * 0.92 / 1470, h * 0.52 / 460));
+        double gridAreaHeight = 460 * gridScale + 28 + 48;
+        double topSpace = (h - gridAreaHeight) / 2;
+        HoverPreview.MaxHeight = Math.Clamp(topSpace - 48, 160, 320);
+        HoverPreview.MaxWidth = w * 0.45;
     }
 
     private void OnBackdropClick(object sender, MouseButtonEventArgs e)

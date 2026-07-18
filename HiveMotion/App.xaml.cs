@@ -77,26 +77,67 @@ public partial class App : System.Windows.Application
 
     private void OnWinTabPressed(object? sender, EventArgs e)
     {
-        if (_state == OverlayState.Hidden)
-            OpenTaskGrid();
-        else
-            CloseOverlay();
+        // The low-level hook drops events whose callback outlives its timeout, which let
+        // Win+Tab fall through to the system Task View. Swallow the key instantly (callback
+        // returns immediately) and do the scanning / preview capture off the hook thread.
+        bool opening = _state == OverlayState.Hidden;
+        if (opening && _keyboardHook != null)
+        {
+            _keyboardHook.OverlayOpen = true;
+            _keyboardHook.Searching = false;
+        }
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (opening)
+                OpenTaskGrid();
+            else
+                CloseOverlay();
+        });
     }
 
     private void OpenTaskGrid()
     {
-        IReadOnlyList<HiveCell> cells = Array.Empty<HiveCell>();
-        Dispatcher.Invoke(() =>
-        {
-            var windows = _windowScanner!.Scan();
-            cells = _cellAssigner!.Assign(windows);
-            _currentCells = cells;
-        });
-
+        var windows = _windowScanner!.Scan();
+        var cells = _cellAssigner!.Assign(windows);
+        _currentCells = cells;
         _state = OverlayState.TaskGrid;
         _keyboardHook!.OverlayOpen = true;
         _keyboardHook.Searching = false;
         _overlayWindow!.ShowTaskGrid(cells);
+        CapturePreviewsAsync(windows, cells);
+    }
+
+    /// <summary>Window snapshots are slow (PrintWindow per window): capture them in the
+    /// background after the grid is already on screen, and patch the cells in place.</summary>
+    private void CapturePreviewsAsync(IReadOnlyList<RunningWindow> windows, IReadOnlyList<HiveCell> cells)
+    {
+        var byHandle = new Dictionary<IntPtr, HiveCell>();
+        foreach (var cell in cells)
+        {
+            if (cell.IsRunning)
+                byHandle[cell.WindowHandle] = cell;
+        }
+        var handles = new List<IntPtr>();
+        foreach (var window in windows)
+            handles.Add(window.Handle);
+
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            foreach (var handle in handles)
+            {
+                if (_state != OverlayState.TaskGrid)
+                    return;
+                var preview = PreviewCapturer.Capture(handle);
+                if (preview == null)
+                    continue;
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (_state == OverlayState.TaskGrid && byHandle.TryGetValue(handle, out var cell))
+                        cell.Preview = preview;
+                });
+            }
+        });
     }
 
     private void OnEscapePressed(object? sender, EventArgs e)

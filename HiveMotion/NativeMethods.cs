@@ -49,6 +49,29 @@ internal static class NativeMethods
     public const int WS_EX_NOACTIVATE = 0x08000000;
 
     public const int DWMWA_CLOAKED = 14;
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+    public const uint PW_RENDERFULLCONTENT = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 
     public const int WCA_ACCENT_POLICY = 19;
 

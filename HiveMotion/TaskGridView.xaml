@@ -19,29 +19,6 @@
             </Border.Background>
         </Border>
 
-        <!-- 顶部提示 -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top"
-                    Margin="0,32,0,0" IsHitTestVisible="False">
-            <Border Width="32" Height="1" VerticalAlignment="Center">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#00F5B301" Offset="0" />
-                        <GradientStop Color="#B3F5B301" Offset="1" />
-                    </LinearGradientBrush>
-                </Border.Background>
-            </Border>
-            <TextBlock Text="点 击 六 边 形 , 或 按 下 对 应 字 母 切 换 窗 口"
-                       FontSize="13" Foreground="#8CFFFFFF" Margin="10,0" />
-            <Border Width="32" Height="1" VerticalAlignment="Center">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#B3F5B301" Offset="0" />
-                        <GradientStop Color="#00F5B301" Offset="1" />
-                    </LinearGradientBrush>
-                </Border.Background>
-            </Border>
-        </StackPanel>
-
         <!-- 中央:蜂巢网格 + 搜索面板 -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
             <Viewbox x:Name="HiveBox" Stretch="Uniform" StretchDirection="DownOnly">
@@ -147,6 +124,27 @@
                 </Border>
             </Canvas>
         </StackPanel>
+
+        <!-- 悬浮窗口预览:在蜂巢区域正上方,所有程序共用这一个位置(置于顶层) -->
+        <Border x:Name="HoverPreview" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,28,0,0" MaxWidth="600" MaxHeight="380"
+                Padding="6" CornerRadius="12"
+                Background="#E614161D" BorderBrush="#59F5B301" BorderThickness="1"
+                Opacity="0" IsHitTestVisible="False">
+            <Border.CacheMode>
+                <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
+            </Border.CacheMode>
+            <Border.Effect>
+                <DropShadowEffect Color="Black" Opacity="0.55" BlurRadius="30" ShadowDepth="14" />
+            </Border.Effect>
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="HoverPreviewSlide" Y="10" />
+            </Border.RenderTransform>
+            <Border CornerRadius="8" ClipToBounds="True">
+                <Image x:Name="HoverPreviewImage" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+            </Border>
+        </Border>
 
         <!-- 底部提示 -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom"

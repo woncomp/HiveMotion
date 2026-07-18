@@ -10,6 +10,7 @@ public sealed class HiveCell
     public string AppName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public ImageSource? Icon { get; set; }
+    public ImageSource? Preview { get; set; }
     public IntPtr WindowHandle { get; set; }
     public bool IsPreset { get; set; }
     public AppItem? Preset { get; set; }
@@ -22,6 +23,7 @@ public sealed class HiveCell
         AppName = window.AppName,
         Title = window.Title,
         Icon = window.Icon,
+        Preview = window.Preview,
         WindowHandle = window.Handle,
         IsPreset = false
     };
