@@ -1,0 +1,58 @@
+# .NET build outputs
+bin/
+obj/
+out/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+*.sln.iml
+
+# NuGet
+*.nupkg
+packages/
+project.lock.json
+*.nuget.props
+*.nuget.targets
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# WPF / XAML generated
+*.g.i.cs
+*.g.cs
+*.baml
+*.cache
+
+# Publish profiles
+*.pubxml
+*.publishproj
+
+# Test results
+TestResults/
+
+# DotCover
+*.dotCover
+
+# Local history / temp
+*.tmp
+*.temp
+*.log
+
+# Others
+*.swp
+*~
