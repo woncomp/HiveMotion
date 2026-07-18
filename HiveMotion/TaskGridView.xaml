@@ -3,15 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei">
     <Grid x:Name="Root" SizeChanged="OnRootSizeChanged">
-        <!-- 桌面截图 + 高斯模糊(还原演示的 backdrop blur) -->
-        <Image x:Name="BackdropImage" Stretch="Fill" IsHitTestVisible="False">
-            <Image.CacheMode>
-                <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
-            </Image.CacheMode>
-            <Image.Effect>
-                <BlurEffect Radius="16" RenderingBias="Performance" />
-            </Image.Effect>
-        </Image>
+        <!-- 桌面截图(模糊已在截图时烘进像素,无需着色器) -->
+        <Image x:Name="BackdropImage" Stretch="Fill" IsHitTestVisible="False" />
 
         <!-- 压暗层(点击空白处关闭) -->
         <Border Background="#8010131A" MouseLeftButtonDown="OnBackdropClick" />

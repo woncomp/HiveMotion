@@ -31,44 +31,75 @@ public partial class OverlayWindow : Window
         int exStyle = NativeMethods.GetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE);
         exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE) & ~NativeMethods.WS_EX_APPWINDOW;
         NativeMethods.SetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE, exStyle);
-
-        TryEnableAcrylic(helper.Handle);
     }
 
-    /// <summary>Frosted backdrop like the demo's blur(52px) layer; a dim border inside the view is the fallback tint.</summary>
-    private static void TryEnableAcrylic(IntPtr hwnd)
+    /// <summary>Three separable box-blur passes approximate a Gaussian; radius in pixels.</summary>
+    private static void ApplyBoxBlur(System.Drawing.Bitmap bmp, int radius)
     {
+        var rect = new System.Drawing.Rectangle(0, 0, bmp.Width, bmp.Height);
+        var data = bmp.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         try
         {
-            var policy = new NativeMethods.AccentPolicy
-            {
-                AccentState = NativeMethods.AccentState.EnableAcrylicBlurBehind,
-                AccentFlags = 0,
-                GradientColor = 0x20101A26, // ABGR: faint honey-blue tint over the blurred desktop
-                AnimationId = 0
-            };
+            int stride = data.Stride;
+            int size = Math.Abs(stride) * bmp.Height;
+            byte[] pixels = new byte[size];
+            byte[] buffer = new byte[size];
+            Marshal.Copy(data.Scan0, pixels, 0, size);
 
-            int size = Marshal.SizeOf(policy);
-            IntPtr policyPtr = Marshal.AllocHGlobal(size);
-            try
+            for (int pass = 0; pass < 3; pass++)
             {
-                Marshal.StructureToPtr(policy, policyPtr, false);
-                var data = new NativeMethods.WindowCompositionAttributeData
-                {
-                    Attribute = NativeMethods.WCA_ACCENT_POLICY,
-                    Data = policyPtr,
-                    SizeOfData = size
-                };
-                NativeMethods.SetWindowCompositionAttribute(hwnd, ref data);
+                BoxBlurHorizontal(pixels, buffer, bmp.Width, bmp.Height, stride, radius);
+                BoxBlurVertical(buffer, pixels, bmp.Width, bmp.Height, stride, radius);
             }
-            finally
+
+            Marshal.Copy(pixels, 0, data.Scan0, size);
+        }
+        finally
+        {
+            bmp.UnlockBits(data);
+        }
+    }
+
+    private static void BoxBlurHorizontal(byte[] src, byte[] dst, int width, int height, int stride, int radius)
+    {
+        int div = radius * 2 + 1;
+        for (int y = 0; y < height; y++)
+        {
+            int row = y * stride;
+            for (int c = 0; c < 4; c++)
             {
-                Marshal.FreeHGlobal(policyPtr);
+                int sum = 0;
+                for (int x = -radius; x <= radius; x++)
+                    sum += src[row + Math.Clamp(x, 0, width - 1) * 4 + c];
+                for (int x = 0; x < width; x++)
+                {
+                    dst[row + x * 4 + c] = (byte)(sum / div);
+                    int add = Math.Clamp(x + radius + 1, 0, width - 1);
+                    int sub = Math.Clamp(x - radius, 0, width - 1);
+                    sum += src[row + add * 4 + c] - src[row + sub * 4 + c];
+                }
             }
         }
-        catch
+    }
+
+    private static void BoxBlurVertical(byte[] src, byte[] dst, int width, int height, int stride, int radius)
+    {
+        int div = radius * 2 + 1;
+        for (int x = 0; x < width; x++)
         {
-            // Older Windows without acrylic: the view's own dim layer still renders correctly.
+            for (int c = 0; c < 4; c++)
+            {
+                int sum = 0;
+                for (int y = -radius; y <= radius; y++)
+                    sum += src[Math.Clamp(y, 0, height - 1) * stride + x * 4 + c];
+                for (int y = 0; y < height; y++)
+                {
+                    dst[y * stride + x * 4 + c] = (byte)(sum / div);
+                    int add = Math.Clamp(y + radius + 1, 0, height - 1);
+                    int sub = Math.Clamp(y - radius, 0, height - 1);
+                    sum += src[add * stride + x * 4 + c] - src[sub * stride + x * 4 + c];
+                }
+            }
         }
     }
 
@@ -95,13 +126,16 @@ public partial class OverlayWindow : Window
             using (var g = System.Drawing.Graphics.FromImage(full))
                 g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
 
-            // Quarter-size + stretch gives most of the blur; the view adds a BlurEffect on top.
+            // Quarter-size + stretch gives most of the blur; bake the rest in with a CPU box blur
+            // (a shader BlurEffect re-evaluates on dirty regions and leaves rectangular seams).
             small = new System.Drawing.Bitmap(bounds.Width / 4, bounds.Height / 4, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             using (var g = System.Drawing.Graphics.FromImage(small))
             {
                 g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                 g.DrawImage(full, 0, 0, small.Width, small.Height);
             }
+
+            ApplyBoxBlur(small, 12);
 
             hBitmap = small.GetHbitmap(System.Drawing.Color.FromArgb(0));
             var source = Imaging.CreateBitmapSourceFromHBitmap(
