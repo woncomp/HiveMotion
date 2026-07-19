@@ -110,7 +110,7 @@ public partial class OverlayWindow : Window
         {
             MoveToCursorScreen();
             // Capture the desktop BEFORE showing so the frosted-glass layer sees the real screen.
-            TaskGrid.SetBackdrop(CaptureBlurredBackdrop(_screenBounds));
+            TaskGrid.SetBackdrop(CaptureBlurredBackdrop(_screen));
             TaskGrid.SetCells(cells);
             Show();
             // Plain Activate() is denied for a background process; the attach-input recipe is not.
@@ -119,7 +119,7 @@ public partial class OverlayWindow : Window
         });
     }
 
-    private System.Drawing.Rectangle _screenBounds = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+    private System.Windows.Forms.Screen _screen = System.Windows.Forms.Screen.PrimaryScreen!;
 
     /// <summary>Cover the screen that currently holds the mouse cursor (multi-monitor aware).</summary>
     private void MoveToCursorScreen()
@@ -129,8 +129,8 @@ public partial class OverlayWindow : Window
             if (!NativeMethods.GetCursorPos(out var point))
                 return;
 
-            _screenBounds = System.Windows.Forms.Screen.FromPoint(
-                new System.Drawing.Point(point.x, point.y)).Bounds;
+            _screen = System.Windows.Forms.Screen.FromPoint(
+                new System.Drawing.Point(point.x, point.y));
 
             uint dpiX = 96, dpiY = 96;
             var monitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MONITOR_DEFAULTTONEAREST);
@@ -139,10 +139,10 @@ public partial class OverlayWindow : Window
             if (dpiX == 0) dpiX = 96;
             if (dpiY == 0) dpiY = 96;
 
-            Left = _screenBounds.Left * 96.0 / dpiX;
-            Top = _screenBounds.Top * 96.0 / dpiY;
-            Width = _screenBounds.Width * 96.0 / dpiX;
-            Height = _screenBounds.Height * 96.0 / dpiY;
+            Left = _screen.Bounds.Left * 96.0 / dpiX;
+            Top = _screen.Bounds.Top * 96.0 / dpiY;
+            Width = _screen.Bounds.Width * 96.0 / dpiX;
+            Height = _screen.Bounds.Height * 96.0 / dpiY;
         }
         catch
         {
@@ -150,20 +150,39 @@ public partial class OverlayWindow : Window
         }
     }
 
-    private static System.Windows.Media.ImageSource? CaptureBlurredBackdrop(System.Drawing.Rectangle bounds)
+    /// <summary>
+    /// Snapshot one display via its own device DC + BitBlt. Going through the monitor's
+    /// device (instead of virtual-screen coordinates) survives multi-monitor DPI mixes
+    /// and odd display layouts where CopyFromScreen returns black.
+    /// </summary>
+    private static System.Windows.Media.ImageSource? CaptureBlurredBackdrop(System.Windows.Forms.Screen screen)
     {
+        int width = screen.Bounds.Width;
+        int height = screen.Bounds.Height;
+
+        IntPtr hdcScreen = IntPtr.Zero;
+        IntPtr hdcMem = IntPtr.Zero;
+        IntPtr hBitmap = IntPtr.Zero;
+        IntPtr hOld = IntPtr.Zero;
         System.Drawing.Bitmap? full = null;
         System.Drawing.Bitmap? small = null;
-        IntPtr hBitmap = IntPtr.Zero;
+        IntPtr hBitmapSmall = IntPtr.Zero;
         try
         {
-            full = new System.Drawing.Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            using (var g = System.Drawing.Graphics.FromImage(full))
-                g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+            hdcScreen = NativeMethods.CreateDC(screen.DeviceName, null, null, IntPtr.Zero);
+            if (hdcScreen == IntPtr.Zero)
+                return null;
+            hdcMem = NativeMethods.CreateCompatibleDC(hdcScreen);
+            hBitmap = NativeMethods.CreateCompatibleBitmap(hdcScreen, width, height);
+            hOld = NativeMethods.SelectObject(hdcMem, hBitmap);
+            if (!NativeMethods.BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, NativeMethods.SRCCOPY))
+                return null;
+
+            full = System.Drawing.Image.FromHbitmap(hBitmap);
 
             // Quarter-size + stretch gives most of the blur; bake the rest in with a CPU box blur
             // (a shader BlurEffect re-evaluates on dirty regions and leaves rectangular seams).
-            small = new System.Drawing.Bitmap(bounds.Width / 4, bounds.Height / 4, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            small = new System.Drawing.Bitmap(width / 4, height / 4, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             using (var g = System.Drawing.Graphics.FromImage(small))
             {
                 g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
@@ -172,9 +191,9 @@ public partial class OverlayWindow : Window
 
             ApplyBoxBlur(small, 12);
 
-            hBitmap = small.GetHbitmap(System.Drawing.Color.FromArgb(0));
+            hBitmapSmall = small.GetHbitmap(System.Drawing.Color.FromArgb(0));
             var source = Imaging.CreateBitmapSourceFromHBitmap(
-                hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                hBitmapSmall, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
             source.Freeze();
             return source;
         }
@@ -184,8 +203,16 @@ public partial class OverlayWindow : Window
         }
         finally
         {
+            if (hOld != IntPtr.Zero)
+                NativeMethods.SelectObject(hdcMem, hOld);
             if (hBitmap != IntPtr.Zero)
                 NativeMethods.DeleteObject(hBitmap);
+            if (hdcMem != IntPtr.Zero)
+                NativeMethods.DeleteDC(hdcMem);
+            if (hdcScreen != IntPtr.Zero)
+                NativeMethods.DeleteDC(hdcScreen);
+            if (hBitmapSmall != IntPtr.Zero)
+                NativeMethods.DeleteObject(hBitmapSmall);
             full?.Dispose();
             small?.Dispose();
         }
