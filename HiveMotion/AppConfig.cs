@@ -25,5 +25,14 @@ public sealed class AppConfig
         "Code"
     };
 
+    /// <summary>
+    /// Global hotkeys that summon the hive. First press (overlay hidden) opens the overlay;
+    /// second press (overlay open) falls through to the combo's native system function.
+    /// </summary>
+    public List<HotkeyRule> Hotkeys { get; } = new()
+    {
+        HotkeyRule.WinTab
+    };
+
     public static AppConfig Default { get; } = new();
 }

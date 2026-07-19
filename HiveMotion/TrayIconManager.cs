@@ -11,6 +11,8 @@ public sealed class TrayIconManager : IDisposable
     private bool _disposed;
 
     public event EventHandler? ExitRequested;
+    /// <summary>Left-click on the tray icon: show the overlay.</summary>
+    public event EventHandler? ShowRequested;
 
     public TrayIconManager(AutoStartManager autoStartManager)
     {
@@ -44,9 +46,10 @@ public sealed class TrayIconManager : IDisposable
             Visible = true,
             ContextMenuStrip = _contextMenu
         };
-        _notifyIcon.DoubleClick += (_, _) =>
+        _notifyIcon.MouseClick += (_, e) =>
         {
-            // no-op in MVP
+            if (e.Button == MouseButtons.Left)
+                ShowRequested?.Invoke(this, EventArgs.Empty);
         };
     }
 

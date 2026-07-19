@@ -1,17 +1,23 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace HiveMotion;
 
-/// <summary>Global low-level keyboard hook. Its only job is intercepting Win+Tab;
-/// every other key goes to the overlay window itself once it has real focus.</summary>
+/// <summary>
+/// Global low-level keyboard hook driven by a list of <see cref="HotkeyRule"/> combos.
+/// Hidden overlay: swallow the combo and ask to open. Open overlay: let the combo through
+/// to the system (native function fires) and notify so we close.
+/// </summary>
 public sealed class GlobalKeyboardHook : IDisposable
 {
     private const uint InjectedExtraInfo = 0x484D4F54; // 'HMOT': marks our own synthetic chord key
     private const int VkUnassigned = 0xE8;
 
+    private readonly IReadOnlyList<HotkeyRule> _rules;
+    private readonly HashSet<int> _swallowedKeys = new();
     private readonly ManualResetEvent _ready = new(false);
     private Thread? _hookThread;
     private uint _hookThreadId;
@@ -19,7 +25,18 @@ public sealed class GlobalKeyboardHook : IDisposable
     private NativeMethods.LowLevelKeyboardProc? _hookProc;
     private bool _disposed;
 
-    public event EventHandler? WinTabPressed;
+    /// <summary>Mirror of the overlay visibility, written by the app; decides swallow vs pass-through.</summary>
+    public bool IsOverlayOpen { get; set; }
+
+    /// <summary>A registered combo fired while the overlay was hidden: open the overlay.</summary>
+    public event EventHandler<HotkeyRule>? HotkeyOpenRequested;
+    /// <summary>A registered combo fired while the overlay was open: passed to the system, close the overlay.</summary>
+    public event EventHandler<HotkeyRule>? HotkeyPassthrough;
+
+    public GlobalKeyboardHook(IReadOnlyList<HotkeyRule> rules)
+    {
+        _rules = rules;
+    }
 
     public void Start()
     {
@@ -72,9 +89,9 @@ public sealed class GlobalKeyboardHook : IDisposable
     }
 
     /// <summary>
-    /// The OS opens Start when Win is released with no chord. We swallow Tab, so we inject a
-    /// harmless unassigned key while Win is still held: the shell sees a chord and stays quiet,
-    /// and the Win key state never gets stuck.
+    /// The OS opens Start when Win is released with no chord. We swallow the combo key, so we
+    /// inject a harmless unassigned key while Win is still held: the shell sees a chord and
+    /// stays quiet, and the Win key state never gets stuck.
     /// </summary>
     private static void InjectBenignChordKey()
     {
@@ -110,20 +127,110 @@ public sealed class GlobalKeyboardHook : IDisposable
             return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         int vk = (int)kbd.vkCode;
-        if (vk != NativeMethods.VK_TAB)
-            return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
-        bool winDown = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LWIN) & 0x8000) != 0 ||
-                       (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RWIN) & 0x8000) != 0;
-        if (!winDown)
-            return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-
-        if (isDown)
+        // Swallow key-ups of combo keys we swallowed on the way down (no orphan key-ups).
+        if (isUp && _swallowedKeys.Contains(vk))
         {
-            WinTabPressed?.Invoke(this, EventArgs.Empty);
-            InjectBenignChordKey();
+            _swallowedKeys.Remove(vk);
+            return (IntPtr)1;
         }
-        return (IntPtr)1;
+        if (!isDown)
+            return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+        foreach (var rule in _rules)
+        {
+            if (vk != rule.Vk || !ModifiersMatch(rule))
+                continue;
+
+            Logger.Info($"hotkey {rule.Name}: overlayOpen={IsOverlayOpen} foreground={DescribeForeground()}");
+
+            // The combo's own native UI (Task View, Game Bar…) is foreground: let the key
+            // reach it so the native UI toggles itself closed instead of reopening our overlay.
+            if (IsForegroundNativeUi(rule))
+                return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+            if (IsOverlayOpen)
+            {
+                // Generic rule: a second press goes to the system (Task View, Game Bar…).
+                HotkeyPassthrough?.Invoke(this, rule);
+                return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+            }
+
+            _swallowedKeys.Add(vk);
+            HotkeyOpenRequested?.Invoke(this, rule);
+            if (rule.Win)
+                InjectBenignChordKey();
+            return (IntPtr)1;
+        }
+
+        return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+    }
+
+    private static string DescribeForeground()
+    {
+        try
+        {
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            var className = new System.Text.StringBuilder(256);
+            NativeMethods.GetClassName(foreground, className, className.Capacity);
+            return className.ToString();
+        }
+        catch
+        {
+            return "?";
+        }
+    }
+
+    private static bool IsForegroundNativeUi(HotkeyRule rule)
+    {
+        if (rule.NativeClassNames.Length == 0 && rule.NativeProcessNames.Length == 0)
+            return false;
+
+        IntPtr foreground = NativeMethods.GetForegroundWindow();
+        if (foreground == IntPtr.Zero)
+            return false;
+
+        if (rule.NativeClassNames.Length > 0)
+        {
+            var className = new System.Text.StringBuilder(256);
+            NativeMethods.GetClassName(foreground, className, className.Capacity);
+            foreach (string name in rule.NativeClassNames)
+            {
+                if (string.Equals(className.ToString(), name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+
+        if (rule.NativeProcessNames.Length > 0)
+        {
+            try
+            {
+                NativeMethods.GetWindowThreadProcessId(foreground, out uint pid);
+                string processName = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
+                foreach (string name in rule.NativeProcessNames)
+                {
+                    if (string.Equals(processName, name, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch
+            {
+                // process may have exited between the two calls
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ModifiersMatch(HotkeyRule rule)
+    {
+        bool win = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LWIN) & 0x8000) != 0 ||
+                   (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RWIN) & 0x8000) != 0;
+        bool ctrl = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_CONTROL) & 0x8000) != 0;
+        bool alt = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_MENU) & 0x8000) != 0;
+        bool shift = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_SHIFT) & 0x8000) != 0;
+
+        return rule.Win == win && rule.Ctrl == ctrl && rule.Alt == alt && rule.Shift == shift;
     }
 
     public void Dispose()

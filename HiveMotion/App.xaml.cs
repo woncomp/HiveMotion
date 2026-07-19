@@ -57,9 +57,31 @@ public partial class App : System.Windows.Application
         _autoStartManager = new AutoStartManager();
         _trayIconManager = new TrayIconManager(_autoStartManager);
         _trayIconManager.ExitRequested += (_, _) => Shutdown();
+        _trayIconManager.ShowRequested += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            if (_state == OverlayState.Hidden)
+                OpenTaskGrid();
+            else
+                CloseOverlay(restoreFocus: true);
+        });
 
-        _keyboardHook = new GlobalKeyboardHook();
-        _keyboardHook.WinTabPressed += OnWinTabPressed;
+        _keyboardHook = new GlobalKeyboardHook(config.Hotkeys);
+        _keyboardHook.HotkeyOpenRequested += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                OpenTaskGrid();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+            }
+        });
+        _keyboardHook.HotkeyPassthrough += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            // The combo went to the system (Task View & co.); the native UI takes over.
+            CloseOverlay(restoreFocus: false);
+        });
         _keyboardHook.Start();
     }
 
@@ -76,35 +98,6 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 
-    private void OnWinTabPressed(object? sender, EventArgs e)
-    {
-        // Never block the hook callback: marshal to the UI thread immediately.
-        Dispatcher.BeginInvoke(() =>
-        {
-            try
-            {
-                if (_state == OverlayState.Hidden)
-                {
-                    OpenTaskGrid();
-                }
-                else if (_overlayWindow!.ContainsCursor())
-                {
-                    // Same screen as the overlay: toggle closed.
-                    CloseOverlay(restoreFocus: true);
-                }
-                else
-                {
-                    // Cursor moved to another screen: the hive follows the mouse.
-                    OpenTaskGrid();
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex);
-            }
-        });
-    }
-
     private void OpenTaskGrid()
     {
         _previousForeground = NativeMethods.GetForegroundWindow();
@@ -113,6 +106,7 @@ public partial class App : System.Windows.Application
         var cells = _cellAssigner!.Assign(windows);
         _currentCells = cells;
         _state = OverlayState.TaskGrid;
+        _keyboardHook!.IsOverlayOpen = true;
         _overlayWindow!.ShowTaskGrid(cells);
     }
 
@@ -122,6 +116,8 @@ public partial class App : System.Windows.Application
         _previousForeground = IntPtr.Zero;
         // Mark hidden up front so the Deactivated handler stays a no-op during the switch.
         _state = OverlayState.Hidden;
+        if (_keyboardHook != null)
+            _keyboardHook.IsOverlayOpen = false;
 
         if (cell.IsRunning)
         {
@@ -137,6 +133,8 @@ public partial class App : System.Windows.Application
     private void CloseOverlay(bool restoreFocus)
     {
         _state = OverlayState.Hidden;
+        if (_keyboardHook != null)
+            _keyboardHook.IsOverlayOpen = false;
         _overlayWindow!.HideOverlay();
         _currentCells = new List<HiveCell>();
 

@@ -124,14 +124,6 @@ public partial class OverlayWindow : Window
 
     private System.Windows.Forms.Screen _screen = System.Windows.Forms.Screen.PrimaryScreen!;
 
-    /// <summary>True when the mouse cursor is on the same screen the overlay currently covers.</summary>
-    public bool ContainsCursor()
-    {
-        if (!NativeMethods.GetCursorPos(out var point))
-            return true;
-        return _screen.Bounds.Contains(point.x, point.y);
-    }
-
     public string DescribeGeometry() =>
         $"screen={_screen.DeviceName} bounds={_screen.Bounds} window=({Left},{Top},{Width},{Height})";
 
