@@ -24,6 +24,8 @@ public partial class App : System.Windows.Application
     private WindowScanner? _windowScanner;
     private CellAssigner? _cellAssigner;
     private PinStore? _pinStore;
+    private HistoryStore? _historyStore;
+    private ManageWindow? _manageWindow;
 
     private OverlayState _state = OverlayState.Hidden;
     private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
@@ -42,6 +44,7 @@ public partial class App : System.Windows.Application
 
         var config = AppConfig.Default;
         _pinStore = new PinStore();
+        _historyStore = new HistoryStore();
         _windowScanner = new WindowScanner(config.PriorityProcessNames);
         _cellAssigner = new CellAssigner(_pinStore.Pins);
         _overlayWindow = new OverlayWindow();
@@ -60,6 +63,7 @@ public partial class App : System.Windows.Application
         _autoStartManager = new AutoStartManager();
         _trayIconManager = new TrayIconManager(_autoStartManager);
         _trayIconManager.ExitRequested += (_, _) => Shutdown();
+        _trayIconManager.ManageRequested += (_, _) => Dispatcher.BeginInvoke(ShowManageWindow);
         _trayIconManager.ShowRequested += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             if (_state == OverlayState.Hidden)
@@ -92,6 +96,7 @@ public partial class App : System.Windows.Application
     {
         _keyboardHook?.Dispose();
         _trayIconManager?.Dispose();
+        _manageWindow?.Close();
         _overlayWindow?.Close();
         if (_ownsMutex)
         {
@@ -106,6 +111,7 @@ public partial class App : System.Windows.Application
         _previousForeground = NativeMethods.GetForegroundWindow();
 
         var windows = _windowScanner!.Scan();
+        _historyStore!.RecordScan(windows);
         var cells = _cellAssigner!.Assign(windows);
         _currentCells = cells;
         _state = OverlayState.TaskGrid;
@@ -119,6 +125,7 @@ public partial class App : System.Windows.Application
         try
         {
             var windows = _windowScanner!.Scan();
+            _historyStore!.RecordScan(windows);
             var cells = _cellAssigner!.Assign(windows);
             _currentCells = cells;
             _overlayWindow!.UpdateCells(cells);
@@ -126,6 +133,23 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             Logger.Error(ex);
+        }
+    }
+
+    /// <summary>Manage center is a singleton normal window; reopening just brings it forward.</summary>
+    private void ShowManageWindow()
+    {
+        if (_manageWindow == null)
+        {
+            _manageWindow = new ManageWindow(_pinStore!, _historyStore!, _autoStartManager!, _windowScanner!);
+            _manageWindow.Closed += (_, _) => _manageWindow = null;
+            _manageWindow.Show();
+        }
+        else
+        {
+            if (_manageWindow.WindowState == WindowState.Minimized)
+                _manageWindow.WindowState = WindowState.Normal;
+            _manageWindow.Activate();
         }
     }
 

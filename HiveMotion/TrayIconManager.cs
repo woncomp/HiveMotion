@@ -13,10 +13,22 @@ public sealed class TrayIconManager : IDisposable
     public event EventHandler? ExitRequested;
     /// <summary>Left-click on the tray icon: show the overlay.</summary>
     public event EventHandler? ShowRequested;
+    /// <summary>"管理中心…" menu item: open the manage window.</summary>
+    public event EventHandler? ManageRequested;
 
     public TrayIconManager(AutoStartManager autoStartManager)
     {
         _contextMenu = new ContextMenuStrip();
+
+        var showItem = new ToolStripMenuItem("打开蜂巢");
+        showItem.Click += (_, _) => ShowRequested?.Invoke(this, EventArgs.Empty);
+        _contextMenu.Items.Add(showItem);
+
+        var manageItem = new ToolStripMenuItem("管理中心…");
+        manageItem.Click += (_, _) => ManageRequested?.Invoke(this, EventArgs.Empty);
+        _contextMenu.Items.Add(manageItem);
+
+        _contextMenu.Items.Add(new ToolStripSeparator());
 
         var autoStartItem = new ToolStripMenuItem("开机自启动")
         {

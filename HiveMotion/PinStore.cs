@@ -17,6 +17,10 @@ public sealed class PinStore
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HiveMotion");
     private static readonly string StoreFile = Path.Combine(StoreDirectory, "pins.json");
 
+    /// <summary>Config directory shared by pins.json and history.json.</summary>
+    public static string StoreDirectoryPath => StoreDirectory;
+    public static string PinsFilePath => StoreFile;
+
     public List<PinnedApp> Pins { get; } = new();
 
     public PinStore()

@@ -21,4 +21,6 @@ public sealed class RunningWindow
     public string? ExecutablePath { get; set; }
     /// <summary>Command line argument tail of the owning process; null when unreadable.</summary>
     public string? CommandLineArguments { get; set; }
+    /// <summary>Working directory of the owning process; null when unreadable.</summary>
+    public string? WorkingDirectory { get; set; }
 }

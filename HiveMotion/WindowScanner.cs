@@ -95,12 +95,16 @@ public sealed class WindowScanner
 
             string appName = ResolveAppName(processName, title);
 
-            // Launch identity, used by pinned-cell matching. Best effort: elevated or
-            // protected processes refuse the PEB read and simply stay unpinnable-by-args.
+            // Launch identity, used by pinned-cell matching and the launch history.
+            // Best effort: elevated or protected processes refuse the PEB read.
             string? executablePath = ProcessIdentity.TryGetImagePath(pid);
             string? arguments = null;
-            if (ProcessIdentity.TryReadProcessParameters(pid, out string? commandLine, out _))
+            string? workingDirectory = null;
+            if (ProcessIdentity.TryReadProcessParameters(pid, out string? commandLine, out string? currentDirectory))
+            {
                 arguments = ProcessIdentity.ExtractArguments(commandLine);
+                workingDirectory = currentDirectory;
+            }
 
             result.Add(new RunningWindow
             {
@@ -114,7 +118,8 @@ public sealed class WindowScanner
                 ZOrder = zOrder,
                 PreferredLetter = PreferredLetter(appName, processName),
                 ExecutablePath = executablePath,
-                CommandLineArguments = arguments
+                CommandLineArguments = arguments,
+                WorkingDirectory = workingDirectory
             });
         }
 

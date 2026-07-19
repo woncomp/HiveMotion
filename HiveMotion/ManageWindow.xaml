@@ -1,0 +1,320 @@
+<Window x:Class="HiveMotion.ManageWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HiveMotion 管理中心" Width="920" Height="620" MinWidth="780" MinHeight="540"
+        Background="#F214161D" Foreground="#E6FFFFFF"
+        FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei"
+        WindowStartupLocation="CenterScreen"
+        KeyDown="OnWindowKeyDown">
+    <Window.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="#0DFFFFFF" />
+            <Setter Property="BorderBrush" Value="#1FFFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+        <Style x:Key="FieldStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="#14FFFFFF" />
+            <Setter Property="BorderBrush" Value="#33FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#E6FFFFFF" />
+            <Setter Property="CaretBrush" Value="#F5C542" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ButtonStyle" TargetType="Border">
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="#14FFFFFF" />
+            <Setter Property="BorderBrush" Value="#33FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#66FFFFFF" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="196" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 左侧导航 -->
+        <Border Background="#0F1014" BorderBrush="#1FFFFFFF" BorderThickness="0,0,1,0">
+            <StackPanel>
+                <TextBlock Text="HiveMotion" FontSize="18" FontWeight="SemiBold"
+                           Foreground="#F2FFFFFF" Margin="20,22,20,2" />
+                <TextBlock Text="管 理 中 心" FontSize="10" Foreground="#66F5C542" Margin="20,0,20,18" />
+
+                <Border x:Name="NavPins" Padding="12,10" Margin="10,2" CornerRadius="8"
+                        Cursor="Hand" MouseLeftButtonUp="OnNavPinsClick">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="固 定" FontSize="13" Foreground="#E6FFFFFF" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="NavGeneral" Padding="12,10" Margin="10,2" CornerRadius="8"
+                        Cursor="Hand" MouseLeftButtonUp="OnNavGeneralClick">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="常 规" FontSize="13" Foreground="#E6FFFFFF" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- 内容区 -->
+        <Grid Grid.Column="1" Margin="16">
+
+            <!-- 固定页 -->
+            <Grid x:Name="PagePins">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- 字母总览:拖拽改键,点击编辑 -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid Margin="2,0,2,8">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="字 母 分 配" FontSize="12" Foreground="#99F5C542" VerticalAlignment="Center" />
+                                <TextBlock Text="拖拽格子调整字母 · 点击格子编辑" FontSize="11"
+                                           Foreground="#59FFFFFF" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            </StackPanel>
+                            <Border x:Name="ClearPinsButton" Style="{StaticResource ButtonStyle}"
+                                    Padding="10,4" HorizontalAlignment="Right"
+                                    MouseLeftButtonUp="OnClearPinsClick">
+                                <TextBlock Text="清空全部固定" FontSize="11" Foreground="#BFFFFFFF" />
+                            </Border>
+                        </Grid>
+                        <StackPanel x:Name="LetterRows" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 编辑器 -->
+                <Border Style="{StaticResource CardStyle}" Grid.Row="1" Margin="0,12,0,0">
+                    <Grid>
+                        <TextBlock x:Name="EditorEmpty" Text="点 击 上 方 格 子 查 看 或 编 辑 固 定"
+                                   FontSize="13" Foreground="#40FFFFFF"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                        <Grid x:Name="EditorPanel" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <!-- 头部:图标 + 名称 + 状态 -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
+                                        BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top">
+                                    <Image x:Name="EditorIcon" Width="32" Height="32"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
+                                                BorderBrush="#80F5B301" BorderThickness="1"
+                                                VerticalAlignment="Center" Margin="0,0,8,0">
+                                            <TextBlock x:Name="EditorLetterBadge" Text="N" FontSize="12"
+                                                       FontWeight="Bold" Foreground="#FFFFD97A" />
+                                        </Border>
+                                        <TextBox x:Name="EditorName" Style="{StaticResource FieldStyle}"
+                                                 FontSize="15" FontWeight="SemiBold" MinWidth="240"
+                                                 LostFocus="OnEditorFieldLostFocus" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="EditorStatus" Text="" FontSize="11"
+                                               Foreground="#66FFFFFF" Margin="2,6,0,0" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Grid.Row="1" Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="程序路径" Style="{StaticResource LabelStyle}" />
+                                <TextBox x:Name="EditorPath" Grid.Column="1" Style="{StaticResource FieldStyle}"
+                                         TextChanged="OnEditorPathChanged" LostFocus="OnEditorFieldLostFocus" />
+                                <Border x:Name="BrowsePathButton" Grid.Column="2" Style="{StaticResource ButtonStyle}"
+                                        Padding="10,5" Margin="8,0,0,0" MouseLeftButtonUp="OnBrowsePathClick">
+                                    <TextBlock Text="浏览…" FontSize="12" Foreground="#BFFFFFFF" />
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="PathWarning" Grid.Row="2" Text="⚠ 文件当前不存在(可能是移动磁盘未连接)"
+                                       FontSize="10" Foreground="#E5484D" Visibility="Collapsed" Margin="64,4,0,0" />
+
+                            <Grid Grid.Row="3" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="启动参数" Style="{StaticResource LabelStyle}" />
+                                <TextBox x:Name="EditorArgs" Grid.Column="1" Style="{StaticResource FieldStyle}"
+                                         TextChanged="OnEditorArgsChanged" LostFocus="OnEditorFieldLostFocus" />
+                            </Grid>
+
+                            <Grid Grid.Row="4" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="工作目录" Style="{StaticResource LabelStyle}" />
+                                <TextBox x:Name="EditorCwd" Grid.Column="1" Style="{StaticResource FieldStyle}"
+                                         LostFocus="OnEditorFieldLostFocus" />
+                                <Border x:Name="BrowseCwdButton" Grid.Column="2" Style="{StaticResource ButtonStyle}"
+                                        Padding="10,5" Margin="8,0,0,0" MouseLeftButtonUp="OnBrowseCwdClick">
+                                    <TextBlock Text="浏览…" FontSize="12" Foreground="#BFFFFFFF" />
+                                </Border>
+                            </Grid>
+
+                            <StackPanel Grid.Row="5" Margin="0,12,0,0">
+                                <TextBlock Text="完整命令行" Style="{StaticResource LabelStyle}" />
+                                <TextBlock x:Name="EditorPreview" FontSize="12" Foreground="#99FFFFFF"
+                                           TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,12,0,0">
+                                <Border x:Name="LaunchButton" Style="{StaticResource ButtonStyle}"
+                                        Background="#26F5B301" BorderBrush="#80F5B301"
+                                        MouseLeftButtonUp="OnLaunchClick">
+                                    <TextBlock Text="立 即 启 动" FontSize="12" Foreground="#FFFFD97A" />
+                                </Border>
+                                <Border x:Name="DeletePinButton" Style="{StaticResource ButtonStyle}"
+                                        Margin="10,0,0,0" BorderBrush="#80E5484D"
+                                        MouseLeftButtonUp="OnDeletePinClick">
+                                    <TextBlock Text="删 除 固 定" FontSize="12" Foreground="#FFE5484D" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- 常规页 -->
+            <Grid x:Name="PageGeneral" Visibility="Collapsed">
+                <StackPanel>
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="启 动" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,10" />
+                            <CheckBox x:Name="AutoStartBox" Content="开机自启动" FontSize="13"
+                                      Foreground="#E6FFFFFF" Margin="2,0,0,0"
+                                      Checked="OnAutoStartChecked" Unchecked="OnAutoStartUnchecked" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="数 据" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,10" />
+                            <TextBlock x:Name="ConfigPathText" FontSize="11" Foreground="#66FFFFFF"
+                                       Margin="2,0,0,10" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal">
+                                <Border Style="{StaticResource ButtonStyle}" MouseLeftButtonUp="OnOpenConfigDirClick">
+                                    <TextBlock Text="打开配置目录" FontSize="12" Foreground="#BFFFFFFF" />
+                                </Border>
+                                <Border Style="{StaticResource ButtonStyle}" Margin="10,0,0,0"
+                                        MouseLeftButtonUp="OnOpenPinsFileClick">
+                                    <TextBlock Text="打开 pins.json" FontSize="12" Foreground="#BFFFFFFF" />
+                                </Border>
+                            </StackPanel>
+                            <Grid Margin="2,14,0,0">
+                                <TextBlock x:Name="HistoryCountText" FontSize="11" Foreground="#66FFFFFF"
+                                           VerticalAlignment="Center" />
+                                <Border Style="{StaticResource ButtonStyle}" Padding="10,4"
+                                        HorizontalAlignment="Right" MouseLeftButtonUp="OnClearHistoryClick">
+                                    <TextBlock Text="清空启动历史" FontSize="11" Foreground="#BFFFFFFF" />
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- 历史选择器(模态) -->
+        <Grid x:Name="PickerOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
+              MouseLeftButtonDown="OnPickerBackdropClick">
+            <Border Width="600" Height="440" CornerRadius="14" Background="#F214161D"
+                    BorderBrush="#59F5B301" BorderThickness="1" Padding="18"
+                    MouseLeftButtonDown="OnPickerDialogClick">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="32" ShadowDepth="12" />
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="PickerTitle" Text="固定到 F" FontSize="15" FontWeight="SemiBold"
+                               Foreground="#F2FFFFFF" />
+                    <TextBox x:Name="PickerSearch" Grid.Row="1" Style="{StaticResource FieldStyle}"
+                             Margin="0,10,0,10" TextChanged="OnPickerSearchChanged" />
+
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="PickerList" />
+                    </ScrollViewer>
+
+                    <Grid Grid.Row="3" Margin="0,10,0,0">
+                        <TextBlock Text="列表来自蜂巢历次扫描,按启动次数排序" FontSize="10"
+                                   Foreground="#59FFFFFF" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Border Style="{StaticResource ButtonStyle}" Padding="12,5"
+                                    MouseLeftButtonUp="OnPickerManualClick">
+                                <TextBlock Text="手动填写…" FontSize="12" Foreground="#BFFFFFFF" />
+                            </Border>
+                            <Border Style="{StaticResource ButtonStyle}" Padding="12,5" Margin="10,0,0,0"
+                                    MouseLeftButtonUp="OnPickerCancelClick">
+                                <TextBlock Text="取 消" FontSize="12" Foreground="#BFFFFFFF" />
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 确认弹窗(模态) -->
+        <Grid x:Name="ConfirmOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
+              MouseLeftButtonDown="OnConfirmBackdropClick">
+            <Border Width="420" CornerRadius="14" Background="#F214161D"
+                    BorderBrush="#59F5B301" BorderThickness="1" Padding="22,18"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    MouseLeftButtonDown="OnConfirmDialogClick">
+                <StackPanel>
+                    <TextBlock x:Name="ConfirmMessage" FontSize="14" Foreground="#E6FFFFFF"
+                               TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Border Style="{StaticResource ButtonStyle}" Background="#26F5B301"
+                                BorderBrush="#80F5B301" Padding="16,6" Margin="0,0,10,0"
+                                MouseLeftButtonUp="OnConfirmYesClick">
+                            <TextBlock Text="确 定" FontSize="12" Foreground="#FFFFD97A" />
+                        </Border>
+                        <Border Style="{StaticResource ButtonStyle}" Padding="16,6"
+                                MouseLeftButtonUp="OnConfirmNoClick">
+                            <TextBlock Text="取 消" FontSize="12" Foreground="#BFFFFFFF" />
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
