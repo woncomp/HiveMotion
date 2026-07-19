@@ -45,6 +45,13 @@ public partial class App : System.Windows.Application
         _overlayWindow = new OverlayWindow();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
         _overlayWindow.CloseRequested += (_, _) => CloseOverlay(restoreFocus: true);
+        _overlayWindow.Deactivated += (_, _) =>
+        {
+            // Clicking elsewhere dismisses the launcher (standard launcher behavior);
+            // without this the topmost grid would linger visible but unfocused.
+            if (_state == OverlayState.TaskGrid)
+                CloseOverlay(restoreFocus: false);
+        };
         _overlayWindow.Hide();
 
         _autoStartManager = new AutoStartManager();
@@ -74,10 +81,27 @@ public partial class App : System.Windows.Application
         // Never block the hook callback: marshal to the UI thread immediately.
         Dispatcher.BeginInvoke(() =>
         {
-            if (_state == OverlayState.Hidden)
-                OpenTaskGrid();
-            else
-                CloseOverlay(restoreFocus: true);
+            try
+            {
+                if (_state == OverlayState.Hidden)
+                {
+                    OpenTaskGrid();
+                }
+                else if (_overlayWindow!.ContainsCursor())
+                {
+                    // Same screen as the overlay: toggle closed.
+                    CloseOverlay(restoreFocus: true);
+                }
+                else
+                {
+                    // Cursor moved to another screen: the hive follows the mouse.
+                    OpenTaskGrid();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+            }
         });
     }
 
@@ -96,6 +120,8 @@ public partial class App : System.Windows.Application
     {
         // A deliberate switch, not a cancel: focus goes to the chosen window, not back.
         _previousForeground = IntPtr.Zero;
+        // Mark hidden up front so the Deactivated handler stays a no-op during the switch.
+        _state = OverlayState.Hidden;
 
         if (cell.IsRunning)
         {

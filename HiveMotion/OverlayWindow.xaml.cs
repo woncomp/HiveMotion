@@ -109,6 +109,7 @@ public partial class OverlayWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             MoveToCursorScreen();
+            Logger.Info($"ShowTaskGrid: {DescribeGeometry()}");
             // Capture the desktop BEFORE showing so the frosted-glass layer sees the real screen.
             TaskGrid.SetBackdrop(CaptureBlurredBackdrop(_screen));
             TaskGrid.SetCells(cells);
@@ -120,6 +121,17 @@ public partial class OverlayWindow : Window
     }
 
     private System.Windows.Forms.Screen _screen = System.Windows.Forms.Screen.PrimaryScreen!;
+
+    /// <summary>True when the mouse cursor is on the same screen the overlay currently covers.</summary>
+    public bool ContainsCursor()
+    {
+        if (!NativeMethods.GetCursorPos(out var point))
+            return true;
+        return _screen.Bounds.Contains(point.x, point.y);
+    }
+
+    public string DescribeGeometry() =>
+        $"screen={_screen.DeviceName} bounds={_screen.Bounds} window=({Left},{Top},{Width},{Height})";
 
     /// <summary>Cover the screen that currently holds the mouse cursor (multi-monitor aware).</summary>
     private void MoveToCursorScreen()
