@@ -133,7 +133,7 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <!-- 头部:图标 + 名称 + 状态 -->
+                            <!-- Header: icon + name + status -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -227,7 +227,7 @@
                 </Border>
             </Grid>
 
-            <!-- 优先级页 -->
+            <!-- Priority page -->
             <Grid x:Name="PagePriority" Visibility="Collapsed">
                 <StackPanel>
                     <Border Style="{StaticResource CardStyle}">
@@ -255,7 +255,7 @@
                 </StackPanel>
             </Grid>
 
-            <!-- 快捷键页 -->
+            <!-- Hotkeys page -->
             <Grid x:Name="PageHotkeys" Visibility="Collapsed">
                 <StackPanel>
                     <Border Style="{StaticResource CardStyle}">
@@ -278,7 +278,7 @@
                                 <StackPanel Orientation="Horizontal" Grid.Column="1">
                                     <Border Style="{StaticResource ButtonStyle}"
                                             MouseLeftButtonUp="OnRecordHotkeyClick">
-                                        <TextBlock x:Name="RecordHotkeyText" Text="录制新组合键…"
+                                        <TextBlock x:Name="RecordHotkeyText" Text="Record a new combo…"
                                                    FontSize="12" Foreground="#BFFFFFFF" />
                                     </Border>
                                     <Border Style="{StaticResource ButtonStyle}" Margin="10,0,0,0"
@@ -308,7 +308,7 @@
                 </StackPanel>
             </Grid>
 
-            <!-- 常规页 -->
+            <!-- General page -->
             <Grid x:Name="PageGeneral" Visibility="Collapsed">
                 <StackPanel>
                     <Border Style="{StaticResource CardStyle}">
@@ -384,14 +384,14 @@
                 </StackPanel>
             </Grid>
 
-            <!-- 关于页 -->
+            <!-- About page -->
             <Grid x:Name="PageAbout" Visibility="Collapsed">
                 <StackPanel>
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
                             <TextBlock Text="HiveMotion" FontSize="20" FontWeight="SemiBold"
                                        Foreground="#F2FFFFFF" Margin="2,0,0,2" />
-                            <TextBlock x:Name="VersionText" Text="版本" FontSize="11"
+                            <TextBlock x:Name="VersionText" Text="Version" FontSize="11"
                                        Foreground="#66FFFFFF" Margin="2,0,0,14" />
                             <TextBlock Text="{l:Loc About_Hotkeys}" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,8" />
                             <StackPanel x:Name="CheatsheetList" Margin="2,0,0,0" />
@@ -401,7 +401,7 @@
             </Grid>
         </Grid>
 
-        <!-- 历史选择器(模态) -->
+        <!-- History picker (modal) -->
         <Grid x:Name="PickerOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
               MouseLeftButtonDown="OnPickerBackdropClick">
             <Border Width="600" Height="440" CornerRadius="14" Background="#F214161D"
@@ -418,7 +418,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock x:Name="PickerTitle" Text="固定到 F" FontSize="15" FontWeight="SemiBold"
+                    <TextBlock x:Name="PickerTitle" Text="Pin to F" FontSize="15" FontWeight="SemiBold"
                                Foreground="#F2FFFFFF" />
                     <TextBox x:Name="PickerSearch" Grid.Row="1" Style="{StaticResource FieldStyle}"
                              Margin="0,10,0,10" TextChanged="OnPickerSearchChanged" />
@@ -445,7 +445,7 @@
             </Border>
         </Grid>
 
-        <!-- 确认弹窗(模态) -->
+        <!-- Confirm dialog (modal) -->
         <Grid x:Name="ConfirmOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
               MouseLeftButtonDown="OnConfirmBackdropClick">
             <Border Width="420" CornerRadius="14" Background="#F214161D"

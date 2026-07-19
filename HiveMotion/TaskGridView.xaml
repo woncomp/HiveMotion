@@ -85,7 +85,7 @@
                     </ScrollViewer>
                 </Border>
 
-                <!-- 复制成功的轻提示:浮在列表底部,自动淡出 -->
+                <!-- Copy-success toast: floats at the bottom of the list, fades out automatically -->
                 <Border x:Name="CopyToast" Canvas.Left="0" Canvas.Bottom="64" Width="552"
                         Opacity="0" IsHitTestVisible="False">
                     <Border HorizontalAlignment="Center" Padding="14,5" CornerRadius="8"

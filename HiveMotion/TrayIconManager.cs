@@ -18,7 +18,7 @@ public sealed class TrayIconManager : IDisposable
     public event EventHandler? ExitRequested;
     /// <summary>Left-click on the tray icon: show the overlay.</summary>
     public event EventHandler? ShowRequested;
-    /// <summary>"管理中心…" menu item: open the manage window.</summary>
+    /// <summary>"Manage center…" menu item: open the manage window.</summary>
     public event EventHandler? ManageRequested;
 
     public TrayIconManager(AutoStartManager autoStartManager)
