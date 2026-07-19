@@ -11,4 +11,13 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The .NET 10 SDK turns UseWindowsForms into implicit global usings for
+         System.Drawing/System.Windows.Forms, which clash with the WPF namespaces
+         imported by the code-behind files (Cursors, DragEventArgs, Binding...).
+         All WinForms usages in this project import the namespaces explicitly. -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
 </Project>

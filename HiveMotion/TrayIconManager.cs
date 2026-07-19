@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using HiveMotion.Localization;
 
 namespace HiveMotion;
 
@@ -8,6 +9,10 @@ public sealed class TrayIconManager : IDisposable
 {
     private readonly NotifyIcon _notifyIcon;
     private readonly ContextMenuStrip _contextMenu;
+    private readonly ToolStripMenuItem _showItem;
+    private readonly ToolStripMenuItem _manageItem;
+    private readonly ToolStripMenuItem _autoStartItem;
+    private readonly ToolStripMenuItem _exitItem;
     private bool _disposed;
 
     public event EventHandler? ExitRequested;
@@ -20,36 +25,36 @@ public sealed class TrayIconManager : IDisposable
     {
         _contextMenu = new ContextMenuStrip();
 
-        var showItem = new ToolStripMenuItem("打开蜂巢");
-        showItem.Click += (_, _) => ShowRequested?.Invoke(this, EventArgs.Empty);
-        _contextMenu.Items.Add(showItem);
+        _showItem = new ToolStripMenuItem();
+        _showItem.Click += (_, _) => ShowRequested?.Invoke(this, EventArgs.Empty);
+        _contextMenu.Items.Add(_showItem);
 
-        var manageItem = new ToolStripMenuItem("管理中心…");
-        manageItem.Click += (_, _) => ManageRequested?.Invoke(this, EventArgs.Empty);
-        _contextMenu.Items.Add(manageItem);
+        _manageItem = new ToolStripMenuItem();
+        _manageItem.Click += (_, _) => ManageRequested?.Invoke(this, EventArgs.Empty);
+        _contextMenu.Items.Add(_manageItem);
 
         _contextMenu.Items.Add(new ToolStripSeparator());
 
-        var autoStartItem = new ToolStripMenuItem("开机自启动")
+        _autoStartItem = new ToolStripMenuItem
         {
             Checked = autoStartManager.IsAutoStartEnabled(),
             CheckOnClick = true
         };
-        autoStartItem.Click += (_, _) =>
+        _autoStartItem.Click += (_, _) =>
         {
-            autoStartItem.Checked = !autoStartItem.Checked;
-            if (autoStartItem.Checked)
+            _autoStartItem.Checked = !_autoStartItem.Checked;
+            if (_autoStartItem.Checked)
                 autoStartManager.EnableAutoStart();
             else
                 autoStartManager.DisableAutoStart();
         };
-        _contextMenu.Items.Add(autoStartItem);
+        _contextMenu.Items.Add(_autoStartItem);
 
         _contextMenu.Items.Add(new ToolStripSeparator());
 
-        var exitItem = new ToolStripMenuItem("退出");
-        exitItem.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
-        _contextMenu.Items.Add(exitItem);
+        _exitItem = new ToolStripMenuItem();
+        _exitItem.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
+        _contextMenu.Items.Add(_exitItem);
 
         _notifyIcon = new NotifyIcon
         {
@@ -63,6 +68,19 @@ public sealed class TrayIconManager : IDisposable
             if (e.Button == MouseButtons.Left)
                 ShowRequested?.Invoke(this, EventArgs.Empty);
         };
+
+        ApplyLocalizedStrings();
+        LocalizationManager.Instance.CultureChanged += OnCultureChanged;
+    }
+
+    private void OnCultureChanged(object? sender, EventArgs e) => ApplyLocalizedStrings();
+
+    private void ApplyLocalizedStrings()
+    {
+        _showItem.Text = Loc.Get("Tray_OpenHive");
+        _manageItem.Text = Loc.Get("Tray_Manage");
+        _autoStartItem.Text = Loc.Get("Tray_AutoStart");
+        _exitItem.Text = Loc.Get("Tray_Exit");
     }
 
     private static System.Drawing.Icon LoadAppIcon()
@@ -88,6 +106,7 @@ public sealed class TrayIconManager : IDisposable
     {
         if (_disposed)
             return;
+        LocalizationManager.Instance.CultureChanged -= OnCultureChanged;
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
         _contextMenu.Dispose();

@@ -21,15 +21,15 @@ public sealed class WindowScanner
         "SearchHost", "StartMenuExperienceHost", "MoNotificationUx", "TabTip"
     };
 
+    /// <summary>
+    /// Locale-neutral brand names. Names that should follow the UI language
+    /// (Notepad, Paint, Explorer…) live in the resx under "AppName_{process}" instead.
+    /// </summary>
     private static readonly Dictionary<string, string> DisplayNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["notepad"] = "记事本",
         ["msedge"] = "Edge",
         ["code"] = "VS Code",
-        ["explorer"] = "资源管理器",
         ["devenv"] = "Visual Studio",
-        ["windowsterminal"] = "终端",
-        ["cmd"] = "命令提示符",
         ["powershell"] = "PowerShell",
         ["pwsh"] = "PowerShell",
         ["chrome"] = "Chrome",
@@ -38,8 +38,6 @@ public sealed class WindowScanner
         ["excel"] = "Excel",
         ["powerpnt"] = "PowerPoint",
         ["outlook"] = "Outlook",
-        ["mspaint"] = "画图",
-        ["wechat"] = "微信",
         ["qq"] = "QQ"
     };
 
@@ -166,6 +164,9 @@ public sealed class WindowScanner
         // UWP windows all share ApplicationFrameHost; the window title is the only useful name.
         if (processName.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
             return title;
+
+        if (Loc.TryGet("AppName_" + processName.ToLowerInvariant()) is { } localized)
+            return localized;
 
         if (DisplayNames.TryGetValue(processName, out string? display))
             return display;

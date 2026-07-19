@@ -1,0 +1,414 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader>
+    <value name="resmimetype">text/microsoft-resx</value>
+    <value name="version">2.0</value>
+    <value name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    <value name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common_Ok" xml:space="preserve">
+    <value>好</value>
+  </data>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>取 消</value>
+  </data>
+  <data name="Common_Confirm" xml:space="preserve">
+    <value>确 定</value>
+  </data>
+  <data name="Common_Browse" xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="Tray_OpenHive" xml:space="preserve">
+    <value>打开蜂巢</value>
+  </data>
+  <data name="Tray_Manage" xml:space="preserve">
+    <value>管理中心…</value>
+  </data>
+  <data name="Tray_AutoStart" xml:space="preserve">
+    <value>开机自启动</value>
+  </data>
+  <data name="Tray_Exit" xml:space="preserve">
+    <value>退出</value>
+  </data>
+  <data name="App_UnpinMessage" xml:space="preserve">
+    <value>移除固定在 {0} 键的「{1}」?
+{2}</value>
+  </data>
+  <data name="App_UnpinConfirm" xml:space="preserve">
+    <value>移 除</value>
+  </data>
+  <data name="App_UwpNotPinnable" xml:space="preserve">
+    <value>该应用为 UWP 应用,暂不支持固定。</value>
+  </data>
+  <data name="App_CannotReadPath" xml:space="preserve">
+    <value>无法读取该程序的启动路径,不能固定。</value>
+  </data>
+  <data name="App_MovePinMessage" xml:space="preserve">
+    <value>「{0}」已固定在 {1} 键,移动到 {2} 键?</value>
+  </data>
+  <data name="App_MovePinConfirm" xml:space="preserve">
+    <value>移 动</value>
+  </data>
+  <data name="Cell_ClickToLaunch" xml:space="preserve">
+    <value>点 击 启 动</value>
+  </data>
+  <data name="Grid_AllWindowsCount" xml:space="preserve">
+    <value>全 部 窗 口 · {0}</value>
+  </data>
+  <data name="Grid_NoMatches" xml:space="preserve">
+    <value>没 有 匹 配 的 窗 口</value>
+  </data>
+  <data name="Grid_PressSpace" xml:space="preserve">
+    <value>按 下 空 格 搜 索</value>
+  </data>
+  <data name="Grid_SearchPlaceholder" xml:space="preserve">
+    <value>输 入 窗 口 标 题 或 应 用 名 …</value>
+  </data>
+  <data name="Grid_EscExit" xml:space="preserve">
+    <value>Esc 退 出</value>
+  </data>
+  <data name="Grid_HintJump" xml:space="preserve">
+    <value>直 达 窗 口</value>
+  </data>
+  <data name="Grid_KeySpace" xml:space="preserve">
+    <value>空 格</value>
+  </data>
+  <data name="Grid_HintSearch" xml:space="preserve">
+    <value>搜 索</value>
+  </data>
+  <data name="Grid_HintPin" xml:space="preserve">
+    <value>固 定 / 取 消</value>
+  </data>
+  <data name="Grid_HintClose" xml:space="preserve">
+    <value>关 闭</value>
+  </data>
+  <data name="Grid_HintExitSearch" xml:space="preserve">
+    <value>退 出 搜 索</value>
+  </data>
+  <data name="Grid_LaunchInfoWithDir" xml:space="preserve">
+    <value>{0}
+工作目录: {1}</value>
+  </data>
+  <data name="Grid_StatusRunning" xml:space="preserve">
+    <value>运 行 中</value>
+  </data>
+  <data name="Grid_StatusNotRunning" xml:space="preserve">
+    <value>未 运 行</value>
+  </data>
+  <data name="Manage_Title" xml:space="preserve">
+    <value>HiveMotion 管理中心</value>
+  </data>
+  <data name="Nav_Subtitle" xml:space="preserve">
+    <value>管 理 中 心</value>
+  </data>
+  <data name="Nav_Pins" xml:space="preserve">
+    <value>固 定</value>
+  </data>
+  <data name="Nav_Priority" xml:space="preserve">
+    <value>优 先 级</value>
+  </data>
+  <data name="Nav_Hotkeys" xml:space="preserve">
+    <value>快 捷 键</value>
+  </data>
+  <data name="Nav_General" xml:space="preserve">
+    <value>常 规</value>
+  </data>
+  <data name="Nav_About" xml:space="preserve">
+    <value>关 于</value>
+  </data>
+  <data name="Pins_Header" xml:space="preserve">
+    <value>字 母 分 配</value>
+  </data>
+  <data name="Pins_Hint" xml:space="preserve">
+    <value>拖拽格子调整字母 · 点击格子编辑</value>
+  </data>
+  <data name="Pins_ClearAll" xml:space="preserve">
+    <value>清空全部固定</value>
+  </data>
+  <data name="Pins_EditorEmpty" xml:space="preserve">
+    <value>点 击 上 方 格 子 查 看 或 编 辑 固 定</value>
+  </data>
+  <data name="Pins_ProgramPath" xml:space="preserve">
+    <value>程序路径</value>
+  </data>
+  <data name="Pins_PathWarning" xml:space="preserve">
+    <value>⚠ 文件当前不存在(可能是移动磁盘未连接)</value>
+  </data>
+  <data name="Pins_Arguments" xml:space="preserve">
+    <value>启动参数</value>
+  </data>
+  <data name="Pins_WorkingDir" xml:space="preserve">
+    <value>工作目录</value>
+  </data>
+  <data name="Pins_CommandLine" xml:space="preserve">
+    <value>完整命令行</value>
+  </data>
+  <data name="Pins_Launch" xml:space="preserve">
+    <value>立 即 启 动</value>
+  </data>
+  <data name="Pins_Delete" xml:space="preserve">
+    <value>删 除 固 定</value>
+  </data>
+  <data name="Pins_StatusRunning" xml:space="preserve">
+    <value>● 运行中(有窗口匹配该命令行)</value>
+  </data>
+  <data name="Pins_StatusNotRunning" xml:space="preserve">
+    <value>○ 未运行</value>
+  </data>
+  <data name="Pins_PinToLetter" xml:space="preserve">
+    <value>固定到 {0}</value>
+  </data>
+  <data name="Pins_DeleteConfirm" xml:space="preserve">
+    <value>移除固定在 {0} 键的「{1}」?</value>
+  </data>
+  <data name="Pins_ClearAllConfirm" xml:space="preserve">
+    <value>清空全部固定?此操作不可撤销。</value>
+  </data>
+  <data name="Pins_PickerTitle" xml:space="preserve">
+    <value>固定到 {0} 键</value>
+  </data>
+  <data name="Priority_Header" xml:space="preserve">
+    <value>优 先 级</value>
+  </data>
+  <data name="Priority_Desc" xml:space="preserve">
+    <value>蜂巢打开时,进程名越靠上的窗口越先挑选自己想要的字母</value>
+  </data>
+  <data name="Priority_Add" xml:space="preserve">
+    <value>添 加</value>
+  </data>
+  <data name="Priority_Hint" xml:space="preserve">
+    <value>填写进程名(不含 .exe),例如 msedge、Code、devenv</value>
+  </data>
+  <data name="Hotkeys_Header" xml:space="preserve">
+    <value>召 唤 组 合 键</value>
+  </data>
+  <data name="Hotkeys_Current" xml:space="preserve">
+    <value>当前:</value>
+  </data>
+  <data name="Hotkeys_Record" xml:space="preserve">
+    <value>录制新组合键…</value>
+  </data>
+  <data name="Hotkeys_Recording" xml:space="preserve">
+    <value>录制中…</value>
+  </data>
+  <data name="Hotkeys_Reset" xml:space="preserve">
+    <value>恢复默认</value>
+  </data>
+  <data name="Hotkeys_CaptureHint" xml:space="preserve">
+    <value>请按下新的组合键(需包含至少一个修饰键),Esc 取消</value>
+  </data>
+  <data name="Hotkeys_Behavior" xml:space="preserve">
+    <value>行 为</value>
+  </data>
+  <data name="Hotkeys_Passthrough" xml:space="preserve">
+    <value>蜂巢打开时再次按下:穿透给系统原生功能(如任务视图)</value>
+  </data>
+  <data name="Hotkeys_PassthroughDesc" xml:space="preserve">
+    <value>关闭后,再次按下只会关闭蜂巢,不会触发组合键的系统功能</value>
+  </data>
+  <data name="Hotkeys_NeedModifier" xml:space="preserve">
+    <value>组合键需要至少一个修饰键(Win / Ctrl / Alt / Shift)</value>
+  </data>
+  <data name="Hotkeys_Conflict" xml:space="preserve">
+    <value>⚠ {0} 可能与系统组合键冲突,若不生效请换一个组合</value>
+  </data>
+  <data name="General_Startup" xml:space="preserve">
+    <value>启 动</value>
+  </data>
+  <data name="General_AutoStart" xml:space="preserve">
+    <value>开机自启动</value>
+  </data>
+  <data name="General_Language" xml:space="preserve">
+    <value>语 言</value>
+  </data>
+  <data name="General_LanguageSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="General_Data" xml:space="preserve">
+    <value>数 据</value>
+  </data>
+  <data name="General_OpenConfigDir" xml:space="preserve">
+    <value>打开配置目录</value>
+  </data>
+  <data name="General_OpenPins" xml:space="preserve">
+    <value>打开 pins.json</value>
+  </data>
+  <data name="General_ClearHistory" xml:space="preserve">
+    <value>清空启动历史</value>
+  </data>
+  <data name="General_HistoryCount" xml:space="preserve">
+    <value>启动历史:已记录 {0} 条</value>
+  </data>
+  <data name="General_ClearHistoryConfirm" xml:space="preserve">
+    <value>清空全部启动历史?</value>
+  </data>
+  <data name="General_Backup" xml:space="preserve">
+    <value>备 份</value>
+  </data>
+  <data name="General_BackupDesc" xml:space="preserve">
+    <value>导出/导入固定、启动历史与设置(快捷键、优先级、语言)</value>
+  </data>
+  <data name="General_Export" xml:space="preserve">
+    <value>导出配置…</value>
+  </data>
+  <data name="General_Import" xml:space="preserve">
+    <value>导入配置…</value>
+  </data>
+  <data name="About_Version" xml:space="preserve">
+    <value>版本 {0} · 配置目录: {1}</value>
+  </data>
+  <data name="About_Hotkeys" xml:space="preserve">
+    <value>快 捷 键</value>
+  </data>
+  <data name="Cheat_Summon" xml:space="preserve">
+    <value>召唤蜂巢</value>
+  </data>
+  <data name="Cheat_Jump" xml:space="preserve">
+    <value>直达对应格子的窗口</value>
+  </data>
+  <data name="Cheat_Space" xml:space="preserve">
+    <value>空 格</value>
+  </data>
+  <data name="Cheat_Search" xml:space="preserve">
+    <value>搜索窗口</value>
+  </data>
+  <data name="Cheat_Pin" xml:space="preserve">
+    <value>固定当前格 / 取消固定</value>
+  </data>
+  <data name="Cheat_Close" xml:space="preserve">
+    <value>关闭蜂巢</value>
+  </data>
+  <data name="Picker_Desc" xml:space="preserve">
+    <value>列表来自蜂巢历次扫描,按启动次数排序</value>
+  </data>
+  <data name="Picker_Manual" xml:space="preserve">
+    <value>手动填写…</value>
+  </data>
+  <data name="Picker_Empty" xml:space="preserve">
+    <value>没 有 匹 配 的 历 史 记 录</value>
+  </data>
+  <data name="Picker_FileMissing" xml:space="preserve">
+    <value>  (文件缺失)</value>
+  </data>
+  <data name="Picker_RunningPrefix" xml:space="preserve">
+    <value>运行中 · </value>
+  </data>
+  <data name="Picker_LaunchMeta" xml:space="preserve">
+    <value>启动 {0} 次 · {1}</value>
+  </data>
+  <data name="Dialog_ExeFilter" xml:space="preserve">
+    <value>可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*</value>
+  </data>
+  <data name="Dialog_SelectProgram" xml:space="preserve">
+    <value>选择程序</value>
+  </data>
+  <data name="Dialog_SelectPinProgram" xml:space="preserve">
+    <value>选择要固定的程序</value>
+  </data>
+  <data name="Dialog_SelectWorkingDir" xml:space="preserve">
+    <value>选择工作目录</value>
+  </data>
+  <data name="Dialog_ConfigFilter" xml:space="preserve">
+    <value>HiveMotion 配置 (*.json)|*.json</value>
+  </data>
+  <data name="Dialog_ExportConfig" xml:space="preserve">
+    <value>导出配置</value>
+  </data>
+  <data name="Dialog_ImportConfig" xml:space="preserve">
+    <value>导入配置</value>
+  </data>
+  <data name="Backup_ExportFailed" xml:space="preserve">
+    <value>导出失败:{0}</value>
+  </data>
+  <data name="Backup_ImportParseFailed" xml:space="preserve">
+    <value>导入失败,文件无法解析:{0}</value>
+  </data>
+  <data name="Backup_ImportEmpty" xml:space="preserve">
+    <value>导入失败:文件里没有可识别的配置。</value>
+  </data>
+  <data name="Backup_ImportConfirm" xml:space="preserve">
+    <value>导入将覆盖当前的固定、启动历史与设置,继续?</value>
+  </data>
+  <data name="Time_JustNow" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
+  <data name="Time_MinutesAgo" xml:space="preserve">
+    <value>{0} 分钟前</value>
+  </data>
+  <data name="Time_Today" xml:space="preserve">
+    <value>今天 {0}</value>
+  </data>
+  <data name="Time_Yesterday" xml:space="preserve">
+    <value>昨天</value>
+  </data>
+  <data name="Time_DaysAgo" xml:space="preserve">
+    <value>{0} 天前</value>
+  </data>
+  <data name="Time_DateFormat" xml:space="preserve">
+    <value>yyyy-MM-dd</value>
+  </data>
+  <data name="AppName_notepad" xml:space="preserve">
+    <value>记事本</value>
+  </data>
+  <data name="AppName_explorer" xml:space="preserve">
+    <value>资源管理器</value>
+  </data>
+  <data name="AppName_windowsterminal" xml:space="preserve">
+    <value>终端</value>
+  </data>
+  <data name="AppName_cmd" xml:space="preserve">
+    <value>命令提示符</value>
+  </data>
+  <data name="AppName_mspaint" xml:space="preserve">
+    <value>画图</value>
+  </data>
+  <data name="AppName_wechat" xml:space="preserve">
+    <value>微信</value>
+  </data>
+</root>

@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader>
+    <value name="resmimetype">text/microsoft-resx</value>
+    <value name="version">2.0</value>
+    <value name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    <value name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common_Ok" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Common_Confirm" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Common_Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Tray_OpenHive" xml:space="preserve">
+    <value>Open hive</value>
+  </data>
+  <data name="Tray_Manage" xml:space="preserve">
+    <value>Manage center…</value>
+  </data>
+  <data name="Tray_AutoStart" xml:space="preserve">
+    <value>Run at startup</value>
+  </data>
+  <data name="Tray_Exit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="App_UnpinMessage" xml:space="preserve">
+    <value>Remove the pin on {0} for "{1}"?
+{2}</value>
+  </data>
+  <data name="App_UnpinConfirm" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="App_UwpNotPinnable" xml:space="preserve">
+    <value>This is a UWP app and cannot be pinned yet.</value>
+  </data>
+  <data name="App_CannotReadPath" xml:space="preserve">
+    <value>Cannot read this app's launch path; it cannot be pinned.</value>
+  </data>
+  <data name="App_MovePinMessage" xml:space="preserve">
+    <value>"{0}" is already pinned to {1}. Move it to {2}?</value>
+  </data>
+  <data name="App_MovePinConfirm" xml:space="preserve">
+    <value>Move</value>
+  </data>
+  <data name="Cell_ClickToLaunch" xml:space="preserve">
+    <value>Click to launch</value>
+  </data>
+  <data name="Grid_AllWindowsCount" xml:space="preserve">
+    <value>All windows · {0}</value>
+  </data>
+  <data name="Grid_NoMatches" xml:space="preserve">
+    <value>No matching windows</value>
+  </data>
+  <data name="Grid_PressSpace" xml:space="preserve">
+    <value>Press Space to search</value>
+  </data>
+  <data name="Grid_SearchPlaceholder" xml:space="preserve">
+    <value>Type a window title or app name…</value>
+  </data>
+  <data name="Grid_EscExit" xml:space="preserve">
+    <value>Esc to exit</value>
+  </data>
+  <data name="Grid_HintJump" xml:space="preserve">
+    <value>Jump to window</value>
+  </data>
+  <data name="Grid_KeySpace" xml:space="preserve">
+    <value>Space</value>
+  </data>
+  <data name="Grid_HintSearch" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Grid_HintPin" xml:space="preserve">
+    <value>Pin / Unpin</value>
+  </data>
+  <data name="Grid_HintClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Grid_HintExitSearch" xml:space="preserve">
+    <value>Exit search</value>
+  </data>
+  <data name="Grid_LaunchInfoWithDir" xml:space="preserve">
+    <value>{0}
+Working directory: {1}</value>
+  </data>
+  <data name="Grid_StatusRunning" xml:space="preserve">
+    <value>Running</value>
+  </data>
+  <data name="Grid_StatusNotRunning" xml:space="preserve">
+    <value>Not running</value>
+  </data>
+  <data name="Manage_Title" xml:space="preserve">
+    <value>HiveMotion Management Center</value>
+  </data>
+  <data name="Nav_Subtitle" xml:space="preserve">
+    <value>Management Center</value>
+  </data>
+  <data name="Nav_Pins" xml:space="preserve">
+    <value>Pins</value>
+  </data>
+  <data name="Nav_Priority" xml:space="preserve">
+    <value>Priority</value>
+  </data>
+  <data name="Nav_Hotkeys" xml:space="preserve">
+    <value>Hotkeys</value>
+  </data>
+  <data name="Nav_General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Nav_About" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="Pins_Header" xml:space="preserve">
+    <value>Letter assignment</value>
+  </data>
+  <data name="Pins_Hint" xml:space="preserve">
+    <value>Drag tiles to change letters · Click a tile to edit</value>
+  </data>
+  <data name="Pins_ClearAll" xml:space="preserve">
+    <value>Clear all pins</value>
+  </data>
+  <data name="Pins_EditorEmpty" xml:space="preserve">
+    <value>Click a tile above to view or edit a pin</value>
+  </data>
+  <data name="Pins_ProgramPath" xml:space="preserve">
+    <value>Program path</value>
+  </data>
+  <data name="Pins_PathWarning" xml:space="preserve">
+    <value>⚠ File does not exist right now (a removable drive may be disconnected)</value>
+  </data>
+  <data name="Pins_Arguments" xml:space="preserve">
+    <value>Arguments</value>
+  </data>
+  <data name="Pins_WorkingDir" xml:space="preserve">
+    <value>Working directory</value>
+  </data>
+  <data name="Pins_CommandLine" xml:space="preserve">
+    <value>Full command line</value>
+  </data>
+  <data name="Pins_Launch" xml:space="preserve">
+    <value>Launch now</value>
+  </data>
+  <data name="Pins_Delete" xml:space="preserve">
+    <value>Delete pin</value>
+  </data>
+  <data name="Pins_StatusRunning" xml:space="preserve">
+    <value>● Running (a window matches this command line)</value>
+  </data>
+  <data name="Pins_StatusNotRunning" xml:space="preserve">
+    <value>○ Not running</value>
+  </data>
+  <data name="Pins_PinToLetter" xml:space="preserve">
+    <value>Pin to {0}</value>
+  </data>
+  <data name="Pins_DeleteConfirm" xml:space="preserve">
+    <value>Remove the pin on {0} for "{1}"?</value>
+  </data>
+  <data name="Pins_ClearAllConfirm" xml:space="preserve">
+    <value>Clear all pins? This cannot be undone.</value>
+  </data>
+  <data name="Pins_PickerTitle" xml:space="preserve">
+    <value>Pin to {0}</value>
+  </data>
+  <data name="Priority_Header" xml:space="preserve">
+    <value>Priority</value>
+  </data>
+  <data name="Priority_Desc" xml:space="preserve">
+    <value>When the hive opens, windows higher on this process-name list pick their letters first</value>
+  </data>
+  <data name="Priority_Add" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="Priority_Hint" xml:space="preserve">
+    <value>Enter a process name (without .exe), e.g. msedge, Code, devenv</value>
+  </data>
+  <data name="Hotkeys_Header" xml:space="preserve">
+    <value>Summon combo</value>
+  </data>
+  <data name="Hotkeys_Current" xml:space="preserve">
+    <value>Current:</value>
+  </data>
+  <data name="Hotkeys_Record" xml:space="preserve">
+    <value>Record a new combo…</value>
+  </data>
+  <data name="Hotkeys_Recording" xml:space="preserve">
+    <value>Recording…</value>
+  </data>
+  <data name="Hotkeys_Reset" xml:space="preserve">
+    <value>Reset to default</value>
+  </data>
+  <data name="Hotkeys_CaptureHint" xml:space="preserve">
+    <value>Press the new combo (needs at least one modifier); Esc cancels</value>
+  </data>
+  <data name="Hotkeys_Behavior" xml:space="preserve">
+    <value>Behavior</value>
+  </data>
+  <data name="Hotkeys_Passthrough" xml:space="preserve">
+    <value>Press again while the hive is open: pass through to the system's native action (e.g. Task View)</value>
+  </data>
+  <data name="Hotkeys_PassthroughDesc" xml:space="preserve">
+    <value>When off, pressing again only closes the hive and never triggers the combo's system action</value>
+  </data>
+  <data name="Hotkeys_NeedModifier" xml:space="preserve">
+    <value>The combo needs at least one modifier (Win / Ctrl / Alt / Shift)</value>
+  </data>
+  <data name="Hotkeys_Conflict" xml:space="preserve">
+    <value>⚠ {0} may conflict with a system combo; if it stops working, pick another combo</value>
+  </data>
+  <data name="General_Startup" xml:space="preserve">
+    <value>Startup</value>
+  </data>
+  <data name="General_AutoStart" xml:space="preserve">
+    <value>Run at startup</value>
+  </data>
+  <data name="General_Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="General_LanguageSystem" xml:space="preserve">
+    <value>System default</value>
+  </data>
+  <data name="General_Data" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="General_OpenConfigDir" xml:space="preserve">
+    <value>Open config folder</value>
+  </data>
+  <data name="General_OpenPins" xml:space="preserve">
+    <value>Open pins.json</value>
+  </data>
+  <data name="General_ClearHistory" xml:space="preserve">
+    <value>Clear launch history</value>
+  </data>
+  <data name="General_HistoryCount" xml:space="preserve">
+    <value>Launch history: {0} entries</value>
+  </data>
+  <data name="General_HistoryCount_One" xml:space="preserve">
+    <value>Launch history: 1 entry</value>
+  </data>
+  <data name="General_ClearHistoryConfirm" xml:space="preserve">
+    <value>Clear all launch history?</value>
+  </data>
+  <data name="General_Backup" xml:space="preserve">
+    <value>Backup</value>
+  </data>
+  <data name="General_BackupDesc" xml:space="preserve">
+    <value>Export/import pins, launch history and settings (hotkeys, priority, language)</value>
+  </data>
+  <data name="General_Export" xml:space="preserve">
+    <value>Export config…</value>
+  </data>
+  <data name="General_Import" xml:space="preserve">
+    <value>Import config…</value>
+  </data>
+  <data name="About_Version" xml:space="preserve">
+    <value>Version {0} · Config folder: {1}</value>
+  </data>
+  <data name="About_Hotkeys" xml:space="preserve">
+    <value>Hotkeys</value>
+  </data>
+  <data name="Cheat_Summon" xml:space="preserve">
+    <value>Summon the hive</value>
+  </data>
+  <data name="Cheat_Jump" xml:space="preserve">
+    <value>Jump to that cell's window</value>
+  </data>
+  <data name="Cheat_Space" xml:space="preserve">
+    <value>Space</value>
+  </data>
+  <data name="Cheat_Search" xml:space="preserve">
+    <value>Search windows</value>
+  </data>
+  <data name="Cheat_Pin" xml:space="preserve">
+    <value>Pin / unpin the current cell</value>
+  </data>
+  <data name="Cheat_Close" xml:space="preserve">
+    <value>Close the hive</value>
+  </data>
+  <data name="Picker_Desc" xml:space="preserve">
+    <value>From past hive scans, sorted by launch count</value>
+  </data>
+  <data name="Picker_Manual" xml:space="preserve">
+    <value>Enter manually…</value>
+  </data>
+  <data name="Picker_Empty" xml:space="preserve">
+    <value>No matching history</value>
+  </data>
+  <data name="Picker_FileMissing" xml:space="preserve">
+    <value>  (file missing)</value>
+  </data>
+  <data name="Picker_RunningPrefix" xml:space="preserve">
+    <value>Running · </value>
+  </data>
+  <data name="Picker_LaunchMeta" xml:space="preserve">
+    <value>Launched {0} times · {1}</value>
+  </data>
+  <data name="Picker_LaunchMeta_One" xml:space="preserve">
+    <value>Launched once · {1}</value>
+  </data>
+  <data name="Dialog_ExeFilter" xml:space="preserve">
+    <value>Executables (*.exe)|*.exe|All files (*.*)|*.*</value>
+  </data>
+  <data name="Dialog_SelectProgram" xml:space="preserve">
+    <value>Select a program</value>
+  </data>
+  <data name="Dialog_SelectPinProgram" xml:space="preserve">
+    <value>Select a program to pin</value>
+  </data>
+  <data name="Dialog_SelectWorkingDir" xml:space="preserve">
+    <value>Select a working directory</value>
+  </data>
+  <data name="Dialog_ConfigFilter" xml:space="preserve">
+    <value>HiveMotion config (*.json)|*.json</value>
+  </data>
+  <data name="Dialog_ExportConfig" xml:space="preserve">
+    <value>Export config</value>
+  </data>
+  <data name="Dialog_ImportConfig" xml:space="preserve">
+    <value>Import config</value>
+  </data>
+  <data name="Backup_ExportFailed" xml:space="preserve">
+    <value>Export failed: {0}</value>
+  </data>
+  <data name="Backup_ImportParseFailed" xml:space="preserve">
+    <value>Import failed; the file could not be parsed: {0}</value>
+  </data>
+  <data name="Backup_ImportEmpty" xml:space="preserve">
+    <value>Import failed: no recognizable config found in the file.</value>
+  </data>
+  <data name="Backup_ImportConfirm" xml:space="preserve">
+    <value>Importing overwrites current pins, launch history and settings. Continue?</value>
+  </data>
+  <data name="Time_JustNow" xml:space="preserve">
+    <value>Just now</value>
+  </data>
+  <data name="Time_MinutesAgo" xml:space="preserve">
+    <value>{0} min ago</value>
+  </data>
+  <data name="Time_Today" xml:space="preserve">
+    <value>Today {0}</value>
+  </data>
+  <data name="Time_Yesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+  <data name="Time_DaysAgo" xml:space="preserve">
+    <value>{0} days ago</value>
+  </data>
+  <data name="Time_DaysAgo_One" xml:space="preserve">
+    <value>{0} day ago</value>
+  </data>
+  <data name="Time_DateFormat" xml:space="preserve">
+    <value>MMM d, yyyy</value>
+  </data>
+  <data name="AppName_notepad" xml:space="preserve">
+    <value>Notepad</value>
+  </data>
+  <data name="AppName_explorer" xml:space="preserve">
+    <value>File Explorer</value>
+  </data>
+  <data name="AppName_windowsterminal" xml:space="preserve">
+    <value>Terminal</value>
+  </data>
+  <data name="AppName_cmd" xml:space="preserve">
+    <value>Command Prompt</value>
+  </data>
+  <data name="AppName_mspaint" xml:space="preserve">
+    <value>Paint</value>
+  </data>
+  <data name="AppName_wechat" xml:space="preserve">
+    <value>WeChat</value>
+  </data>
+</root>

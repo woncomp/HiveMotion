@@ -11,9 +11,11 @@ using System.Windows.Shapes;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
+using HiveMotion.Localization;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
 using Orientation = System.Windows.Controls.Orientation;
+using Path = System.IO.Path;
 using Point = System.Windows.Point;
 
 namespace HiveMotion;
@@ -72,7 +74,28 @@ public partial class ManageWindow : Window
         _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _statusTimer.Tick += (_, _) => Rescan();
         _statusTimer.Start();
-        Closed += (_, _) => _statusTimer.Stop();
+        UpdateLanguageButtons();
+        LocalizationManager.Instance.CultureChanged += OnCultureChanged;
+        Closed += (_, _) =>
+        {
+            _statusTimer.Stop();
+            LocalizationManager.Instance.CultureChanged -= OnCultureChanged;
+        };
+    }
+
+    /// <summary>Re-applies every code-set string after the UI language switched.</summary>
+    private void OnCultureChanged(object? sender, EventArgs e) => ApplyLocalizedStrings();
+
+    private void ApplyLocalizedStrings()
+    {
+        BuildLetterTiles();
+        UpdateEditorStatus();
+        UpdateHistoryCount();
+        RefreshHotkeyUi();
+        InitAboutPage();
+        if (PickerOverlay.Visibility == Visibility.Visible)
+            RebuildPickerList();
+        UpdateLanguageButtons();
     }
 
     // ---------- status ----------
@@ -153,7 +176,7 @@ public partial class ManageWindow : Window
             AllowDrop = true,
             Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(pin != null ? "#1AFFFFFF" : "#0AFFFFFF")),
             BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(pin != null ? "#80F5B301" : "#26FFFFFF")),
-            ToolTip = pin != null ? $"{letter}: {pin.DisplayName}" : $"固定到 {letter}"
+            ToolTip = pin != null ? $"{letter}: {pin.DisplayName}" : Loc.Format("Pins_PinToLetter", letter)
         };
 
         var content = new Grid();
@@ -361,7 +384,7 @@ public partial class ManageWindow : Window
         if (_selectedPin == null)
             return;
         bool running = IsIdentityRunning(_selectedPin);
-        EditorStatus.Text = running ? "● 运行中(有窗口匹配该命令行)" : "○ 未运行";
+        EditorStatus.Text = Loc.Get(running ? "Pins_StatusRunning" : "Pins_StatusNotRunning");
         EditorStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
             running ? "#CC7CFC00" : "#66FFFFFF"));
     }
@@ -421,8 +444,8 @@ public partial class ManageWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*",
-            Title = "选择程序"
+            Filter = Loc.Get("Dialog_ExeFilter"),
+            Title = Loc.Get("Dialog_SelectProgram")
         };
         if (dialog.ShowDialog(this) == true)
         {
@@ -437,7 +460,7 @@ public partial class ManageWindow : Window
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "选择工作目录"
+            Description = Loc.Get("Dialog_SelectWorkingDir")
         };
         if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
         {
@@ -460,7 +483,7 @@ public partial class ManageWindow : Window
         if (_selectedPin == null)
             return;
         var pin = _selectedPin;
-        ShowConfirm($"移除固定在 {pin.Key} 键的「{pin.DisplayName}」?", () =>
+        ShowConfirm(Loc.Format("Pins_DeleteConfirm", pin.Key, pin.DisplayName), () =>
         {
             _pinStore.Remove(pin.Key);
             BuildLetterTiles();
@@ -471,7 +494,7 @@ public partial class ManageWindow : Window
 
     private void OnClearPinsClick(object sender, MouseButtonEventArgs e)
     {
-        ShowConfirm("清空全部固定?此操作不可撤销。", () =>
+        ShowConfirm(Loc.Get("Pins_ClearAllConfirm"), () =>
         {
             foreach (var pin in _pinStore.Pins.ToList())
                 _pinStore.Remove(pin.Key);
@@ -486,7 +509,7 @@ public partial class ManageWindow : Window
     private void OpenPicker(char letter)
     {
         _pickerLetter = letter;
-        PickerTitle.Text = $"固定到 {letter} 键";
+        PickerTitle.Text = Loc.Format("Pins_PickerTitle", letter);
         PickerSearch.Text = string.Empty;
         RebuildPickerList();
         PickerOverlay.Visibility = Visibility.Visible;
@@ -521,7 +544,7 @@ public partial class ManageWindow : Window
         {
             PickerList.Children.Add(new TextBlock
             {
-                Text = "没 有 匹 配 的 历 史 记 录",
+                Text = Loc.Get("Picker_Empty"),
                 FontSize = 12,
                 Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#59FFFFFF")),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -557,7 +580,7 @@ public partial class ManageWindow : Window
         });
         texts.Children.Add(new TextBlock
         {
-            Text = entry.CommandLine + (missing ? "  (文件缺失)" : ""),
+            Text = entry.CommandLine + (missing ? Loc.Get("Picker_FileMissing") : ""),
             FontSize = 10,
             Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#66FFFFFF")),
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -573,7 +596,7 @@ public partial class ManageWindow : Window
         {
             meta.Children.Add(new TextBlock
             {
-                Text = "运行中 · ",
+                Text = Loc.Get("Picker_RunningPrefix"),
                 FontSize = 10,
                 Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CC7CFC00")),
                 VerticalAlignment = VerticalAlignment.Center
@@ -581,7 +604,7 @@ public partial class ManageWindow : Window
         }
         meta.Children.Add(new TextBlock
         {
-            Text = $"启动 {entry.LaunchCount} 次 · {RelativeTime(entry.LastSeen)}",
+            Text = Loc.Plural("Picker_LaunchMeta", entry.LaunchCount, entry.LaunchCount, RelativeTime(entry.LastSeen)),
             FontSize = 10,
             Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#66FFFFFF")),
             VerticalAlignment = VerticalAlignment.Center
@@ -640,8 +663,8 @@ public partial class ManageWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*",
-            Title = "选择要固定的程序"
+            Filter = Loc.Get("Dialog_ExeFilter"),
+            Title = Loc.Get("Dialog_SelectPinProgram")
         };
         if (dialog.ShowDialog(this) == true)
         {
@@ -794,6 +817,7 @@ public partial class ManageWindow : Window
         var settings = _settingsStore.Settings;
         HotkeyCurrentText.Text = string.Join(", ", settings.Hotkeys.Select(r => r.Name));
         PassthroughBox.IsChecked = settings.SecondPressPassthrough;
+        RecordHotkeyText.Text = Loc.Get(_capturingHotkey ? "Hotkeys_Recording" : "Hotkeys_Record");
         UpdateCheatsheet();
     }
 
@@ -809,7 +833,7 @@ public partial class ManageWindow : Window
         _capturingHotkey = true;
         HotkeyCaptureHint.Visibility = Visibility.Visible;
         HotkeyWarning.Visibility = Visibility.Collapsed;
-        RecordHotkeyText.Text = "录制中…";
+        RecordHotkeyText.Text = Loc.Get("Hotkeys_Recording");
         e.Handled = true;
     }
 
@@ -817,7 +841,7 @@ public partial class ManageWindow : Window
     {
         _capturingHotkey = false;
         HotkeyCaptureHint.Visibility = Visibility.Collapsed;
-        RecordHotkeyText.Text = "录制新组合键…";
+        RecordHotkeyText.Text = Loc.Get("Hotkeys_Record");
         _settingsStore.Settings.Hotkeys.Clear();
         _settingsStore.Settings.Hotkeys.Add(HotkeyRule.WinTab);
         _settingsStore.Save();
@@ -833,19 +857,19 @@ public partial class ManageWindow : Window
         {
             _capturingHotkey = false;
             HotkeyCaptureHint.Visibility = Visibility.Collapsed;
-            RecordHotkeyText.Text = "录制新组合键…";
+            RecordHotkeyText.Text = Loc.Get("Hotkeys_Record");
             return;
         }
 
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is Key.LWin or Key.RWin or Key.LControl or Key.RControl
-            or Key.LAlt or Key.RAlt or Key.LShift or Key.RShift)
+        if (key is Key.LWin or Key.RWin or Key.LeftCtrl or Key.RightCtrl
+            or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift)
             return; // wait for the non-modifier key of the chord
 
         var mods = Keyboard.Modifiers;
         if (mods == ModifierKeys.None)
         {
-            HotkeyWarning.Text = "组合键需要至少一个修饰键(Win / Ctrl / Alt / Shift)";
+            HotkeyWarning.Text = Loc.Get("Hotkeys_NeedModifier");
             HotkeyWarning.Visibility = Visibility.Visible;
             return;
         }
@@ -876,12 +900,12 @@ public partial class ManageWindow : Window
 
         _capturingHotkey = false;
         HotkeyCaptureHint.Visibility = Visibility.Collapsed;
-        RecordHotkeyText.Text = "录制新组合键…";
+        RecordHotkeyText.Text = Loc.Get("Hotkeys_Record");
 
         if (win && !ctrl && !alt && !shift && vk is >= 0x41 and <= 0x5A)
         {
             // Win+Letter combos are mostly owned by the shell (Win+E, Win+R, Win+I…).
-            HotkeyWarning.Text = $"⚠ {rule.Name} 可能与系统组合键冲突,若不生效请换一个组合";
+            HotkeyWarning.Text = Loc.Format("Hotkeys_Conflict", rule.Name);
             HotkeyWarning.Visibility = Visibility.Visible;
         }
         else
@@ -912,9 +936,37 @@ public partial class ManageWindow : Window
     private void OnAutoStartChecked(object sender, RoutedEventArgs e) => _autoStartManager.EnableAutoStart();
     private void OnAutoStartUnchecked(object sender, RoutedEventArgs e) => _autoStartManager.DisableAutoStart();
 
+    private void OnLanguageSystemClick(object sender, MouseButtonEventArgs e) => SetLanguage(LocalizationManager.SystemSetting);
+    private void OnLanguageZhClick(object sender, MouseButtonEventArgs e) => SetLanguage(LocalizationManager.ChineseCulture);
+    private void OnLanguageEnClick(object sender, MouseButtonEventArgs e) => SetLanguage(LocalizationManager.EnglishCulture);
+
+    private void SetLanguage(string language)
+    {
+        if (_settingsStore.Settings.Language == language)
+            return;
+        _settingsStore.Settings.Language = language;
+        _settingsStore.Save();
+        LocalizationManager.Instance.ApplyLanguageSetting(language);
+        UpdateLanguageButtons();
+    }
+
+    private void UpdateLanguageButtons()
+    {
+        string current = _settingsStore.Settings.Language;
+        HighlightLanguageButton(LangSystemButton, current == LocalizationManager.SystemSetting);
+        HighlightLanguageButton(LangZhButton, current == LocalizationManager.ChineseCulture);
+        HighlightLanguageButton(LangEnButton, current == LocalizationManager.EnglishCulture);
+    }
+
+    private static void HighlightLanguageButton(Border button, bool active)
+    {
+        button.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(active ? "#26F5B301" : "#14FFFFFF"));
+        button.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(active ? "#80F5B301" : "#33FFFFFF"));
+    }
+
     private void UpdateHistoryCount()
     {
-        HistoryCountText.Text = $"启动历史:已记录 {_historyStore.Entries.Count} 条";
+        HistoryCountText.Text = Loc.Plural("General_HistoryCount", _historyStore.Entries.Count, _historyStore.Entries.Count);
     }
 
     private void OnOpenConfigDirClick(object sender, MouseButtonEventArgs e)
@@ -944,7 +996,7 @@ public partial class ManageWindow : Window
 
     private void OnClearHistoryClick(object sender, MouseButtonEventArgs e)
     {
-        ShowConfirm("清空全部启动历史?", () =>
+        ShowConfirm(Loc.Get("General_ClearHistoryConfirm"), () =>
         {
             _historyStore.Clear();
             UpdateHistoryCount();
@@ -966,9 +1018,9 @@ public partial class ManageWindow : Window
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "HiveMotion 配置 (*.json)|*.json",
+            Filter = Loc.Get("Dialog_ConfigFilter"),
             FileName = "hivemotion-config.json",
-            Title = "导出配置"
+            Title = Loc.Get("Dialog_ExportConfig")
         };
         if (dialog.ShowDialog(this) != true)
             return;
@@ -987,7 +1039,7 @@ public partial class ManageWindow : Window
         }
         catch (Exception ex)
         {
-            ShowConfirm($"导出失败:{ex.Message}", () => { });
+            ShowConfirm(Loc.Format("Backup_ExportFailed", ex.Message), () => { });
         }
         e.Handled = true;
     }
@@ -996,8 +1048,8 @@ public partial class ManageWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "HiveMotion 配置 (*.json)|*.json",
-            Title = "导入配置"
+            Filter = Loc.Get("Dialog_ConfigFilter"),
+            Title = Loc.Get("Dialog_ImportConfig")
         };
         if (dialog.ShowDialog(this) != true)
             return;
@@ -1010,16 +1062,16 @@ public partial class ManageWindow : Window
         }
         catch (Exception ex)
         {
-            ShowConfirm($"导入失败,文件无法解析:{ex.Message}", () => { });
+            ShowConfirm(Loc.Format("Backup_ImportParseFailed", ex.Message), () => { });
             return;
         }
         if (bundle?.Pins == null && bundle?.Settings == null && bundle?.History == null)
         {
-            ShowConfirm("导入失败:文件里没有可识别的配置。", () => { });
+            ShowConfirm(Loc.Get("Backup_ImportEmpty"), () => { });
             return;
         }
 
-        ShowConfirm("导入将覆盖当前的固定、启动历史与设置,继续?", () => ApplyImport(bundle));
+        ShowConfirm(Loc.Get("Backup_ImportConfirm"), () => ApplyImport(bundle));
         e.Handled = true;
     }
 
@@ -1042,8 +1094,10 @@ public partial class ManageWindow : Window
             settings.Hotkeys.Clear();
             settings.Hotkeys.AddRange(bundle.Settings.Hotkeys);
             settings.SecondPressPassthrough = bundle.Settings.SecondPressPassthrough;
+            settings.Language = bundle.Settings.Language ?? LocalizationManager.SystemSetting;
             _settingsStore.Save();
             _applyHotkeys();
+            LocalizationManager.Instance.ApplyLanguageSetting(settings.Language);
         }
 
         BuildLetterTiles();
@@ -1059,18 +1113,18 @@ public partial class ManageWindow : Window
     private void InitAboutPage()
     {
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        VersionText.Text = $"版本 {version?.ToString(3) ?? "?"} · 配置目录: {PinStore.StoreDirectoryPath}";
+        VersionText.Text = Loc.Format("About_Version", version?.ToString(3) ?? "?", PinStore.StoreDirectoryPath);
         UpdateCheatsheet();
     }
 
     private void UpdateCheatsheet()
     {
         CheatsheetList.Children.Clear();
-        AddCheatsheet(string.Join(" / ", _settingsStore.Settings.Hotkeys.Select(r => r.Name)), "召唤蜂巢");
-        AddCheatsheet("A – Z", "直达对应格子的窗口");
-        AddCheatsheet("空 格", "搜索窗口");
-        AddCheatsheet("Ctrl + P", "固定当前格 / 取消固定");
-        AddCheatsheet("Esc", "关闭蜂巢");
+        AddCheatsheet(string.Join(" / ", _settingsStore.Settings.Hotkeys.Select(r => r.Name)), Loc.Get("Cheat_Summon"));
+        AddCheatsheet("A – Z", Loc.Get("Cheat_Jump"));
+        AddCheatsheet(Loc.Get("Cheat_Space"), Loc.Get("Cheat_Search"));
+        AddCheatsheet("Ctrl + P", Loc.Get("Cheat_Pin"));
+        AddCheatsheet("Esc", Loc.Get("Cheat_Close"));
     }
 
     private void AddCheatsheet(string keys, string description)
@@ -1173,15 +1227,15 @@ public partial class ManageWindow : Window
     {
         var span = DateTime.Now - time;
         if (span.TotalMinutes < 1)
-            return "刚刚";
+            return Loc.Get("Time_JustNow");
         if (span.TotalHours < 1)
-            return $"{(int)span.TotalMinutes} 分钟前";
+            return Loc.Format("Time_MinutesAgo", (int)span.TotalMinutes);
         if (time.Date == DateTime.Today)
-            return $"今天 {time:HH:mm}";
+            return Loc.Format("Time_Today", time.ToString("HH:mm"));
         if (time.Date == DateTime.Today.AddDays(-1))
-            return "昨天";
+            return Loc.Get("Time_Yesterday");
         if (span.TotalDays < 30)
-            return $"{(int)span.TotalDays} 天前";
-        return time.ToString("yyyy-MM-dd");
+            return Loc.Plural("Time_DaysAgo", (int)span.TotalDays, (int)span.TotalDays);
+        return time.ToString(Loc.Get("Time_DateFormat"));
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using HiveMotion.Localization;
 
 namespace HiveMotion;
 
@@ -47,6 +48,7 @@ public partial class App : System.Windows.Application
         _pinStore = new PinStore();
         _historyStore = new HistoryStore();
         _settingsStore = new SettingsStore();
+        LocalizationManager.Instance.ApplyLanguageSetting(_settingsStore.Settings.Language);
         _windowScanner = new WindowScanner(_settingsStore.Settings.PriorityProcessNames);
         _cellAssigner = new CellAssigner(_pinStore.Pins);
         _overlayWindow = new OverlayWindow();
@@ -196,8 +198,8 @@ public partial class App : System.Windows.Application
         if (cell.Pin is { } pin)
         {
             _overlayWindow!.ShowConfirm(
-                $"移除固定在 {pin.Key} 键的「{pin.DisplayName}」?\n{pin.CommandLine}",
-                "移 除",
+                Loc.Format("App_UnpinMessage", pin.Key, pin.DisplayName, pin.CommandLine),
+                Loc.Get("App_UnpinConfirm"),
                 () =>
                 {
                     _pinStore!.Remove(pin.Key);
@@ -212,14 +214,14 @@ public partial class App : System.Windows.Application
         // UWP apps all share ApplicationFrameHost.exe; that identity cannot be relaunched.
         if (cell.ProcessName.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
         {
-            _overlayWindow!.ShowConfirm("该应用为 UWP 应用,暂不支持固定。", "好", null);
+            _overlayWindow!.ShowConfirm(Loc.Get("App_UwpNotPinnable"), Loc.Get("Common_Ok"), null);
             return;
         }
 
         string? executablePath = ProcessIdentity.TryGetImagePath(cell.ProcessId);
         if (executablePath == null)
         {
-            _overlayWindow!.ShowConfirm("无法读取该程序的启动路径,不能固定。", "好", null);
+            _overlayWindow!.ShowConfirm(Loc.Get("App_CannotReadPath"), Loc.Get("Common_Ok"), null);
             return;
         }
 
@@ -237,8 +239,8 @@ public partial class App : System.Windows.Application
         if (existing != null && existing.Key != cell.Letter)
         {
             _overlayWindow!.ShowConfirm(
-                $"「{existing.DisplayName}」已固定在 {existing.Key} 键,移动到 {cell.Letter} 键?",
-                "移 动",
+                Loc.Format("App_MovePinMessage", existing.DisplayName, existing.Key, cell.Letter),
+                Loc.Get("App_MovePinConfirm"),
                 () =>
                 {
                     _pinStore.Remove(existing.Key);

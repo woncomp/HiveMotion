@@ -27,4 +27,10 @@ public sealed class AppSettings
     /// system function (Task View). False: the second press is swallowed and only closes.
     /// </summary>
     public bool SecondPressPassthrough { get; set; } = true;
+
+    /// <summary>
+    /// UI language: "system" follows the OS (non-Chinese falls back to English),
+    /// or an explicit culture: "zh-CN" / "en".
+    /// </summary>
+    public string Language { get; set; } = "system";
 }

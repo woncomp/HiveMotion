@@ -10,6 +10,7 @@ using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Cursors = System.Windows.Input.Cursors;
+using HiveMotion.Localization;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -57,6 +58,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     public TaskGridView()
     {
         InitializeComponent();
+        ApplyLocalizedStrings();
+        // Lives for the whole app lifetime, so no unsubscribe is needed.
+        LocalizationManager.Instance.CultureChanged += (_, _) => ApplyLocalizedStrings();
         PreviewMouseMove += (_, _) => WakeMouseIfMoved();
         // While disarmed, swallow every mouse button press: no cell clicks, no backdrop
         // dismiss, no focus shifts — the user must move the mouse first.
@@ -103,6 +107,15 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             Math.Abs(point.y - _mouseAnchor.y) < MouseWakeThreshold)
             return;
         ArmMouse();
+    }
+
+    private void ApplyLocalizedStrings()
+    {
+        EscHintText.Text = Loc.Get(_searching ? "Grid_HintExitSearch" : "Grid_HintClose");
+        if (_searching)
+            RebuildResults();
+        if (_previewMode == PreviewMode.LaunchInfo && _hoveredCell?.Pin != null)
+            ShowLaunchInfo(_hoveredCell.Pin);
     }
 
     public void SetBackdrop(System.Windows.Media.ImageSource? backdrop)
@@ -161,7 +174,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         BarSearch.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#A6F5B301");
         SpaceBarRidge.Opacity = 1;
-        EscHintText.Text = "退 出 搜 索";
+        EscHintText.Text = Loc.Get("Grid_HintExitSearch");
 
         SearchInput.Text = string.Empty;
         RebuildResults();
@@ -195,7 +208,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         BarIdle.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
         SpaceBarRidge.Opacity = 0.6;
-        EscHintText.Text = "关 闭";
+        EscHintText.Text = Loc.Get("Grid_HintClose");
 
         SplineAnimate(ResultPanel, UIElement.OpacityProperty, 0, 300);
         SplineAnimate(ResultPanelSlide, TranslateTransform.YProperty, 24, 300);
@@ -222,7 +235,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         BarIdle.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
         SpaceBarRidge.Opacity = 0.6;
-        EscHintText.Text = "关 闭";
+        EscHintText.Text = Loc.Get("Grid_HintClose");
         ResultPanel.BeginAnimation(UIElement.OpacityProperty, null);
         ResultPanel.Opacity = 0;
         ResultPanel.Visibility = Visibility.Collapsed;
@@ -345,7 +358,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         ConfirmMessage.Text = message;
         ConfirmYesText.Text = confirmText;
         ConfirmYes.Visibility = onConfirm != null ? Visibility.Visible : Visibility.Collapsed;
-        ConfirmNoText.Text = onConfirm != null ? "取 消" : "好";
+        ConfirmNoText.Text = Loc.Get(onConfirm != null ? "Common_Cancel" : "Common_Ok");
         _confirmAction = onConfirm;
         ConfirmOverlay.Visibility = Visibility.Visible;
     }
@@ -455,7 +468,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         LaunchInfoName.Text = pin.DisplayName;
         LaunchInfoCommand.Text = string.IsNullOrEmpty(pin.WorkingDirectory)
             ? pin.CommandLine
-            : $"{pin.CommandLine}\n工作目录: {pin.WorkingDirectory}";
+            : Loc.Format("Grid_LaunchInfoWithDir", pin.CommandLine, pin.WorkingDirectory);
 
         bool wasVisible = _previewVisible;
         _previewVisible = true;
@@ -541,7 +554,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             _itemVisuals.Add(visual);
         }
 
-        ResultHeaderText.Text = $"全 部 窗 口 · {_results.Count}";
+        ResultHeaderText.Text = Loc.Format("Grid_AllWindowsCount", _results.Count);
         ResultEmpty.Visibility = _results.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ResultHeader.Visibility = _results.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
 
@@ -653,7 +666,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             });
             status.Children.Add(new TextBlock
             {
-                Text = "运 行 中",
+                Text = Loc.Get("Grid_StatusRunning"),
                 FontSize = 11,
                 Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D9FFD97A")),
                 VerticalAlignment = VerticalAlignment.Center
@@ -663,7 +676,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         {
             status.Children.Add(new TextBlock
             {
-                Text = "未 运 行",
+                Text = Loc.Get("Grid_StatusNotRunning"),
                 FontSize = 11,
                 Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4DFFFFFF")),
                 VerticalAlignment = VerticalAlignment.Center
