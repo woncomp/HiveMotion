@@ -180,12 +180,13 @@ public partial class App : System.Windows.Application
             _manageWindow.Closed += (_, _) => _manageWindow = null;
             _manageWindow.Show();
         }
-        else
+        else if (_manageWindow.WindowState == WindowState.Minimized)
         {
-            if (_manageWindow.WindowState == WindowState.Minimized)
-                _manageWindow.WindowState = WindowState.Normal;
-            _manageWindow.Activate();
+            _manageWindow.WindowState = WindowState.Normal;
         }
+
+        // Plain Activate() is denied for a background process; use the attach-input recipe.
+        WindowManager.ActivateWindow(new System.Windows.Interop.WindowInteropHelper(_manageWindow).Handle);
     }
 
     /// <summary>

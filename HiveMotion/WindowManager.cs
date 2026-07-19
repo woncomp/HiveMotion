@@ -27,6 +27,12 @@ public static class WindowManager
         }
     }
 
+    /// <summary>
+    /// Brings a window to the foreground. A background process is normally denied
+    /// SetForegroundWindow, so we attach to the foreground thread's input queue first.
+    /// The denial can still stick (elevated or hung foreground window, shell UI
+    /// transitions), so the result is verified and retried before giving up.
+    /// </summary>
     public static void ActivateWindow(IntPtr hWnd)
     {
         if (hWnd == IntPtr.Zero)
@@ -35,22 +41,40 @@ public static class WindowManager
         if (NativeMethods.IsIconic(hWnd))
             NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
 
-        uint foregroundThread = NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out _);
-        uint targetThread = NativeMethods.GetWindowThreadProcessId(hWnd, out _);
-        uint currentThread = NativeMethods.GetCurrentThreadId();
-
-        if (foregroundThread != targetThread)
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            NativeMethods.AttachThreadInput(foregroundThread, currentThread, true);
-            NativeMethods.AttachThreadInput(targetThread, currentThread, true);
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            if (foreground == hWnd)
+                return;
+
+            uint foregroundThread = foreground != IntPtr.Zero
+                ? NativeMethods.GetWindowThreadProcessId(foreground, out _)
+                : 0;
+            uint targetThread = NativeMethods.GetWindowThreadProcessId(hWnd, out _);
+            uint currentThread = NativeMethods.GetCurrentThreadId();
+
+            bool attachedForeground = foregroundThread != 0
+                && foregroundThread != currentThread
+                && NativeMethods.AttachThreadInput(foregroundThread, currentThread, true);
+            bool attachedTarget = targetThread != 0
+                && targetThread != currentThread
+                && targetThread != foregroundThread
+                && NativeMethods.AttachThreadInput(targetThread, currentThread, true);
+
+            NativeMethods.BringWindowToTop(hWnd);
+            NativeMethods.SetForegroundWindow(hWnd);
+
+            if (attachedTarget)
+                NativeMethods.AttachThreadInput(targetThread, currentThread, false);
+            if (attachedForeground)
+                NativeMethods.AttachThreadInput(foregroundThread, currentThread, false);
+
+            if (NativeMethods.GetForegroundWindow() == hWnd)
+                return;
+
+            System.Threading.Thread.Sleep(50);
         }
 
-        NativeMethods.SetForegroundWindow(hWnd);
-
-        if (foregroundThread != targetThread)
-        {
-            NativeMethods.AttachThreadInput(targetThread, currentThread, false);
-            NativeMethods.AttachThreadInput(foregroundThread, currentThread, false);
-        }
+        Logger.Info($"ActivateWindow: foreground denied for hwnd 0x{hWnd.ToInt64():X}");
     }
 }

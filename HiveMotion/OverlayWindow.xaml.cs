@@ -137,6 +137,10 @@ public partial class OverlayWindow : Window
             // Plain Activate() is denied for a background process; the attach-input recipe is not.
             WindowManager.ActivateWindow(TaskGrid.OverlayHwnd);
             Focus();
+            // Re-assert the top of the topmost band: when activation is denied, another
+            // always-on-top window would otherwise cover the grid.
+            NativeMethods.SetWindowPos(TaskGrid.OverlayHwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
             // Windows may apply its own DPI-suggested rect on the cross-DPI hop; re-assert ours.
             Dispatcher.BeginInvoke(ApplyScreenBounds);
         });
