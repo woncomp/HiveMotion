@@ -123,6 +123,8 @@ public partial class OverlayWindow : Window
             // Capture the desktop BEFORE showing so the frosted-glass layer sees the real screen.
             TaskGrid.SetBackdrop(CaptureBlurredBackdrop(_screen));
             TaskGrid.SetCells(cells);
+            // Hide the cursor and suspend hover/clicks until the user actually moves the mouse.
+            TaskGrid.DisarmMouse();
             Show();
             // Plain Activate() is denied for a background process; the attach-input recipe is not.
             WindowManager.ActivateWindow(TaskGrid.OverlayHwnd);
@@ -242,6 +244,7 @@ public partial class OverlayWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             TaskGrid.ResetPreview();
+            TaskGrid.ArmMouse();
             Hide();
         });
     }

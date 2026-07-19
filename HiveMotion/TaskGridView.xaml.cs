@@ -32,7 +32,12 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private double _previewMaxH = 320;
     private HiveCell? _hoveredCell;
     private Action? _confirmAction;
+    private bool _mouseArmed = true;
+    private NativeMethods.POINT _mouseAnchor;
     private readonly DwmThumbnailPreview _dwmPreview = new();
+
+    /// <summary>Physical pixels the cursor must travel from its show-time anchor before it re-arms.</summary>
+    private const int MouseWakeThreshold = 6;
 
     private enum PreviewMode
     {
@@ -52,9 +57,53 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     public TaskGridView()
     {
         InitializeComponent();
+        PreviewMouseMove += (_, _) => WakeMouseIfMoved();
+        // While disarmed, swallow every mouse button press: no cell clicks, no backdrop
+        // dismiss, no focus shifts — the user must move the mouse first.
+        PreviewMouseDown += (_, e) =>
+        {
+            if (!_mouseArmed)
+                e.Handled = true;
+        };
     }
 
     public bool Searching => _searching;
+
+    /// <summary>
+    /// Called each time the overlay appears: hides the cursor and suspends hover and
+    /// clicks until the user physically moves the mouse past MouseWakeThreshold.
+    /// Prevents the cell that happens to sit under the cursor from being hovered.
+    /// </summary>
+    public void DisarmMouse()
+    {
+        _mouseArmed = false;
+        if (NativeMethods.GetCursorPos(out var point))
+            _mouseAnchor = point;
+        Mouse.OverrideCursor = Cursors.None;
+        HexCanvas.IsHitTestVisible = false;
+    }
+
+    /// <summary>Restores the cursor and hit testing; also called defensively on hide.</summary>
+    public void ArmMouse()
+    {
+        if (_mouseArmed)
+            return;
+        _mouseArmed = true;
+        Mouse.OverrideCursor = null;
+        HexCanvas.IsHitTestVisible = true;
+    }
+
+    private void WakeMouseIfMoved()
+    {
+        if (_mouseArmed || !NativeMethods.GetCursorPos(out var point))
+            return;
+        // Threshold in physical pixels guards against spurious WM_MOUSEMOVE (activation,
+        // high-polling mouse jitter) that would otherwise unlock the grid instantly.
+        if (Math.Abs(point.x - _mouseAnchor.x) < MouseWakeThreshold &&
+            Math.Abs(point.y - _mouseAnchor.y) < MouseWakeThreshold)
+            return;
+        ArmMouse();
+    }
 
     public void SetBackdrop(System.Windows.Media.ImageSource? backdrop)
     {
