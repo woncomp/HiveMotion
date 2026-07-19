@@ -28,6 +28,12 @@ public sealed class GlobalKeyboardHook : IDisposable
     /// <summary>Mirror of the overlay visibility, written by the app; decides swallow vs pass-through.</summary>
     public bool IsOverlayOpen { get; set; }
 
+    /// <summary>
+    /// True: a second press while open reaches the system (native UI fires). False: the
+    /// second press is swallowed, the app only closes the overlay.
+    /// </summary>
+    public bool PassThroughOnSecondPress { get; set; } = true;
+
     /// <summary>A registered combo fired while the overlay was hidden: open the overlay.</summary>
     public event EventHandler<HotkeyRule>? HotkeyOpenRequested;
     /// <summary>A registered combo fired while the overlay was open: passed to the system, close the overlay.</summary>
@@ -151,9 +157,17 @@ public sealed class GlobalKeyboardHook : IDisposable
 
             if (IsOverlayOpen)
             {
-                // Generic rule: a second press goes to the system (Task View, Game Bar…).
                 HotkeyPassthrough?.Invoke(this, rule);
-                return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+                if (PassThroughOnSecondPress)
+                {
+                    // Generic rule: a second press goes to the system (Task View, Game Bar…).
+                    return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+                }
+                // Close-only mode: swallow the combo so its native UI never fires.
+                _swallowedKeys.Add(vk);
+                if (rule.Win)
+                    InjectBenignChordKey();
+                return (IntPtr)1;
             }
 
             _swallowedKeys.Add(vk);

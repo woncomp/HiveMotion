@@ -25,7 +25,9 @@ public partial class App : System.Windows.Application
     private CellAssigner? _cellAssigner;
     private PinStore? _pinStore;
     private HistoryStore? _historyStore;
+    private SettingsStore? _settingsStore;
     private ManageWindow? _manageWindow;
+    private string _activeHotkeyJson = string.Empty;
 
     private OverlayState _state = OverlayState.Hidden;
     private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
@@ -42,10 +44,10 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var config = AppConfig.Default;
         _pinStore = new PinStore();
         _historyStore = new HistoryStore();
-        _windowScanner = new WindowScanner(config.PriorityProcessNames);
+        _settingsStore = new SettingsStore();
+        _windowScanner = new WindowScanner(_settingsStore.Settings.PriorityProcessNames);
         _cellAssigner = new CellAssigner(_pinStore.Pins);
         _overlayWindow = new OverlayWindow();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
@@ -72,8 +74,19 @@ public partial class App : System.Windows.Application
                 CloseOverlay(restoreFocus: true);
         });
 
-        _keyboardHook = new GlobalKeyboardHook(config.Hotkeys);
-        _keyboardHook.HotkeyOpenRequested += (_, _) => Dispatcher.BeginInvoke(() =>
+        _keyboardHook = BuildKeyboardHook();
+        _keyboardHook.Start();
+    }
+
+    private GlobalKeyboardHook BuildKeyboardHook()
+    {
+        var settings = _settingsStore!.Settings;
+        _activeHotkeyJson = System.Text.Json.JsonSerializer.Serialize(settings.Hotkeys);
+        var hook = new GlobalKeyboardHook(settings.Hotkeys)
+        {
+            PassThroughOnSecondPress = settings.SecondPressPassthrough
+        };
+        hook.HotkeyOpenRequested += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             try
             {
@@ -84,12 +97,29 @@ public partial class App : System.Windows.Application
                 Logger.Error(ex);
             }
         });
-        _keyboardHook.HotkeyPassthrough += (_, _) => Dispatcher.BeginInvoke(() =>
+        hook.HotkeyPassthrough += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             // The combo went to the system (Task View & co.); the native UI takes over.
             CloseOverlay(restoreFocus: false);
         });
+        return hook;
+    }
+
+    /// <summary>Applies edited hotkey settings: rebuilds the hook only when combos changed.</summary>
+    private void ApplyHotkeySettings()
+    {
+        var settings = _settingsStore!.Settings;
+        if (_keyboardHook != null)
+            _keyboardHook.PassThroughOnSecondPress = settings.SecondPressPassthrough;
+
+        if (System.Text.Json.JsonSerializer.Serialize(settings.Hotkeys) == _activeHotkeyJson)
+            return;
+
+        var oldHook = _keyboardHook;
+        _keyboardHook = BuildKeyboardHook();
+        _keyboardHook.IsOverlayOpen = _state == OverlayState.TaskGrid;
         _keyboardHook.Start();
+        oldHook?.Dispose();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -141,7 +171,8 @@ public partial class App : System.Windows.Application
     {
         if (_manageWindow == null)
         {
-            _manageWindow = new ManageWindow(_pinStore!, _historyStore!, _autoStartManager!, _windowScanner!);
+            _manageWindow = new ManageWindow(_pinStore!, _historyStore!, _settingsStore!,
+                _autoStartManager!, _windowScanner!, ApplyHotkeySettings);
             _manageWindow.Closed += (_, _) => _manageWindow = null;
             _manageWindow.Show();
         }

@@ -58,6 +58,18 @@
                         <TextBlock Text="固 定" FontSize="13" Foreground="#E6FFFFFF" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
+                <Border x:Name="NavPriority" Padding="12,10" Margin="10,2" CornerRadius="8"
+                        Cursor="Hand" MouseLeftButtonUp="OnNavPriorityClick">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="优 先 级" FontSize="13" Foreground="#E6FFFFFF" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <Border x:Name="NavHotkeys" Padding="12,10" Margin="10,2" CornerRadius="8"
+                        Cursor="Hand" MouseLeftButtonUp="OnNavHotkeysClick">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="快 捷 键" FontSize="13" Foreground="#E6FFFFFF" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
                 <Border x:Name="NavGeneral" Padding="12,10" Margin="10,2" CornerRadius="8"
                         Cursor="Hand" MouseLeftButtonUp="OnNavGeneralClick">
                     <StackPanel Orientation="Horizontal">
@@ -206,6 +218,87 @@
                         </Grid>
                     </Grid>
                 </Border>
+            </Grid>
+
+            <!-- 优先级页 -->
+            <Grid x:Name="PagePriority" Visibility="Collapsed">
+                <StackPanel>
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="优 先 级" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,4" />
+                            <TextBlock Text="蜂巢打开时,进程名越靠上的窗口越先挑选自己想要的字母"
+                                       FontSize="11" Foreground="#59FFFFFF" Margin="2,0,0,10" />
+                            <StackPanel x:Name="PriorityList" Margin="0,0,0,10" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="PriorityInput" Style="{StaticResource FieldStyle}"
+                                         KeyDown="OnPriorityInputKeyDown" />
+                                <Border Style="{StaticResource ButtonStyle}" Grid.Column="1"
+                                        Margin="8,0,0,0" MouseLeftButtonUp="OnAddPriorityClick">
+                                    <TextBlock Text="添 加" FontSize="12" Foreground="#BFFFFFFF" />
+                                </Border>
+                            </Grid>
+                            <TextBlock Text="填写进程名(不含 .exe),例如 msedge、Code、devenv"
+                                       FontSize="10" Foreground="#40FFFFFF" Margin="2,6,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <!-- 快捷键页 -->
+            <Grid x:Name="PageHotkeys" Visibility="Collapsed">
+                <StackPanel>
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="召 唤 组 合 键" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,10" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="当前:" FontSize="13" Foreground="#66FFFFFF" VerticalAlignment="Center" />
+                                    <Border Padding="10,4" Margin="8,0,0,0" CornerRadius="6"
+                                            Background="#26F5B301" BorderBrush="#80F5B301" BorderThickness="1"
+                                            VerticalAlignment="Center">
+                                        <TextBlock x:Name="HotkeyCurrentText" Text="Win+Tab" FontSize="13"
+                                                   FontWeight="SemiBold" Foreground="#FFFFD97A" />
+                                    </Border>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1">
+                                    <Border Style="{StaticResource ButtonStyle}"
+                                            MouseLeftButtonUp="OnRecordHotkeyClick">
+                                        <TextBlock x:Name="RecordHotkeyText" Text="录制新组合键…"
+                                                   FontSize="12" Foreground="#BFFFFFFF" />
+                                    </Border>
+                                    <Border Style="{StaticResource ButtonStyle}" Margin="10,0,0,0"
+                                            MouseLeftButtonUp="OnResetHotkeyClick">
+                                        <TextBlock Text="恢复默认" FontSize="12" Foreground="#BFFFFFFF" />
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="HotkeyCaptureHint" Text="请按下新的组合键(需包含至少一个修饰键),Esc 取消"
+                                       FontSize="11" Foreground="#CCFFD97A" Margin="2,10,0,0" Visibility="Collapsed" />
+                            <TextBlock x:Name="HotkeyWarning" FontSize="11" Foreground="#E5484D"
+                                       Margin="2,6,0,0" Visibility="Collapsed" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="行 为" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,10" />
+                            <CheckBox x:Name="PassthroughBox"
+                                      Content="蜂巢打开时再次按下:穿透给系统原生功能(如任务视图)"
+                                      FontSize="13" Foreground="#E6FFFFFF" Margin="2,0,0,0"
+                                      Checked="OnPassthroughChanged" Unchecked="OnPassthroughChanged" />
+                            <TextBlock Text="关闭后,再次按下只会关闭蜂巢,不会触发组合键的系统功能"
+                                       FontSize="10" Foreground="#40FFFFFF" Margin="24,4,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </Grid>
 
             <!-- 常规页 -->

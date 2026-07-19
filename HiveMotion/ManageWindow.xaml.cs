@@ -29,8 +29,10 @@ public partial class ManageWindow : Window
 
     private readonly PinStore _pinStore;
     private readonly HistoryStore _historyStore;
+    private readonly SettingsStore _settingsStore;
     private readonly AutoStartManager _autoStartManager;
     private readonly WindowScanner _windowScanner;
+    private readonly Action _applyHotkeys;
     private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
     private readonly List<(Ellipse Dot, char Letter)> _tileDots = new();
 
@@ -42,20 +44,25 @@ public partial class ManageWindow : Window
     private bool _dragArmed;
     private char _dragLetter;
     private Point _dragStart;
+    private bool _capturingHotkey;
 
-    public ManageWindow(PinStore pinStore, HistoryStore historyStore,
-        AutoStartManager autoStartManager, WindowScanner windowScanner)
+    public ManageWindow(PinStore pinStore, HistoryStore historyStore, SettingsStore settingsStore,
+        AutoStartManager autoStartManager, WindowScanner windowScanner, Action applyHotkeys)
     {
         InitializeComponent();
         _pinStore = pinStore;
         _historyStore = historyStore;
+        _settingsStore = settingsStore;
         _autoStartManager = autoStartManager;
         _windowScanner = windowScanner;
+        _applyHotkeys = applyHotkeys;
 
         Rescan();
         BuildLetterTiles();
         ShowEditor(null);
-        SetNav(pins: true);
+        SetNav(0);
+        BuildPriorityList();
+        RefreshHotkeyUi();
 
         AutoStartBox.IsChecked = _autoStartManager.IsAutoStartEnabled();
         ConfigPathText.Text = PinStore.StoreDirectoryPath;
@@ -87,16 +94,23 @@ public partial class ManageWindow : Window
 
     // ---------- navigation ----------
 
-    private void SetNav(bool pins)
+    private void SetNav(int page)
     {
-        NavPins.Background = pins ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1FF5B301")) : Brushes.Transparent;
-        NavGeneral.Background = pins ? Brushes.Transparent : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1FF5B301"));
-        PagePins.Visibility = pins ? Visibility.Visible : Visibility.Collapsed;
-        PageGeneral.Visibility = pins ? Visibility.Collapsed : Visibility.Visible;
+        var active = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1FF5B301"));
+        NavPins.Background = page == 0 ? active : Brushes.Transparent;
+        NavPriority.Background = page == 1 ? active : Brushes.Transparent;
+        NavHotkeys.Background = page == 2 ? active : Brushes.Transparent;
+        NavGeneral.Background = page == 3 ? active : Brushes.Transparent;
+        PagePins.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
+        PagePriority.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
+        PageHotkeys.Visibility = page == 2 ? Visibility.Visible : Visibility.Collapsed;
+        PageGeneral.Visibility = page == 3 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void OnNavPinsClick(object sender, MouseButtonEventArgs e) => SetNav(pins: true);
-    private void OnNavGeneralClick(object sender, MouseButtonEventArgs e) => SetNav(pins: false);
+    private void OnNavPinsClick(object sender, MouseButtonEventArgs e) => SetNav(0);
+    private void OnNavPriorityClick(object sender, MouseButtonEventArgs e) => SetNav(1);
+    private void OnNavHotkeysClick(object sender, MouseButtonEventArgs e) => SetNav(2);
+    private void OnNavGeneralClick(object sender, MouseButtonEventArgs e) => SetNav(3);
 
     // ---------- letter tiles ----------
 
@@ -651,6 +665,243 @@ public partial class ManageWindow : Window
 
     private void OnPickerDialogClick(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
+    // ---------- priority page ----------
+
+    private List<string> PriorityNames => _settingsStore.Settings.PriorityProcessNames;
+
+    private void BuildPriorityList()
+    {
+        PriorityList.Children.Clear();
+        for (int i = 0; i < PriorityNames.Count; i++)
+            PriorityList.Children.Add(BuildPriorityRow(i));
+    }
+
+    private Border BuildPriorityRow(int index)
+    {
+        string name = PriorityNames[index];
+
+        var nameText = new TextBlock
+        {
+            Text = name,
+            FontSize = 13,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E6FFFFFF")),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(BuildSmallButton("↑", index > 0, (_, _) => MovePriority(index, -1)));
+        buttons.Children.Add(BuildSmallButton("↓", index < PriorityNames.Count - 1, (_, _) => MovePriority(index, +1)));
+        buttons.Children.Add(BuildSmallButton("✕", true, (_, _) =>
+        {
+            PriorityNames.RemoveAt(index);
+            _settingsStore.Save();
+            BuildPriorityList();
+        }));
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(nameText, 0);
+        Grid.SetColumn(buttons, 1);
+        grid.Children.Add(nameText);
+        grid.Children.Add(buttons);
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0DFFFFFF")),
+            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1FFFFFFF")),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(2),
+            Child = grid
+        };
+    }
+
+    private Border BuildSmallButton(string glyph, bool enabled, MouseButtonEventHandler onClick)
+    {
+        var button = new Border
+        {
+            Width = 26,
+            Height = 22,
+            Margin = new Thickness(3, 0, 0, 0),
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(enabled ? "#14FFFFFF" : "#08FFFFFF")),
+            Opacity = enabled ? 1 : 0.4,
+            Cursor = enabled ? Cursors.Hand : Cursors.Arrow,
+            Child = new TextBlock
+            {
+                Text = glyph,
+                FontSize = 11,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#BFFFFFFF")),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        if (enabled)
+            button.MouseLeftButtonUp += onClick;
+        return button;
+    }
+
+    private void MovePriority(int index, int delta)
+    {
+        int target = index + delta;
+        if (target < 0 || target >= PriorityNames.Count)
+            return;
+        (PriorityNames[index], PriorityNames[target]) = (PriorityNames[target], PriorityNames[index]);
+        _settingsStore.Save();
+        BuildPriorityList();
+    }
+
+    private void AddPriorityName()
+    {
+        string name = PriorityInput.Text.Trim();
+        if (name.Length == 0)
+            return;
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            name = name.Substring(0, name.Length - 4);
+        if (PriorityNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            return;
+        PriorityNames.Add(name);
+        _settingsStore.Save();
+        PriorityInput.Text = string.Empty;
+        BuildPriorityList();
+    }
+
+    private void OnAddPriorityClick(object sender, MouseButtonEventArgs e)
+    {
+        AddPriorityName();
+        e.Handled = true;
+    }
+
+    private void OnPriorityInputKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            AddPriorityName();
+            e.Handled = true;
+        }
+    }
+
+    // ---------- hotkeys page ----------
+
+    private void RefreshHotkeyUi()
+    {
+        var settings = _settingsStore.Settings;
+        HotkeyCurrentText.Text = string.Join(", ", settings.Hotkeys.Select(r => r.Name));
+        PassthroughBox.IsChecked = settings.SecondPressPassthrough;
+    }
+
+    private void OnPassthroughChanged(object sender, RoutedEventArgs e)
+    {
+        _settingsStore.Settings.SecondPressPassthrough = PassthroughBox.IsChecked == true;
+        _settingsStore.Save();
+        _applyHotkeys();
+    }
+
+    private void OnRecordHotkeyClick(object sender, MouseButtonEventArgs e)
+    {
+        _capturingHotkey = true;
+        HotkeyCaptureHint.Visibility = Visibility.Visible;
+        HotkeyWarning.Visibility = Visibility.Collapsed;
+        RecordHotkeyText.Text = "录制中…";
+        e.Handled = true;
+    }
+
+    private void OnResetHotkeyClick(object sender, MouseButtonEventArgs e)
+    {
+        _capturingHotkey = false;
+        HotkeyCaptureHint.Visibility = Visibility.Collapsed;
+        RecordHotkeyText.Text = "录制新组合键…";
+        _settingsStore.Settings.Hotkeys.Clear();
+        _settingsStore.Settings.Hotkeys.Add(HotkeyRule.WinTab);
+        _settingsStore.Save();
+        _applyHotkeys();
+        RefreshHotkeyUi();
+        e.Handled = true;
+    }
+
+    private void CaptureHotkey(KeyEventArgs e)
+    {
+        e.Handled = true;
+        if (e.Key == Key.Escape)
+        {
+            _capturingHotkey = false;
+            HotkeyCaptureHint.Visibility = Visibility.Collapsed;
+            RecordHotkeyText.Text = "录制新组合键…";
+            return;
+        }
+
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is Key.LWin or Key.RWin or Key.LControl or Key.RControl
+            or Key.LAlt or Key.RAlt or Key.LShift or Key.RShift)
+            return; // wait for the non-modifier key of the chord
+
+        var mods = Keyboard.Modifiers;
+        if (mods == ModifierKeys.None)
+        {
+            HotkeyWarning.Text = "组合键需要至少一个修饰键(Win / Ctrl / Alt / Shift)";
+            HotkeyWarning.Visibility = Visibility.Visible;
+            return;
+        }
+
+        int vk = KeyInterop.VirtualKeyFromKey(key);
+        bool win = (mods & ModifierKeys.Windows) != 0;
+        bool ctrl = (mods & ModifierKeys.Control) != 0;
+        bool alt = (mods & ModifierKeys.Alt) != 0;
+        bool shift = (mods & ModifierKeys.Shift) != 0;
+
+        // Win+Tab keeps its native-UI escape hatches; anything else is a plain combo.
+        var rule = win && !ctrl && !alt && !shift && vk == NativeMethods.VK_TAB
+            ? HotkeyRule.WinTab
+            : new HotkeyRule
+            {
+                Win = win,
+                Ctrl = ctrl,
+                Alt = alt,
+                Shift = shift,
+                Vk = vk,
+                Name = FormatComboName(win, ctrl, alt, shift, key)
+            };
+
+        _settingsStore.Settings.Hotkeys.Clear();
+        _settingsStore.Settings.Hotkeys.Add(rule);
+        _settingsStore.Save();
+        _applyHotkeys();
+
+        _capturingHotkey = false;
+        HotkeyCaptureHint.Visibility = Visibility.Collapsed;
+        RecordHotkeyText.Text = "录制新组合键…";
+
+        if (win && !ctrl && !alt && !shift && vk is >= 0x41 and <= 0x5A)
+        {
+            // Win+Letter combos are mostly owned by the shell (Win+E, Win+R, Win+I…).
+            HotkeyWarning.Text = $"⚠ {rule.Name} 可能与系统组合键冲突,若不生效请换一个组合";
+            HotkeyWarning.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            HotkeyWarning.Visibility = Visibility.Collapsed;
+        }
+
+        RefreshHotkeyUi();
+    }
+
+    private static string FormatComboName(bool win, bool ctrl, bool alt, bool shift, Key key)
+    {
+        var parts = new List<string>();
+        if (win)
+            parts.Add("Win");
+        if (ctrl)
+            parts.Add("Ctrl");
+        if (alt)
+            parts.Add("Alt");
+        if (shift)
+            parts.Add("Shift");
+        parts.Add(key.ToString());
+        return string.Join("+", parts);
+    }
+
     // ---------- general page ----------
 
     private void OnAutoStartChecked(object sender, RoutedEventArgs e) => _autoStartManager.EnableAutoStart();
@@ -740,6 +991,11 @@ public partial class ManageWindow : Window
 
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
+        if (_capturingHotkey)
+        {
+            CaptureHotkey(e);
+            return;
+        }
         if (e.Key != Key.Escape)
             return;
         if (ConfirmOverlay.Visibility == Visibility.Visible)
