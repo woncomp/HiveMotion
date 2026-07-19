@@ -12,8 +12,6 @@ public partial class OverlayWindow : Window
     public OverlayWindow()
     {
         InitializeComponent();
-        Width = SystemParameters.PrimaryScreenWidth;
-        Height = SystemParameters.PrimaryScreenHeight;
 
         TaskGrid.CellChosen += (_, cell) => CellChosen?.Invoke(this, cell);
         TaskGrid.CloseRequested += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
@@ -110,8 +108,9 @@ public partial class OverlayWindow : Window
     {
         Dispatcher.BeginInvoke(() =>
         {
+            MoveToCursorScreen();
             // Capture the desktop BEFORE showing so the frosted-glass layer sees the real screen.
-            TaskGrid.SetBackdrop(CaptureBlurredBackdrop());
+            TaskGrid.SetBackdrop(CaptureBlurredBackdrop(_screenBounds));
             TaskGrid.SetCells(cells);
             Show();
             // Plain Activate() is denied for a background process; the attach-input recipe is not.
@@ -120,14 +119,44 @@ public partial class OverlayWindow : Window
         });
     }
 
-    private static System.Windows.Media.ImageSource? CaptureBlurredBackdrop()
+    private System.Drawing.Rectangle _screenBounds = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+
+    /// <summary>Cover the screen that currently holds the mouse cursor (multi-monitor aware).</summary>
+    private void MoveToCursorScreen()
+    {
+        try
+        {
+            if (!NativeMethods.GetCursorPos(out var point))
+                return;
+
+            _screenBounds = System.Windows.Forms.Screen.FromPoint(
+                new System.Drawing.Point(point.x, point.y)).Bounds;
+
+            uint dpiX = 96, dpiY = 96;
+            var monitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MONITOR_DEFAULTTONEAREST);
+            if (monitor != IntPtr.Zero)
+                NativeMethods.GetDpiForMonitor(monitor, NativeMethods.MDT_EFFECTIVE_DPI, out dpiX, out dpiY);
+            if (dpiX == 0) dpiX = 96;
+            if (dpiY == 0) dpiY = 96;
+
+            Left = _screenBounds.Left * 96.0 / dpiX;
+            Top = _screenBounds.Top * 96.0 / dpiY;
+            Width = _screenBounds.Width * 96.0 / dpiX;
+            Height = _screenBounds.Height * 96.0 / dpiY;
+        }
+        catch
+        {
+            // fall back to wherever the window already is
+        }
+    }
+
+    private static System.Windows.Media.ImageSource? CaptureBlurredBackdrop(System.Drawing.Rectangle bounds)
     {
         System.Drawing.Bitmap? full = null;
         System.Drawing.Bitmap? small = null;
         IntPtr hBitmap = IntPtr.Zero;
         try
         {
-            var bounds = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
             full = new System.Drawing.Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             using (var g = System.Drawing.Graphics.FromImage(full))
                 g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
