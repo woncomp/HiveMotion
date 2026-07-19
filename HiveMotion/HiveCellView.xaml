@@ -55,9 +55,6 @@
                    Margin="0,0,0,6" Opacity="0.9"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    Stretch="Uniform" />
-            <TextBlock x:Name="FallbackGlyph" Visibility="Collapsed"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Margin="0,0,0,6" FontSize="30" FontWeight="Bold" Foreground="#66FFFFFF" />
 
             <!-- 底部压暗,保证文字可读 -->
             <Path Data="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z">
@@ -80,31 +77,59 @@
                 </Ellipse.Fill>
             </Ellipse>
 
-            <!-- 名称紧跟图标下方,位于六边形腹部宽区(裁剪在六边形内,不溢出) -->
-            <TextBlock x:Name="CaptionText"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Margin="0,70,0,0" FontSize="11" Foreground="#F2FFFFFF"
-                       TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="100" />
+        </Grid>
         </Grid>
 
-        <!-- 蜂蜜滴键帽 -->
-        <Border VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,12,0,0"
-                MinWidth="27" Height="27" Padding="6,0"
-                CornerRadius="8" BorderThickness="1" BorderBrush="#B3FFE9B0"
-                RenderTransformOrigin="0.5,0.5">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0.4,0" EndPoint="0.6,1">
-                    <GradientStop Color="#FFE6A3" Offset="0" />
-                    <GradientStop Color="#F5B301" Offset="0.55" />
-                    <GradientStop Color="#D99300" Offset="1" />
-                </LinearGradientBrush>
-            </Border.Background>
-            <Border.Effect>
-                <DropShadowEffect Color="#F5B301" Opacity="0.55" BlurRadius="10" ShadowDepth="2" />
-            </Border.Effect>
-            <TextBlock x:Name="KeyText" Text="A" FontSize="13" FontWeight="ExtraBold"
-                       Foreground="#3D2C00" HorizontalAlignment="Center" VerticalAlignment="Center" />
-        </Border>
+        <!-- Text layer: kept outside the bitmap cache so hover/search scaling
+             re-rasterizes glyphs as vectors every frame instead of stretching a
+             cached bitmap, keeping text sharp at any scale. Transforms are bound
+             1:1 to CellRoot's transforms so the layers stay in sync. -->
+        <Grid IsHitTestVisible="False">
+            <Grid.RenderTransform>
+                <TransformGroup>
+                    <TranslateTransform X="{Binding X, ElementName=ShiftTransform}" />
+                    <ScaleTransform CenterX="66" CenterY="76"
+                                    ScaleX="{Binding ScaleX, ElementName=SearchScaleTransform}"
+                                    ScaleY="{Binding ScaleY, ElementName=SearchScaleTransform}" />
+                    <ScaleTransform CenterX="66" CenterY="76"
+                                    ScaleX="{Binding ScaleX, ElementName=HoverScaleTransform}"
+                                    ScaleY="{Binding ScaleY, ElementName=HoverScaleTransform}" />
+                </TransformGroup>
+            </Grid.RenderTransform>
+
+            <!-- Caption area, still clipped to the hexagon so text cannot spill -->
+            <Grid>
+                <Grid.Clip>
+                    <PathGeometry Figures="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z" />
+                </Grid.Clip>
+                <TextBlock x:Name="FallbackGlyph" Visibility="Collapsed"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Margin="0,0,0,6" FontSize="30" FontWeight="Bold" Foreground="#66FFFFFF" />
+                <!-- 名称紧跟图标下方,位于六边形腹部宽区(裁剪在六边形内,不溢出) -->
+                <TextBlock x:Name="CaptionText"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Margin="0,70,0,0" FontSize="11" Foreground="#F2FFFFFF"
+                           TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="100" />
+            </Grid>
+
+            <!-- 蜂蜜滴键帽 -->
+            <Border VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,12,0,0"
+                    MinWidth="27" Height="27" Padding="6,0"
+                    CornerRadius="8" BorderThickness="1" BorderBrush="#B3FFE9B0"
+                    RenderTransformOrigin="0.5,0.5">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0.4,0" EndPoint="0.6,1">
+                        <GradientStop Color="#FFE6A3" Offset="0" />
+                        <GradientStop Color="#F5B301" Offset="0.55" />
+                        <GradientStop Color="#D99300" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.Effect>
+                    <DropShadowEffect Color="#F5B301" Opacity="0.55" BlurRadius="10" ShadowDepth="2" />
+                </Border.Effect>
+                <TextBlock x:Name="KeyText" Text="A" FontSize="13" FontWeight="ExtraBold"
+                           Foreground="#3D2C00" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
         </Grid>
 
         <!-- 悬停提亮(放在缓存层之外:透明度动画只是廉价混合,不会击穿位图缓存) -->
