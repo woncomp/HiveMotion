@@ -274,12 +274,17 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
         var dpi = VisualTreeHelper.GetDpi(this);
         var topLeft = HoverPreviewViewport.PointToScreen(new Point(0, 0));
+
+        // DWM thumbnail destination is in the overlay's CLIENT coordinates, not screen
+        // coordinates — identical on the primary monitor at (0,0), off by the monitor
+        // origin on any other screen.
+        NativeMethods.GetWindowRect(OverlayHwnd, out var windowRect);
         var rect = new NativeMethods.RECT
         {
-            Left = (int)Math.Round(topLeft.X),
-            Top = (int)Math.Round(topLeft.Y),
-            Right = (int)Math.Round(topLeft.X + HoverPreviewViewport.ActualWidth * dpi.DpiScaleX),
-            Bottom = (int)Math.Round(topLeft.Y + HoverPreviewViewport.ActualHeight * dpi.DpiScaleY)
+            Left = (int)Math.Round(topLeft.X - windowRect.Left),
+            Top = (int)Math.Round(topLeft.Y - windowRect.Top),
+            Right = (int)Math.Round(topLeft.X - windowRect.Left + HoverPreviewViewport.ActualWidth * dpi.DpiScaleX),
+            Bottom = (int)Math.Round(topLeft.Y - windowRect.Top + HoverPreviewViewport.ActualHeight * dpi.DpiScaleY)
         };
         _dwmPreview.Show(OverlayHwnd, sourceHwnd, rect);
     }
