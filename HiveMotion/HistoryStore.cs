@@ -103,6 +103,14 @@ public sealed class HistoryStore
         Save();
     }
 
+    /// <summary>Import path: replaces every entry in one shot.</summary>
+    public void ReplaceAll(IEnumerable<HistoryEntry> entries)
+    {
+        Entries.Clear();
+        Entries.AddRange(entries);
+        Save();
+    }
+
     private void Load()
     {
         try

@@ -46,6 +46,14 @@ public sealed class PinStore
         Save();
     }
 
+    /// <summary>Import path: replaces every pin in one shot.</summary>
+    public void ReplaceAll(IEnumerable<PinnedApp> pins)
+    {
+        Pins.Clear();
+        Pins.AddRange(pins);
+        Save();
+    }
+
     private void Load()
     {
         try

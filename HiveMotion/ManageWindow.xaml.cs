@@ -63,6 +63,7 @@ public partial class ManageWindow : Window
         SetNav(0);
         BuildPriorityList();
         RefreshHotkeyUi();
+        InitAboutPage();
 
         AutoStartBox.IsChecked = _autoStartManager.IsAutoStartEnabled();
         ConfigPathText.Text = PinStore.StoreDirectoryPath;
@@ -101,16 +102,19 @@ public partial class ManageWindow : Window
         NavPriority.Background = page == 1 ? active : Brushes.Transparent;
         NavHotkeys.Background = page == 2 ? active : Brushes.Transparent;
         NavGeneral.Background = page == 3 ? active : Brushes.Transparent;
+        NavAbout.Background = page == 4 ? active : Brushes.Transparent;
         PagePins.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
         PagePriority.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
         PageHotkeys.Visibility = page == 2 ? Visibility.Visible : Visibility.Collapsed;
         PageGeneral.Visibility = page == 3 ? Visibility.Visible : Visibility.Collapsed;
+        PageAbout.Visibility = page == 4 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnNavPinsClick(object sender, MouseButtonEventArgs e) => SetNav(0);
     private void OnNavPriorityClick(object sender, MouseButtonEventArgs e) => SetNav(1);
     private void OnNavHotkeysClick(object sender, MouseButtonEventArgs e) => SetNav(2);
     private void OnNavGeneralClick(object sender, MouseButtonEventArgs e) => SetNav(3);
+    private void OnNavAboutClick(object sender, MouseButtonEventArgs e) => SetNav(4);
 
     // ---------- letter tiles ----------
 
@@ -790,6 +794,7 @@ public partial class ManageWindow : Window
         var settings = _settingsStore.Settings;
         HotkeyCurrentText.Text = string.Join(", ", settings.Hotkeys.Select(r => r.Name));
         PassthroughBox.IsChecked = settings.SecondPressPassthrough;
+        UpdateCheatsheet();
     }
 
     private void OnPassthroughChanged(object sender, RoutedEventArgs e)
@@ -945,6 +950,160 @@ public partial class ManageWindow : Window
             UpdateHistoryCount();
         });
         e.Handled = true;
+    }
+
+    // ---------- backup (export / import) ----------
+
+    private sealed class ConfigBundle
+    {
+        public int Version { get; set; } = 1;
+        public List<PinnedApp>? Pins { get; set; }
+        public AppSettings? Settings { get; set; }
+        public List<HistoryEntry>? History { get; set; }
+    }
+
+    private void OnExportClick(object sender, MouseButtonEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "HiveMotion 配置 (*.json)|*.json",
+            FileName = "hivemotion-config.json",
+            Title = "导出配置"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            var bundle = new ConfigBundle
+            {
+                Pins = _pinStore.Pins.ToList(),
+                Settings = _settingsStore.Settings,
+                History = _historyStore.Entries.ToList()
+            };
+            File.WriteAllText(dialog.FileName,
+                System.Text.Json.JsonSerializer.Serialize(bundle,
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception ex)
+        {
+            ShowConfirm($"导出失败:{ex.Message}", () => { });
+        }
+        e.Handled = true;
+    }
+
+    private void OnImportClick(object sender, MouseButtonEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "HiveMotion 配置 (*.json)|*.json",
+            Title = "导入配置"
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        ConfigBundle? bundle;
+        try
+        {
+            bundle = System.Text.Json.JsonSerializer.Deserialize<ConfigBundle>(
+                File.ReadAllText(dialog.FileName));
+        }
+        catch (Exception ex)
+        {
+            ShowConfirm($"导入失败,文件无法解析:{ex.Message}", () => { });
+            return;
+        }
+        if (bundle?.Pins == null && bundle?.Settings == null && bundle?.History == null)
+        {
+            ShowConfirm("导入失败:文件里没有可识别的配置。", () => { });
+            return;
+        }
+
+        ShowConfirm("导入将覆盖当前的固定、启动历史与设置,继续?", () => ApplyImport(bundle));
+        e.Handled = true;
+    }
+
+    private void ApplyImport(ConfigBundle bundle)
+    {
+        if (bundle.Pins != null)
+        {
+            _pinStore.ReplaceAll(bundle.Pins.Where(p =>
+                p.Key is >= 'A' and <= 'Z' && !string.IsNullOrEmpty(p.ExecutablePath)));
+        }
+        if (bundle.History != null)
+        {
+            _historyStore.ReplaceAll(bundle.History.Where(h => !string.IsNullOrEmpty(h.ExecutablePath)));
+        }
+        if (bundle.Settings != null)
+        {
+            var settings = _settingsStore.Settings;
+            settings.PriorityProcessNames.Clear();
+            settings.PriorityProcessNames.AddRange(bundle.Settings.PriorityProcessNames);
+            settings.Hotkeys.Clear();
+            settings.Hotkeys.AddRange(bundle.Settings.Hotkeys);
+            settings.SecondPressPassthrough = bundle.Settings.SecondPressPassthrough;
+            _settingsStore.Save();
+            _applyHotkeys();
+        }
+
+        BuildLetterTiles();
+        ShowEditor(null);
+        BuildPriorityList();
+        RefreshHotkeyUi();
+        UpdateHistoryCount();
+        UpdateCheatsheet();
+    }
+
+    // ---------- about page ----------
+
+    private void InitAboutPage()
+    {
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        VersionText.Text = $"版本 {version?.ToString(3) ?? "?"} · 配置目录: {PinStore.StoreDirectoryPath}";
+        UpdateCheatsheet();
+    }
+
+    private void UpdateCheatsheet()
+    {
+        CheatsheetList.Children.Clear();
+        AddCheatsheet(string.Join(" / ", _settingsStore.Settings.Hotkeys.Select(r => r.Name)), "召唤蜂巢");
+        AddCheatsheet("A – Z", "直达对应格子的窗口");
+        AddCheatsheet("空 格", "搜索窗口");
+        AddCheatsheet("Ctrl + P", "固定当前格 / 取消固定");
+        AddCheatsheet("Esc", "关闭蜂巢");
+    }
+
+    private void AddCheatsheet(string keys, string description)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(2, 3, 2, 3)
+        };
+        row.Children.Add(new Border
+        {
+            Padding = new Thickness(10, 2, 10, 2),
+            CornerRadius = new CornerRadius(5),
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#14F5B301")),
+            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#59F5B301")),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = keys,
+                FontSize = 11,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCFFD97A"))
+            }
+        });
+        row.Children.Add(new TextBlock
+        {
+            Text = description,
+            FontSize = 12,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFFFFF")),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0)
+        });
+        CheatsheetList.Children.Add(row);
     }
 
     // ---------- confirm dialog ----------
