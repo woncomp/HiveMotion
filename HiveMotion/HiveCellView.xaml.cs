@@ -56,6 +56,9 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         bool awaitingLaunch = cell.IsPinned && !cell.IsRunning;
         HintText.Visibility = awaitingLaunch ? Visibility.Visible : Visibility.Collapsed;
 
+        // A padlock at the hexagon's bottom tip marks pinned cells
+        PinBadge.Visibility = cell.IsPinned ? Visibility.Visible : Visibility.Collapsed;
+
         if (cell.Icon != null)
         {
             AppIcon.Source = cell.Icon;

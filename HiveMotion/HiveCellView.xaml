@@ -135,6 +135,14 @@
                 <TextBlock x:Name="KeyText" Text="A" FontSize="13" FontWeight="ExtraBold"
                            Foreground="#3D2C00" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
+
+            <!-- Pin badge: a small padlock right above the hexagon's bottom tip -->
+            <Grid x:Name="PinBadge" Visibility="Collapsed" Width="11" Height="13"
+                  VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,10">
+                <Path Stroke="#E6FFD97A" StrokeThickness="1.5"
+                      Data="M 2.8,6.5 V 4.5 A 2.7,2.7 0 0 1 8.2,4.5 V 6.5" />
+                <Border Margin="0,5.5,0,0" CornerRadius="1.8" Background="#E6FFD97A" />
+            </Grid>
         </Grid>
 
         <!-- Hover glow (outside the cached layer: an opacity animation is a cheap blend that won't invalidate the bitmap cache) -->
