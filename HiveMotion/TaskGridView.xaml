@@ -148,7 +148,8 @@
             </Canvas>
         </StackPanel>
 
-        <!-- 悬浮窗口预览:在蜂巢区域正上方,所有程序共用这一个位置(置于顶层);画面与边缘齐平 -->
+        <!-- 悬浮窗口预览:在蜂巢区域正上方,所有程序共用这一个位置(置于顶层);画面与边缘齐平。
+             未启动的固定格子不显示缩略图,改为显示程序名与完整命令行。 -->
         <Border x:Name="HoverPreview" HorizontalAlignment="Center" VerticalAlignment="Top"
                 Margin="0,28,0,0"
                 CornerRadius="6" BorderBrush="#59F5B301" BorderThickness="1"
@@ -157,7 +158,17 @@
             <Border.Effect>
                 <DropShadowEffect Color="Black" Opacity="0.55" BlurRadius="30" ShadowDepth="14" />
             </Border.Effect>
-            <Border x:Name="HoverPreviewViewport" CornerRadius="5" Background="Transparent" />
+            <Grid>
+                <Border x:Name="HoverPreviewViewport" CornerRadius="5" Background="Transparent" />
+                <StackPanel x:Name="LaunchInfoPanel" Visibility="Collapsed" Margin="20,14" MaxWidth="560">
+                    <TextBlock x:Name="LaunchInfoName" FontSize="15" FontWeight="SemiBold"
+                               Foreground="#F2FFFFFF" />
+                    <TextBlock x:Name="LaunchInfoCommand" FontSize="12" Foreground="#99FFFFFF"
+                               Margin="0,8,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                               MaxHeight="60" />
+                    <TextBlock Text="点 击 启 动" FontSize="10" Foreground="#CCF5C542" Margin="0,10,0,0" />
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- 底部提示 -->
@@ -178,9 +189,43 @@
             <TextBlock Text="搜 索" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,20,0" />
 
             <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
+                <TextBlock Text="Ctrl+P" FontSize="11" Foreground="#CCFFD97A" />
+            </Border>
+            <TextBlock Text="固 定 / 取 消" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,20,0" />
+
+            <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
                 <TextBlock Text="Esc" FontSize="11" Foreground="#CCFFD97A" />
             </Border>
             <TextBlock x:Name="EscHintText" Text="关 闭" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
+
+        <!-- 固定/移除确认的模态层:盖住整个 overlay,Enter 确认 / Esc 取消 -->
+        <Grid x:Name="ConfirmOverlay" Visibility="Collapsed" Background="#6610131A"
+              MouseLeftButtonDown="OnConfirmBackdropClick">
+            <Border Width="440" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="14" Background="#F214161D"
+                    BorderBrush="#59F5B301" BorderThickness="1" Padding="22,18"
+                    MouseLeftButtonDown="OnConfirmDialogClick">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="32" ShadowDepth="12" />
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock x:Name="ConfirmMessage" FontSize="14" Foreground="#E6FFFFFF"
+                               TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Border x:Name="ConfirmYes" Padding="16,6" Margin="0,0,10,0" CornerRadius="8"
+                                Background="#26F5B301" BorderBrush="#80F5B301" BorderThickness="1"
+                                Cursor="Hand" MouseLeftButtonUp="OnConfirmYesClick">
+                            <TextBlock x:Name="ConfirmYesText" Text="移 除" FontSize="12" Foreground="#FFFFD97A" />
+                        </Border>
+                        <Border x:Name="ConfirmNo" Padding="16,6" CornerRadius="8"
+                                Background="#14FFFFFF" BorderBrush="#33FFFFFF" BorderThickness="1"
+                                Cursor="Hand" MouseLeftButtonUp="OnConfirmNoClick">
+                            <TextBlock x:Name="ConfirmNoText" Text="取 消" FontSize="12" Foreground="#BFFFFFFF" />
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

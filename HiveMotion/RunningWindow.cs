@@ -17,4 +17,8 @@ public sealed class RunningWindow
     public int ZOrder { get; set; }
     /// <summary>Letter this window wants, derived from its app name; null when no A-Z letter exists.</summary>
     public char? PreferredLetter { get; set; }
+    /// <summary>Full image path of the owning process; null when the process denied query.</summary>
+    public string? ExecutablePath { get; set; }
+    /// <summary>Command line argument tail of the owning process; null when unreadable.</summary>
+    public string? CommandLineArguments { get; set; }
 }

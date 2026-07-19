@@ -1,19 +1,25 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 
 namespace HiveMotion;
 
 public static class WindowManager
 {
-    public static void Launch(string executablePath)
+    public static void Launch(string executablePath, string? arguments = null, string? workingDirectory = null)
     {
         try
         {
-            Process.Start(new ProcessStartInfo
+            var startInfo = new ProcessStartInfo
             {
                 FileName = executablePath,
                 UseShellExecute = true
-            });
+            };
+            if (!string.IsNullOrEmpty(arguments))
+                startInfo.Arguments = arguments;
+            if (!string.IsNullOrEmpty(workingDirectory) && Directory.Exists(workingDirectory))
+                startInfo.WorkingDirectory = workingDirectory;
+            Process.Start(startInfo);
         }
         catch
         {

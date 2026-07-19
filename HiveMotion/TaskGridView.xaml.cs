@@ -28,14 +28,26 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private int _highlight;
     private bool _searching;
     private bool _previewVisible;
+    private PreviewMode _previewMode = PreviewMode.None;
     private double _previewMaxH = 320;
+    private HiveCell? _hoveredCell;
+    private Action? _confirmAction;
     private readonly DwmThumbnailPreview _dwmPreview = new();
+
+    private enum PreviewMode
+    {
+        None,
+        Thumbnail,
+        LaunchInfo
+    }
 
     /// <summary>HWND of the owning overlay window; the DWM thumbnail draws into it.</summary>
     public IntPtr OverlayHwnd { get; set; }
 
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
+    /// <summary>Ctrl+P over a cell (grid hover or search highlight): pin or unpin it.</summary>
+    public event EventHandler<HiveCell>? PinToggleRequested;
 
     public TaskGridView()
     {
@@ -52,6 +64,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     public void SetCells(IReadOnlyList<HiveCell> cells)
     {
         _cells = cells;
+        _hoveredCell = null;
+        HideConfirm();
         HexCanvas.Children.Clear();
         _cellViews.Clear();
 
@@ -60,8 +74,17 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             var view = new HiveCellView();
             view.SetCell(cell);
             view.Clicked += (_, chosen) => CellChosen?.Invoke(this, chosen);
-            view.Hovered += (_, hovered) => ShowPreview(hovered);
-            view.Unhovered += (_, _) => HidePreview();
+            view.Hovered += (_, hovered) =>
+            {
+                _hoveredCell = hovered;
+                ShowPreview(hovered);
+            };
+            view.Unhovered += (_, unhovered) =>
+            {
+                if (_hoveredCell == unhovered)
+                    _hoveredCell = null;
+                HidePreview();
+            };
             var center = KeyGrid.CenterOf(cell.Letter);
             Canvas.SetLeft(view, center.X - KeyGrid.HexW / 2);
             Canvas.SetTop(view, center.Y - KeyGrid.HexH / 2);
@@ -70,6 +93,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         }
 
         _previewVisible = false;
+        _previewMode = PreviewMode.None;
         _dwmPreview.Hide();
         HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
         HoverPreview.Opacity = 0;
@@ -170,6 +194,25 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void OnSearchInputPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // A confirm dialog owns all keys while visible.
+        if (ConfirmVisible)
+        {
+            if (e.Key == Key.Enter)
+                CommitConfirm();
+            else if (e.Key == Key.Escape)
+                HideConfirm();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (HighlightedCell is { } highlighted)
+                PinToggleRequested?.Invoke(this, highlighted);
+            e.Handled = true;
+            return;
+        }
+
         switch (e.Key)
         {
             case Key.Down:
@@ -191,10 +234,26 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         }
     }
 
+    private HiveCell? HighlightedCell =>
+        _results.Count == 0 ? null : _results[Math.Clamp(_highlight, 0, _results.Count - 1)];
+
     /// <summary>Key handling for the plain-grid mode (routed here from the overlay window).</summary>
     public void HandleWindowKeyDown(KeyEventArgs e)
     {
-        if (_searching || e.Handled)
+        if (e.Handled)
+            return;
+
+        if (ConfirmVisible)
+        {
+            if (e.Key == Key.Enter)
+                CommitConfirm();
+            else if (e.Key == Key.Escape)
+                HideConfirm();
+            e.Handled = true;
+            return;
+        }
+
+        if (_searching)
             return;
 
         if (e.Key == Key.Escape)
@@ -209,7 +268,15 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             e.Handled = true;
             return;
         }
-        if (e.Key is >= Key.A and <= Key.Z)
+        if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (_hoveredCell != null)
+                PinToggleRequested?.Invoke(this, _hoveredCell);
+            e.Handled = true;
+            return;
+        }
+        // Plain letters only: modified chords (Ctrl+P etc.) must not trigger a cell.
+        if (e.Key is >= Key.A and <= Key.Z && Keyboard.Modifiers == ModifierKeys.None)
         {
             char letter = (char)('A' + (e.Key - Key.A));
             var cell = _cells.FirstOrDefault(c => c.Letter == letter);
@@ -219,6 +286,56 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
                 e.Handled = true;
             }
         }
+    }
+
+    public bool ConfirmVisible => ConfirmOverlay.Visibility == Visibility.Visible;
+
+    /// <summary>Shows the in-overlay confirm dialog; null action turns it into a notice.</summary>
+    public void ShowConfirm(string message, string confirmText, Action? onConfirm)
+    {
+        ConfirmMessage.Text = message;
+        ConfirmYesText.Text = confirmText;
+        ConfirmYes.Visibility = onConfirm != null ? Visibility.Visible : Visibility.Collapsed;
+        ConfirmNoText.Text = onConfirm != null ? "取 消" : "好";
+        _confirmAction = onConfirm;
+        ConfirmOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void HideConfirm()
+    {
+        _confirmAction = null;
+        ConfirmOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void CommitConfirm()
+    {
+        var action = _confirmAction;
+        HideConfirm();
+        action?.Invoke();
+    }
+
+    private void OnConfirmYesClick(object sender, MouseButtonEventArgs e)
+    {
+        CommitConfirm();
+        e.Handled = true;
+    }
+
+    private void OnConfirmNoClick(object sender, MouseButtonEventArgs e)
+    {
+        HideConfirm();
+        e.Handled = true;
+    }
+
+    private void OnConfirmBackdropClick(object sender, MouseButtonEventArgs e)
+    {
+        HideConfirm();
+        e.Handled = true;
+    }
+
+    private void OnConfirmDialogClick(object sender, MouseButtonEventArgs e)
+    {
+        // Clicks inside the dialog must not reach the cancel-on-backdrop handler.
+        e.Handled = true;
     }
 
     public void MoveSearchHighlight(int delta)
@@ -237,11 +354,24 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void ShowPreview(HiveCell cell)
     {
-        if (_searching || !cell.IsRunning || OverlayHwnd == IntPtr.Zero)
+        if (_searching || OverlayHwnd == IntPtr.Zero)
         {
             HidePreview();
             return;
         }
+
+        if (!cell.IsRunning)
+        {
+            // Pinned-but-not-running: no window to thumbnail; show the launch identity instead.
+            if (cell.Pin != null)
+                ShowLaunchInfo(cell.Pin);
+            else
+                HidePreview();
+            return;
+        }
+
+        LaunchInfoPanel.Visibility = Visibility.Collapsed;
+        HoverPreviewViewport.Visibility = Visibility.Visible;
 
         var (contentW, contentH) = GetWindowContentSize(cell.WindowHandle);
         if (contentW <= 0)
@@ -258,6 +388,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
         bool wasVisible = _previewVisible;
         _previewVisible = true;
+        _previewMode = PreviewMode.Thumbnail;
         if (!wasVisible)
             SplineAnimate(HoverPreview, UIElement.OpacityProperty, 1, 160);
 
@@ -267,9 +398,26 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             new Action(() => AttachThumbnail(handle)));
     }
 
+    private void ShowLaunchInfo(PinnedApp pin)
+    {
+        _dwmPreview.Hide();
+        HoverPreviewViewport.Visibility = Visibility.Collapsed;
+        LaunchInfoPanel.Visibility = Visibility.Visible;
+        LaunchInfoName.Text = pin.DisplayName;
+        LaunchInfoCommand.Text = string.IsNullOrEmpty(pin.WorkingDirectory)
+            ? pin.CommandLine
+            : $"{pin.CommandLine}\n工作目录: {pin.WorkingDirectory}";
+
+        bool wasVisible = _previewVisible;
+        _previewVisible = true;
+        _previewMode = PreviewMode.LaunchInfo;
+        if (!wasVisible)
+            SplineAnimate(HoverPreview, UIElement.OpacityProperty, 1, 160);
+    }
+
     private void AttachThumbnail(IntPtr sourceHwnd)
     {
-        if (!_previewVisible || OverlayHwnd == IntPtr.Zero)
+        if (!_previewVisible || _previewMode != PreviewMode.Thumbnail || OverlayHwnd == IntPtr.Zero)
             return;
 
         var dpi = VisualTreeHelper.GetDpi(this);
@@ -292,6 +440,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private void HidePreview()
     {
         _dwmPreview.Hide();
+        _previewMode = PreviewMode.None;
         if (!_previewVisible)
             return;
         _previewVisible = false;

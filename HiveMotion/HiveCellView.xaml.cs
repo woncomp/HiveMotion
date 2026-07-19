@@ -52,10 +52,14 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
             : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCF5C542"));
         CaptionText.FontSize = cell.IsRunning ? 11 : 10;
 
+        // 已固定但未启动:名称下多一行"点击启动"
+        bool awaitingLaunch = cell.IsPinned && !cell.IsRunning;
+        HintText.Visibility = awaitingLaunch ? Visibility.Visible : Visibility.Collapsed;
+
         if (cell.Icon != null)
         {
             AppIcon.Source = cell.Icon;
-            AppIcon.Opacity = cell.IsRunning ? 0.9 : 0.55;
+            AppIcon.Opacity = 0.9;
             AppIcon.Visibility = Visibility.Visible;
             FallbackGlyph.Visibility = Visibility.Collapsed;
         }

@@ -106,10 +106,14 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            Margin="0,0,0,6" FontSize="30" FontWeight="Bold" Foreground="#66FFFFFF" />
                 <!-- 名称紧跟图标下方,位于六边形腹部宽区(裁剪在六边形内,不溢出) -->
-                <TextBlock x:Name="CaptionText"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Margin="0,70,0,0" FontSize="11" Foreground="#F2FFFFFF"
-                           TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="100" />
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,66,0,0">
+                    <TextBlock x:Name="CaptionText"
+                               HorizontalAlignment="Center" FontSize="11" Foreground="#F2FFFFFF"
+                               TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="100" />
+                    <TextBlock x:Name="HintText" Text="点 击 启 动" Visibility="Collapsed"
+                               HorizontalAlignment="Center" FontSize="8" Foreground="#99FFD97A"
+                               Margin="0,2,0,0" />
+                </StackPanel>
             </Grid>
 
             <!-- 蜂蜜滴键帽 -->

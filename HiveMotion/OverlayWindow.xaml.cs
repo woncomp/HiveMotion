@@ -15,11 +15,21 @@ public partial class OverlayWindow : Window
 
         TaskGrid.CellChosen += (_, cell) => CellChosen?.Invoke(this, cell);
         TaskGrid.CloseRequested += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
+        TaskGrid.PinToggleRequested += (_, cell) => PinToggleRequested?.Invoke(this, cell);
         KeyDown += (_, e) => TaskGrid.HandleWindowKeyDown(e);
     }
 
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
+    public event EventHandler<HiveCell>? PinToggleRequested;
+
+    /// <summary>Rebuilds the cells in place after a pin change, without re-showing the overlay.</summary>
+    public void UpdateCells(IReadOnlyList<HiveCell> cells) =>
+        Dispatcher.BeginInvoke(() => TaskGrid.SetCells(cells));
+
+    /// <summary>Modal in-overlay question; null action shows a dismiss-only notice.</summary>
+    public void ShowConfirm(string message, string confirmText, Action? onConfirm) =>
+        Dispatcher.BeginInvoke(() => TaskGrid.ShowConfirm(message, confirmText, onConfirm));
 
     protected override void OnSourceInitialized(EventArgs e)
     {

@@ -23,6 +23,7 @@ public partial class App : System.Windows.Application
     private AutoStartManager? _autoStartManager;
     private WindowScanner? _windowScanner;
     private CellAssigner? _cellAssigner;
+    private PinStore? _pinStore;
 
     private OverlayState _state = OverlayState.Hidden;
     private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
@@ -40,11 +41,13 @@ public partial class App : System.Windows.Application
         }
 
         var config = AppConfig.Default;
+        _pinStore = new PinStore();
         _windowScanner = new WindowScanner(config.PriorityProcessNames);
-        _cellAssigner = new CellAssigner(config);
+        _cellAssigner = new CellAssigner(_pinStore.Pins);
         _overlayWindow = new OverlayWindow();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
         _overlayWindow.CloseRequested += (_, _) => CloseOverlay(restoreFocus: true);
+        _overlayWindow.PinToggleRequested += (_, cell) => TogglePin(cell);
         _overlayWindow.Deactivated += (_, _) =>
         {
             // Clicking elsewhere dismisses the launcher (standard launcher behavior);
@@ -110,6 +113,99 @@ public partial class App : System.Windows.Application
         _overlayWindow!.ShowTaskGrid(cells);
     }
 
+    /// <summary>Re-scans and rebuilds the grid in place after a pin/unpin, keeping the overlay open.</summary>
+    private void RefreshTaskGrid()
+    {
+        try
+        {
+            var windows = _windowScanner!.Scan();
+            var cells = _cellAssigner!.Assign(windows);
+            _currentCells = cells;
+            _overlayWindow!.UpdateCells(cells);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex);
+        }
+    }
+
+    /// <summary>
+    /// Ctrl+P on a cell. Pinned cells (running or not) ask for removal; running unpinned
+    /// cells capture their process identity (same program, same arguments) as a new pin.
+    /// </summary>
+    private void TogglePin(HiveCell cell)
+    {
+        if (_state != OverlayState.TaskGrid)
+            return;
+
+        if (cell.Pin is { } pin)
+        {
+            _overlayWindow!.ShowConfirm(
+                $"移除固定在 {pin.Key} 键的「{pin.DisplayName}」?\n{pin.CommandLine}",
+                "移 除",
+                () =>
+                {
+                    _pinStore!.Remove(pin.Key);
+                    RefreshTaskGrid();
+                });
+            return;
+        }
+
+        if (!cell.IsRunning)
+            return;
+
+        // UWP apps all share ApplicationFrameHost.exe; that identity cannot be relaunched.
+        if (cell.ProcessName.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
+        {
+            _overlayWindow!.ShowConfirm("该应用为 UWP 应用,暂不支持固定。", "好", null);
+            return;
+        }
+
+        string? executablePath = ProcessIdentity.TryGetImagePath(cell.ProcessId);
+        if (executablePath == null)
+        {
+            _overlayWindow!.ShowConfirm("无法读取该程序的启动路径,不能固定。", "好", null);
+            return;
+        }
+
+        // Arguments and working directory live in the PEB; elevated processes refuse the
+        // read and degrade to an exe-only pin that matches any arguments.
+        string arguments = string.Empty;
+        string workingDirectory = string.Empty;
+        if (ProcessIdentity.TryReadProcessParameters(cell.ProcessId, out string? commandLine, out string? currentDirectory))
+        {
+            arguments = ProcessIdentity.ExtractArguments(commandLine);
+            workingDirectory = currentDirectory ?? string.Empty;
+        }
+
+        var existing = _pinStore!.FindByIdentity(executablePath, arguments);
+        if (existing != null && existing.Key != cell.Letter)
+        {
+            _overlayWindow!.ShowConfirm(
+                $"「{existing.DisplayName}」已固定在 {existing.Key} 键,移动到 {cell.Letter} 键?",
+                "移 动",
+                () =>
+                {
+                    _pinStore.Remove(existing.Key);
+                    existing.Key = cell.Letter;
+                    _pinStore.Set(existing);
+                    RefreshTaskGrid();
+                });
+            return;
+        }
+
+        _pinStore.Set(new PinnedApp
+        {
+            Key = cell.Letter,
+            ProcessName = cell.ProcessName,
+            ExecutablePath = executablePath,
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            DisplayName = cell.AppName
+        });
+        RefreshTaskGrid();
+    }
+
     private void ActivateCell(HiveCell cell)
     {
         // A deliberate switch, not a cancel: focus goes to the chosen window, not back.
@@ -123,9 +219,10 @@ public partial class App : System.Windows.Application
         {
             WindowManager.ActivateWindow(cell.WindowHandle);
         }
-        else if (cell.Preset != null)
+        else if (cell.Pin != null)
         {
-            WindowManager.Launch(cell.Preset.ExecutablePath);
+            // Relaunch the pinned program with the exact arguments it was pinned with.
+            WindowManager.Launch(cell.Pin.ExecutablePath, cell.Pin.Arguments, cell.Pin.WorkingDirectory);
         }
         CloseOverlay(restoreFocus: false);
     }
