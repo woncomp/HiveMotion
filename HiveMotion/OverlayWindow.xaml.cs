@@ -117,6 +117,8 @@ public partial class OverlayWindow : Window
             // Plain Activate() is denied for a background process; the attach-input recipe is not.
             WindowManager.ActivateWindow(TaskGrid.OverlayHwnd);
             Focus();
+            // Windows may apply its own DPI-suggested rect on the cross-DPI hop; re-assert ours.
+            Dispatcher.BeginInvoke(ApplyScreenBounds);
         });
     }
 
@@ -133,7 +135,12 @@ public partial class OverlayWindow : Window
     public string DescribeGeometry() =>
         $"screen={_screen.DeviceName} bounds={_screen.Bounds} window=({Left},{Top},{Width},{Height})";
 
-    /// <summary>Cover the screen that currently holds the mouse cursor (multi-monitor aware).</summary>
+    /// <summary>
+    /// Cover the screen that currently holds the mouse cursor.
+    /// Position is set with SetWindowPos in PHYSICAL pixels: assigning WPF Left/Width in DIPs
+    /// converts through the window's CURRENT monitor DPI, which lands the window in empty
+    /// space when moving between monitors with different scaling.
+    /// </summary>
     private void MoveToCursorScreen()
     {
         try
@@ -143,23 +150,21 @@ public partial class OverlayWindow : Window
 
             _screen = System.Windows.Forms.Screen.FromPoint(
                 new System.Drawing.Point(point.x, point.y));
-
-            uint dpiX = 96, dpiY = 96;
-            var monitor = NativeMethods.MonitorFromPoint(point, NativeMethods.MONITOR_DEFAULTTONEAREST);
-            if (monitor != IntPtr.Zero)
-                NativeMethods.GetDpiForMonitor(monitor, NativeMethods.MDT_EFFECTIVE_DPI, out dpiX, out dpiY);
-            if (dpiX == 0) dpiX = 96;
-            if (dpiY == 0) dpiY = 96;
-
-            Left = _screen.Bounds.Left * 96.0 / dpiX;
-            Top = _screen.Bounds.Top * 96.0 / dpiY;
-            Width = _screen.Bounds.Width * 96.0 / dpiX;
-            Height = _screen.Bounds.Height * 96.0 / dpiY;
+            ApplyScreenBounds();
         }
         catch
         {
             // fall back to wherever the window already is
         }
+    }
+
+    private void ApplyScreenBounds()
+    {
+        // EnsureHandle lets the first open position the window before its first Show.
+        var hwnd = new WindowInteropHelper(this).EnsureHandle();
+        var b = _screen.Bounds;
+        NativeMethods.SetWindowPos(hwnd, IntPtr.Zero, b.Left, b.Top, b.Width, b.Height,
+            NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
     }
 
     /// <summary>
