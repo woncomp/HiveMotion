@@ -45,6 +45,8 @@ public sealed class CellAssigner
                 cell.ProcessName = match.ProcessName;
                 cell.Title = match.Title;
                 cell.Icon = match.Icon;
+                cell.ExecutablePath = match.ExecutablePath;
+                cell.CommandLineArguments = match.CommandLineArguments;
                 placed.Add(match);
             }
             else

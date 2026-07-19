@@ -16,12 +16,16 @@ public partial class OverlayWindow : Window
         TaskGrid.CellChosen += (_, cell) => CellChosen?.Invoke(this, cell);
         TaskGrid.CloseRequested += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
         TaskGrid.PinToggleRequested += (_, cell) => PinToggleRequested?.Invoke(this, cell);
+        TaskGrid.RevealRequested += (_, cell) => RevealRequested?.Invoke(this, cell);
+        TaskGrid.CopyCommandRequested += (_, cell) => CopyCommandRequested?.Invoke(this, cell);
         KeyDown += (_, e) => TaskGrid.HandleWindowKeyDown(e);
     }
 
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
     public event EventHandler<HiveCell>? PinToggleRequested;
+    public event EventHandler<HiveCell>? RevealRequested;
+    public event EventHandler<HiveCell>? CopyCommandRequested;
 
     /// <summary>Rebuilds the cells in place after a pin change, without re-showing the overlay.</summary>
     public void UpdateCells(IReadOnlyList<HiveCell> cells) =>
@@ -30,6 +34,10 @@ public partial class OverlayWindow : Window
     /// <summary>Modal in-overlay question; null action shows a dismiss-only notice.</summary>
     public void ShowConfirm(string message, string confirmText, Action? onConfirm) =>
         Dispatcher.BeginInvoke(() => TaskGrid.ShowConfirm(message, confirmText, onConfirm));
+
+    /// <summary>Brief "copied" pill; the overlay stays open.</summary>
+    public void ShowCopyToast() =>
+        Dispatcher.BeginInvoke(() => TaskGrid.ShowCopyToast());
 
     protected override void OnSourceInitialized(EventArgs e)
     {

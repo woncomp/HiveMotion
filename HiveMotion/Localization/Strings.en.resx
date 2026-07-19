@@ -420,4 +420,22 @@ Working directory: {1}</value>
   <data name="AppName_wechat" xml:space="preserve">
     <value>WeChat</value>
   </data>
+  <data name="Grid_CopiedToast" xml:space="preserve">
+    <value>Copied to clipboard</value>
+  </data>
+  <data name="App_UwpNoLocation" xml:space="preserve">
+    <value>This is a UWP app; its program path is not accessible.</value>
+  </data>
+  <data name="App_NoLaunchPath" xml:space="preserve">
+    <value>Cannot read this app's path.</value>
+  </data>
+  <data name="App_CopyFailed" xml:space="preserve">
+    <value>Copy failed: the clipboard is busy.</value>
+  </data>
+  <data name="Cheat_Reveal" xml:space="preserve">
+    <value>Open the app's file location</value>
+  </data>
+  <data name="Cheat_CopyCmd" xml:space="preserve">
+    <value>Copy the full command line</value>
+  </data>
 </root>

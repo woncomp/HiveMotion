@@ -45,14 +45,14 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         _cell = cell;
         KeyText.Text = cell.Letter.ToString();
 
-        // 图标下方:运行中显示窗口标题,未启动显示应用名
+        // Below the icon: window title when running, app name otherwise
         CaptionText.Text = cell.IsRunning ? cell.Title : cell.AppName;
         CaptionText.Foreground = cell.IsRunning
             ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F2FFFFFF"))
             : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCF5C542"));
         CaptionText.FontSize = cell.IsRunning ? 11 : 10;
 
-        // 已固定但未启动:名称下多一行"点击启动"
+        // Pinned but not running: an extra "click to launch" line under the name
         bool awaitingLaunch = cell.IsPinned && !cell.IsRunning;
         HintText.Visibility = awaitingLaunch ? Visibility.Visible : Visibility.Collapsed;
 

@@ -13,6 +13,10 @@ public sealed class HiveCell
     public IntPtr WindowHandle { get; set; }
     public uint ProcessId { get; set; }
     public string ProcessName { get; set; } = string.Empty;
+    /// <summary>Full image path of the owning process, captured at scan time; null when unreadable or not running.</summary>
+    public string? ExecutablePath { get; set; }
+    /// <summary>Command line argument tail with original quoting; null when unreadable or not running.</summary>
+    public string? CommandLineArguments { get; set; }
     public PinnedApp? Pin { get; set; }
 
     public bool IsRunning => WindowHandle != IntPtr.Zero;
@@ -26,6 +30,8 @@ public sealed class HiveCell
         Icon = window.Icon,
         WindowHandle = window.Handle,
         ProcessId = window.ProcessId,
-        ProcessName = window.ProcessName
+        ProcessName = window.ProcessName,
+        ExecutablePath = window.ExecutablePath,
+        CommandLineArguments = window.CommandLineArguments
     };
 }

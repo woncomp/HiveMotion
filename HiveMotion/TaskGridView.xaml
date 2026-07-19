@@ -4,13 +4,13 @@
              xmlns:l="clr-namespace:HiveMotion.Localization"
              FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei">
     <Grid x:Name="Root" SizeChanged="OnRootSizeChanged">
-        <!-- 桌面截图(模糊已在截图时烘进像素,无需着色器) -->
+        <!-- Desktop screenshot (blur is baked into the pixels at capture time, no shader needed) -->
         <Image x:Name="BackdropImage" Stretch="Fill" IsHitTestVisible="False" />
 
-        <!-- 压暗层(点击空白处关闭) -->
+        <!-- Dimming layer (clicking the empty area closes) -->
         <Border Background="#8010131A" MouseLeftButtonDown="OnBackdropClick" />
 
-        <!-- 蜂蜜色径向辉光 -->
+        <!-- Honey-colored radial glow -->
         <Border IsHitTestVisible="False">
             <Border.Background>
                 <RadialGradientBrush Center="0.5,0.42" RadiusX="0.9" RadiusY="0.7">
@@ -20,7 +20,7 @@
             </Border.Background>
         </Border>
 
-        <!-- 中央:蜂巢网格 + 搜索面板 -->
+        <!-- Center: hive grid + search panel -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
             <Viewbox x:Name="HiveBox" Stretch="Uniform" StretchDirection="DownOnly">
                 <Grid Width="1470" Height="460">
@@ -29,7 +29,7 @@
             </Viewbox>
 
             <Canvas x:Name="SearchArea" Width="552" Height="48" Margin="0,28,0,0">
-                <!-- 向上拉出的搜索列表 -->
+                <!-- Search result list that pulls upward -->
                 <Border x:Name="ResultPanel" Canvas.Left="0" Canvas.Bottom="60"
                         Width="552" MaxHeight="340" CornerRadius="16"
                         Background="#E614161D" BorderBrush="#47F5B301" BorderThickness="1"
@@ -75,7 +75,7 @@
                         <StackPanel Margin="6">
                             <StackPanel x:Name="ResultHeader" Orientation="Horizontal" Margin="8,8,8,4">
                                 <Ellipse Width="4" Height="4" Fill="#F5B301" VerticalAlignment="Center" />
-                                <TextBlock x:Name="ResultHeaderText" Text="全 部 窗 口"
+                                <TextBlock x:Name="ResultHeaderText" Text="All windows"
                                            FontSize="11" Foreground="#99F5C542" Margin="8,0,0,0" />
                             </StackPanel>
                             <StackPanel x:Name="ResultList" />
@@ -85,7 +85,19 @@
                     </ScrollViewer>
                 </Border>
 
-                <!-- 空格键造型的长条 / 搜索输入框 -->
+                <!-- 复制成功的轻提示:浮在列表底部,自动淡出 -->
+                <Border x:Name="CopyToast" Canvas.Left="0" Canvas.Bottom="64" Width="552"
+                        Opacity="0" IsHitTestVisible="False">
+                    <Border HorizontalAlignment="Center" Padding="14,5" CornerRadius="8"
+                            Background="#F214161D" BorderBrush="#59F5B301" BorderThickness="1">
+                        <Border.Effect>
+                            <DropShadowEffect Color="Black" Opacity="0.4" BlurRadius="16" ShadowDepth="6" />
+                        </Border.Effect>
+                        <TextBlock x:Name="CopyToastText" FontSize="12" Foreground="#CCFFD97A" />
+                    </Border>
+                </Border>
+
+                <!-- Spacebar-shaped bar / search input -->
                 <Border x:Name="SpaceBar" Canvas.Left="0" Canvas.Bottom="0" Width="552" Height="48"
                         CornerRadius="10" BorderThickness="1"
                         Cursor="Hand"
@@ -106,7 +118,7 @@
                         <Border x:Name="SpaceBarRidge" VerticalAlignment="Bottom" Height="3"
                                 Margin="1,0,1,1" CornerRadius="0,0,9,9" Background="#59F5B301" Opacity="0.6" />
 
-                        <!-- 空闲态 -->
+                        <!-- Idle state -->
                         <StackPanel x:Name="BarIdle" Orientation="Horizontal"
                                     HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
                             <Border Width="16" Height="1" Background="#99F5B301" VerticalAlignment="Center" />
@@ -114,7 +126,7 @@
                             <Border Width="16" Height="1" Background="#99F5B301" VerticalAlignment="Center" />
                         </StackPanel>
 
-                        <!-- 搜索态:真输入框,系统默认编辑行为与输入法 -->
+                        <!-- Search state: a real input box with the system's default editing and IME behavior -->
                         <Grid x:Name="BarSearch" Visibility="Collapsed" Margin="14,0,10,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -149,8 +161,9 @@
             </Canvas>
         </StackPanel>
 
-        <!-- 悬浮窗口预览:在蜂巢区域正上方,所有程序共用这一个位置(置于顶层);画面与边缘齐平。
-             未启动的固定格子不显示缩略图,改为显示程序名与完整命令行。 -->
+        <!-- Hover window preview: right above the hive area, shared by all apps (topmost);
+             content flush with the edges. Pinned cells that are not running show no thumbnail,
+             just the app name and full command line. -->
         <Border x:Name="HoverPreview" HorizontalAlignment="Center" VerticalAlignment="Top"
                 Margin="0,28,0,0"
                 CornerRadius="6" BorderBrush="#59F5B301" BorderThickness="1"
@@ -172,7 +185,7 @@
             </Grid>
         </Border>
 
-        <!-- 底部提示 -->
+        <!-- Bottom hints -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                     Margin="0,0,0,28" IsHitTestVisible="False">
             <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
@@ -197,10 +210,10 @@
             <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
                 <TextBlock Text="Esc" FontSize="11" Foreground="#CCFFD97A" />
             </Border>
-            <TextBlock x:Name="EscHintText" Text="关 闭" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,0,0" />
+            <TextBlock x:Name="EscHintText" Text="Close" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 
-        <!-- 固定/移除确认的模态层:盖住整个 overlay,Enter 确认 / Esc 取消 -->
+        <!-- Pin/remove confirm modal layer: covers the whole overlay; Enter confirms, Esc cancels -->
         <Grid x:Name="ConfirmOverlay" Visibility="Collapsed" Background="#6610131A"
               MouseLeftButtonDown="OnConfirmBackdropClick">
             <Border Width="440" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -217,12 +230,12 @@
                         <Border x:Name="ConfirmYes" Padding="16,6" Margin="0,0,10,0" CornerRadius="8"
                                 Background="#26F5B301" BorderBrush="#80F5B301" BorderThickness="1"
                                 Cursor="Hand" MouseLeftButtonUp="OnConfirmYesClick">
-                            <TextBlock x:Name="ConfirmYesText" Text="移 除" FontSize="12" Foreground="#FFFFD97A" />
+                            <TextBlock x:Name="ConfirmYesText" Text="Remove" FontSize="12" Foreground="#FFFFD97A" />
                         </Border>
                         <Border x:Name="ConfirmNo" Padding="16,6" CornerRadius="8"
                                 Background="#14FFFFFF" BorderBrush="#33FFFFFF" BorderThickness="1"
                                 Cursor="Hand" MouseLeftButtonUp="OnConfirmNoClick">
-                            <TextBlock x:Name="ConfirmNoText" Text="取 消" FontSize="12" Foreground="#BFFFFFFF" />
+                            <TextBlock x:Name="ConfirmNoText" Text="Cancel" FontSize="12" Foreground="#BFFFFFFF" />
                         </Border>
                     </StackPanel>
                 </StackPanel>

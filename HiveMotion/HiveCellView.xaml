@@ -8,7 +8,7 @@
              FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei">
     <Grid>
         <Grid x:Name="CellRoot">
-        <!-- 位图缓存:阴影/渐变一次性光栅化,滑动/缩放/淡出不触发逐帧重绘(修复拖影与卡顿) -->
+        <!-- Bitmap cache: shadows/gradients rasterize once; slide/zoom/fade don't trigger per-frame redraws (fixes smearing and stutter) -->
         <Grid.CacheMode>
             <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
         </Grid.CacheMode>
@@ -23,7 +23,7 @@
             </TransformGroup>
         </Grid.RenderTransform>
 
-        <!-- 蜂蜜金渐变描边层 -->
+        <!-- Honey-gold gradient border layer -->
         <Path Data="M 66,0 L 132,38 132,114 66,152 0,114 0,38 Z">
             <Path.Fill>
                 <LinearGradientBrush StartPoint="0.44,0" EndPoint="0.56,1">
@@ -35,7 +35,7 @@
             </Path.Fill>
         </Path>
 
-        <!-- 液态玻璃内层 -->
+        <!-- Liquid-glass inner layer -->
         <Path Data="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z">
             <Path.Fill>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -50,14 +50,14 @@
                 <PathGeometry Figures="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z" />
             </Grid.Clip>
 
-            <!-- 应用图标:靠近六边形中心 -->
+            <!-- App icon: near the hexagon center -->
             <Image x:Name="AppIcon" Width="48" Height="48"
                    HorizontalAlignment="Center" VerticalAlignment="Center"
                    Margin="0,0,0,6" Opacity="0.9"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    Stretch="Uniform" />
 
-            <!-- 底部压暗,保证文字可读 -->
+            <!-- Darkens the bottom so the caption stays readable -->
             <Path Data="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z">
                 <Path.Fill>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -68,7 +68,7 @@
                 </Path.Fill>
             </Path>
 
-            <!-- 顶部玻璃高光 -->
+            <!-- Top glass highlight -->
             <Ellipse Width="79" Height="34" VerticalAlignment="Top" Margin="0,9,0,0" Opacity="0.6">
                 <Ellipse.Fill>
                     <RadialGradientBrush Center="0.5,0" RadiusX="0.6" RadiusY="1.0">
@@ -106,7 +106,7 @@
                 <TextBlock x:Name="FallbackGlyph" Visibility="Collapsed"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            Margin="0,0,0,6" FontSize="30" FontWeight="Bold" Foreground="#66FFFFFF" />
-                <!-- 名称紧跟图标下方,位于六边形腹部宽区(裁剪在六边形内,不溢出) -->
+                <!-- Name sits right under the icon in the hexagon's wide belly (clipped inside the hexagon, no overflow) -->
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,66,0,0">
                     <TextBlock x:Name="CaptionText"
                                HorizontalAlignment="Center" FontSize="11" Foreground="#F2FFFFFF"
@@ -117,7 +117,7 @@
                 </StackPanel>
             </Grid>
 
-            <!-- 蜂蜜滴键帽 -->
+            <!-- Honey-drop keycap -->
             <Border VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,12,0,0"
                     MinWidth="27" Height="27" Padding="6,0"
                     CornerRadius="8" BorderThickness="1" BorderBrush="#B3FFE9B0"
@@ -137,7 +137,7 @@
             </Border>
         </Grid>
 
-        <!-- 悬停提亮(放在缓存层之外:透明度动画只是廉价混合,不会击穿位图缓存) -->
+        <!-- Hover glow (outside the cached layer: an opacity animation is a cheap blend that won't invalidate the bitmap cache) -->
         <Path x:Name="HoverGlow" Opacity="0" IsHitTestVisible="False"
               Data="M 66,1.73 L 130.5,38.86 130.5,113.14 66,150.27 1.5,113.14 1.5,38.86 Z"
               Fill="#12FFFFFF" />

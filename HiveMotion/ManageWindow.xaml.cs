@@ -1124,6 +1124,8 @@ public partial class ManageWindow : Window
         AddCheatsheet("A – Z", Loc.Get("Cheat_Jump"));
         AddCheatsheet(Loc.Get("Cheat_Space"), Loc.Get("Cheat_Search"));
         AddCheatsheet("Ctrl + P", Loc.Get("Cheat_Pin"));
+        AddCheatsheet("Ctrl + R", Loc.Get("Cheat_Reveal"));
+        AddCheatsheet("Ctrl + S", Loc.Get("Cheat_CopyCmd"));
         AddCheatsheet("Esc", Loc.Get("Cheat_Close"));
     }
 

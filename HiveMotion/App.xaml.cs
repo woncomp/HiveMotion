@@ -55,6 +55,8 @@ public partial class App : System.Windows.Application
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
         _overlayWindow.CloseRequested += (_, _) => CloseOverlay(restoreFocus: true);
         _overlayWindow.PinToggleRequested += (_, cell) => TogglePin(cell);
+        _overlayWindow.RevealRequested += (_, cell) => RevealCell(cell);
+        _overlayWindow.CopyCommandRequested += (_, cell) => CopyCellCommandLine(cell);
         _overlayWindow.Deactivated += (_, _) =>
         {
             // Clicking elsewhere dismisses the launcher (standard launcher behavior);
@@ -212,7 +214,7 @@ public partial class App : System.Windows.Application
             return;
 
         // UWP apps all share ApplicationFrameHost.exe; that identity cannot be relaunched.
-        if (cell.ProcessName.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
+        if (IsUwpCell(cell))
         {
             _overlayWindow!.ShowConfirm(Loc.Get("App_UwpNotPinnable"), Loc.Get("Common_Ok"), null);
             return;
@@ -261,6 +263,86 @@ public partial class App : System.Windows.Application
             DisplayName = cell.AppName
         });
         RefreshTaskGrid();
+    }
+
+    /// <summary>UWP windows all belong to ApplicationFrameHost.exe; that path is not the app's.</summary>
+    private static bool IsUwpCell(HiveCell cell) =>
+        cell.ProcessName.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Ctrl+R in the search list: reveal the app's executable in Explorer.</summary>
+    private void RevealCell(HiveCell cell)
+    {
+        if (_state != OverlayState.TaskGrid)
+            return;
+
+        if (IsUwpCell(cell))
+        {
+            _overlayWindow!.ShowConfirm(Loc.Get("App_UwpNoLocation"), Loc.Get("Common_Ok"), null);
+            return;
+        }
+
+        string? path = cell.ExecutablePath ?? cell.Pin?.ExecutablePath;
+        if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
+        {
+            _overlayWindow!.ShowConfirm(Loc.Get("App_NoLaunchPath"), Loc.Get("Common_Ok"), null);
+            return;
+        }
+
+        // Explorer takes the foreground; the overlay's Deactivated handler closes it.
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{path}\"",
+            UseShellExecute = true
+        });
+    }
+
+    /// <summary>Ctrl+S in the search list: copy exe path + original arguments to the clipboard.</summary>
+    private void CopyCellCommandLine(HiveCell cell)
+    {
+        if (_state != OverlayState.TaskGrid)
+            return;
+
+        if (IsUwpCell(cell))
+        {
+            _overlayWindow!.ShowConfirm(Loc.Get("App_UwpNoLocation"), Loc.Get("Common_Ok"), null);
+            return;
+        }
+
+        string? path = cell.ExecutablePath ?? cell.Pin?.ExecutablePath;
+        if (string.IsNullOrEmpty(path))
+        {
+            _overlayWindow!.ShowConfirm(Loc.Get("App_NoLaunchPath"), Loc.Get("Common_Ok"), null);
+            return;
+        }
+
+        string arguments = cell.CommandLineArguments ?? cell.Pin?.Arguments ?? string.Empty;
+        string text = path.Contains(' ') ? $"\"{path}\"" : path;
+        if (arguments.Length > 0)
+            text += " " + arguments;
+
+        if (TryCopyToClipboard(text))
+            _overlayWindow!.ShowCopyToast();
+        else
+            _overlayWindow!.ShowConfirm(Loc.Get("App_CopyFailed"), Loc.Get("Common_Ok"), null);
+    }
+
+    /// <summary>SetText throws while another app holds the clipboard open; retry briefly.</summary>
+    private static bool TryCopyToClipboard(string text)
+    {
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                Clipboard.SetText(text);
+                return true;
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                System.Threading.Thread.Sleep(50);
+            }
+        }
+        return false;
     }
 
     private void ActivateCell(HiveCell cell)

@@ -54,6 +54,10 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     public event EventHandler? CloseRequested;
     /// <summary>Ctrl+P over a cell (grid hover or search highlight): pin or unpin it.</summary>
     public event EventHandler<HiveCell>? PinToggleRequested;
+    /// <summary>Ctrl+R on the search-list highlight: open the app's file location.</summary>
+    public event EventHandler<HiveCell>? RevealRequested;
+    /// <summary>Ctrl+S on the search-list highlight: copy the full command line.</summary>
+    public event EventHandler<HiveCell>? CopyCommandRequested;
 
     public TaskGridView()
     {
@@ -159,6 +163,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         _dwmPreview.Hide();
         HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
         HoverPreview.Opacity = 0;
+        CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
+        CopyToast.Opacity = 0;
 
         ExitSearchImmediate();
     }
@@ -275,6 +281,22 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             return;
         }
 
+        if (e.Key == Key.R && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (HighlightedCell is { } highlighted)
+                RevealRequested?.Invoke(this, highlighted);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (HighlightedCell is { } highlighted)
+                CopyCommandRequested?.Invoke(this, highlighted);
+            e.Handled = true;
+            return;
+        }
+
         switch (e.Key)
         {
             case Key.Down:
@@ -351,6 +373,23 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     }
 
     public bool ConfirmVisible => ConfirmOverlay.Visibility == Visibility.Visible;
+
+    /// <summary>Brief "copied" pill over the result list; fades out on its own.</summary>
+    public void ShowCopyToast()
+    {
+        CopyToastText.Text = Loc.Get("Grid_CopiedToast");
+        CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
+        var animation = new DoubleAnimationUsingKeyFrames();
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(1,
+            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)),
+            new KeySpline(0.22, 1, 0.36, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(1,
+            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900))));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(0,
+            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1300)),
+            new KeySpline(0.22, 1, 0.36, 1)));
+        CopyToast.BeginAnimation(UIElement.OpacityProperty, animation);
+    }
 
     /// <summary>Shows the in-overlay confirm dialog; null action turns it into a notice.</summary>
     public void ShowConfirm(string message, string confirmText, Action? onConfirm)
@@ -647,7 +686,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         texts.Children.Add(title);
         texts.Children.Add(subtitle);
 
-        // 状态放在最右边:运行中 / 未运行
+        // Status on the far right: running / not running
         var status = new StackPanel
         {
             Orientation = Orientation.Horizontal,

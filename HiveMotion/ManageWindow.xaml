@@ -46,7 +46,7 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- 左侧导航 -->
+        <!-- Left navigation -->
         <Border Background="#0F1014" BorderBrush="#1FFFFFFF" BorderThickness="0,0,1,0">
             <StackPanel>
                 <TextBlock Text="HiveMotion" FontSize="18" FontWeight="SemiBold"
@@ -86,17 +86,17 @@
             </StackPanel>
         </Border>
 
-        <!-- 内容区 -->
+        <!-- Content area -->
         <Grid Grid.Column="1" Margin="16">
 
-            <!-- 固定页 -->
+            <!-- Pins page -->
             <Grid x:Name="PagePins">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <!-- 字母总览:拖拽改键,点击编辑 -->
+                <!-- Letter overview: drag to reassign letters, click to edit -->
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>
                         <Grid Margin="2,0,2,8">
@@ -115,7 +115,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 编辑器 -->
+                <!-- Editor -->
                 <Border Style="{StaticResource CardStyle}" Grid.Row="1" Margin="0,12,0,0">
                     <Grid>
                         <TextBlock x:Name="EditorEmpty" Text="{l:Loc Pins_EditorEmpty}"
