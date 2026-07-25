@@ -1,0 +1,97 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          if ($version.StartsWith('v')) {
+            $version = $version.Substring(1)
+          } else {
+            $version = "0.0.0-ci.${{ github.run_number }}"
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore dependencies
+        run: dotnet restore HiveMotion.sln
+
+      - name: Publish application (Release)
+        run: >
+          dotnet publish HiveMotion/HiveMotion.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output installer/publish
+          /p:PublishSingleFile=true
+          /p:DebugType=None
+          /p:DebugSymbols=false
+          /p:Version=${{ steps.version.outputs.value }}
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DMyAppVersion=${{ steps.version.outputs.value }}" 'installer\HiveMotion.iss'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HiveMotion-Setup-${{ steps.version.outputs.value }}
+          path: installer/dist/HiveMotion-Setup-${{ steps.version.outputs.value }}.exe
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".Substring(1)
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: HiveMotion-Setup-${{ steps.version.outputs.value }}
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/HiveMotion-Setup-${{ steps.version.outputs.value }}.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
