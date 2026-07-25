@@ -89,7 +89,7 @@ finally {
 Write-Host "Harvested $fileIndex file(s)." -ForegroundColor Green
 
 Write-Host "Building WiX installer projects..." -ForegroundColor Cyan
-dotnet build "$root\HiveMotion.sln" `
+dotnet build "$root\HiveMotion.Installer.sln" `
     -c $Configuration `
     -p:Platform=x64
 
