@@ -35,9 +35,9 @@ public sealed class GlobalKeyboardHook : IDisposable
     public bool PassThroughOnSecondPress { get; set; } = true;
 
     /// <summary>A registered combo fired while the overlay was hidden: open the overlay.</summary>
-    public event EventHandler<HotkeyRule>? HotkeyOpenRequested;
+    public event EventHandler<HotkeyEventArgs>? HotkeyOpenRequested;
     /// <summary>A registered combo fired while the overlay was open: passed to the system, close the overlay.</summary>
-    public event EventHandler<HotkeyRule>? HotkeyPassthrough;
+    public event EventHandler<HotkeyEventArgs>? HotkeyPassthrough;
 
     public GlobalKeyboardHook(IReadOnlyList<HotkeyRule> rules)
     {
@@ -148,7 +148,9 @@ public sealed class GlobalKeyboardHook : IDisposable
             if (vk != rule.Vk || !ModifiersMatch(rule))
                 continue;
 
+            long receiptTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             Logger.Info($"hotkey {rule.Name}: overlayOpen={IsOverlayOpen} foreground={DescribeForeground()}");
+            var request = new HotkeyEventArgs(rule, receiptTimestamp);
 
             // The combo's own native UI (Task View, Game Bar…) is foreground: let the key
             // reach it so the native UI toggles itself closed instead of reopening our overlay.
@@ -157,7 +159,7 @@ public sealed class GlobalKeyboardHook : IDisposable
 
             if (IsOverlayOpen)
             {
-                HotkeyPassthrough?.Invoke(this, rule);
+                HotkeyPassthrough?.Invoke(this, request);
                 if (PassThroughOnSecondPress)
                 {
                     // Generic rule: a second press goes to the system (Task View, Game Bar…).
@@ -171,7 +173,7 @@ public sealed class GlobalKeyboardHook : IDisposable
             }
 
             _swallowedKeys.Add(vk);
-            HotkeyOpenRequested?.Invoke(this, rule);
+            HotkeyOpenRequested?.Invoke(this, request);
             if (rule.Win)
                 InjectBenignChordKey();
             return (IntPtr)1;
@@ -256,4 +258,16 @@ public sealed class GlobalKeyboardHook : IDisposable
         _disposed = true;
         GC.SuppressFinalize(this);
     }
+}
+
+public sealed class HotkeyEventArgs : EventArgs
+{
+    public HotkeyEventArgs(HotkeyRule rule, long receiptTimestamp)
+    {
+        Rule = rule;
+        ReceiptTimestamp = receiptTimestamp;
+    }
+
+    public HotkeyRule Rule { get; }
+    public long ReceiptTimestamp { get; }
 }

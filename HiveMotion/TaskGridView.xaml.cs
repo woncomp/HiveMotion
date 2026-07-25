@@ -73,6 +73,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             if (!_mouseArmed)
                 e.Handled = true;
         };
+        CreateCellPool();
     }
 
     public bool Searching => _searching;
@@ -132,13 +133,38 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         _cells = cells;
         _hoveredCell = null;
         HideConfirm();
-        HexCanvas.Children.Clear();
-        _cellViews.Clear();
-
-        foreach (var cell in cells)
+        var byLetter = cells.ToDictionary(cell => cell.Letter);
+        foreach (var view in _cellViews)
         {
-            var view = new HiveCellView();
-            view.SetCell(cell);
+            char letter = view.PoolLetter;
+            if (byLetter.TryGetValue(letter, out var cell))
+            {
+                view.SetCell(cell);
+                view.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                view.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        _previewVisible = false;
+        _previewMode = PreviewMode.None;
+        _dwmPreview.Hide();
+        HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
+        HoverPreview.Opacity = 0;
+        CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
+        CopyToast.Opacity = 0;
+
+        ExitSearchImmediate();
+    }
+
+    /// <summary>Creates the fixed A-Z visual pool once; reopening only swaps model content.</summary>
+    private void CreateCellPool()
+    {
+        for (char letter = 'A'; letter <= 'Z'; letter++)
+        {
+            var view = new HiveCellView { PoolLetter = letter, Visibility = Visibility.Collapsed };
             view.Clicked += (_, chosen) => CellChosen?.Invoke(this, chosen);
             view.Hovered += (_, hovered) =>
             {
@@ -151,22 +177,12 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
                     _hoveredCell = null;
                 HidePreview();
             };
-            var center = KeyGrid.CenterOf(cell.Letter);
+            var center = KeyGrid.CenterOf(letter);
             Canvas.SetLeft(view, center.X - KeyGrid.HexW / 2);
             Canvas.SetTop(view, center.Y - KeyGrid.HexH / 2);
             HexCanvas.Children.Add(view);
             _cellViews.Add(view);
         }
-
-        _previewVisible = false;
-        _previewMode = PreviewMode.None;
-        _dwmPreview.Hide();
-        HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
-        HoverPreview.Opacity = 0;
-        CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
-        CopyToast.Opacity = 0;
-
-        ExitSearchImmediate();
     }
 
     public void EnterSearch()

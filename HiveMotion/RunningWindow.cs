@@ -7,6 +7,8 @@ public sealed class RunningWindow
 {
     public IntPtr Handle { get; set; }
     public uint ProcessId { get; set; }
+    /// <summary>Creation FILETIME captured with the PID; zero means identity could not be queried.</summary>
+    public long ProcessCreationFileTime { get; set; }
     public string ProcessName { get; set; } = string.Empty;
     public string AppName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;

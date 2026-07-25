@@ -6,6 +6,44 @@ namespace HiveMotion;
 
 public static class WindowManager
 {
+    /// <summary>Performs one foreground attempt without retrying or sleeping.</summary>
+    public static void ActivateWindowOnce(IntPtr hWnd)
+    {
+        if (hWnd == IntPtr.Zero)
+            return;
+
+        if (NativeMethods.IsIconic(hWnd))
+            NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+
+        IntPtr foreground = NativeMethods.GetForegroundWindow();
+        uint foregroundThread = foreground != IntPtr.Zero
+            ? NativeMethods.GetWindowThreadProcessId(foreground, out _)
+            : 0;
+        uint targetThread = NativeMethods.GetWindowThreadProcessId(hWnd, out _);
+        uint currentThread = NativeMethods.GetCurrentThreadId();
+
+        bool attachedForeground = foregroundThread != 0
+            && foregroundThread != currentThread
+            && NativeMethods.AttachThreadInput(foregroundThread, currentThread, true);
+        bool attachedTarget = targetThread != 0
+            && targetThread != currentThread
+            && targetThread != foregroundThread
+            && NativeMethods.AttachThreadInput(targetThread, currentThread, true);
+
+        try
+        {
+            NativeMethods.BringWindowToTop(hWnd);
+            NativeMethods.SetForegroundWindow(hWnd);
+        }
+        finally
+        {
+            if (attachedTarget)
+                NativeMethods.AttachThreadInput(targetThread, currentThread, false);
+            if (attachedForeground)
+                NativeMethods.AttachThreadInput(foregroundThread, currentThread, false);
+        }
+    }
+
     public static void Launch(string executablePath, string? arguments = null, string? workingDirectory = null)
     {
         try
@@ -43,31 +81,10 @@ public static class WindowManager
 
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            IntPtr foreground = NativeMethods.GetForegroundWindow();
-            if (foreground == hWnd)
+            if (NativeMethods.GetForegroundWindow() == hWnd)
                 return;
 
-            uint foregroundThread = foreground != IntPtr.Zero
-                ? NativeMethods.GetWindowThreadProcessId(foreground, out _)
-                : 0;
-            uint targetThread = NativeMethods.GetWindowThreadProcessId(hWnd, out _);
-            uint currentThread = NativeMethods.GetCurrentThreadId();
-
-            bool attachedForeground = foregroundThread != 0
-                && foregroundThread != currentThread
-                && NativeMethods.AttachThreadInput(foregroundThread, currentThread, true);
-            bool attachedTarget = targetThread != 0
-                && targetThread != currentThread
-                && targetThread != foregroundThread
-                && NativeMethods.AttachThreadInput(targetThread, currentThread, true);
-
-            NativeMethods.BringWindowToTop(hWnd);
-            NativeMethods.SetForegroundWindow(hWnd);
-
-            if (attachedTarget)
-                NativeMethods.AttachThreadInput(targetThread, currentThread, false);
-            if (attachedForeground)
-                NativeMethods.AttachThreadInput(foregroundThread, currentThread, false);
+            ActivateWindowOnce(hWnd);
 
             if (NativeMethods.GetForegroundWindow() == hWnd)
                 return;

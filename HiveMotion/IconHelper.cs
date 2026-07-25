@@ -13,6 +13,7 @@ namespace HiveMotion;
 public static class IconHelper
 {
     private static readonly Dictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object CacheGate = new();
 
     private static readonly Guid IID_IShellItemImageFactory = new("bcc18b79-ba16-442f-80c4-8a59c30c463b");
 
@@ -51,11 +52,11 @@ public static class IconHelper
         }
 
         // Window-provided icons: large first (a 16px small icon scaled to 48 is the blur bug).
-        IntPtr hIcon = NativeMethods.SendMessage(hWnd, NativeMethods.WM_GETICON, (IntPtr)NativeMethods.ICON_BIG, IntPtr.Zero);
+        IntPtr hIcon = GetWindowIcon(hWnd, NativeMethods.ICON_BIG);
         if (hIcon == IntPtr.Zero)
             hIcon = NativeMethods.GetClassLongPtr64(hWnd, NativeMethods.GCL_HICON);
         if (hIcon == IntPtr.Zero)
-            hIcon = NativeMethods.SendMessage(hWnd, NativeMethods.WM_GETICON, (IntPtr)NativeMethods.ICON_SMALL2, IntPtr.Zero);
+            hIcon = GetWindowIcon(hWnd, NativeMethods.ICON_SMALL2);
         if (hIcon == IntPtr.Zero)
             hIcon = NativeMethods.GetClassLongPtr64(hWnd, NativeMethods.GCL_HICONSM);
         if (hIcon != IntPtr.Zero)
@@ -72,8 +73,11 @@ public static class IconHelper
 
     public static ImageSource? ForExecutable(string executablePath)
     {
-        if (Cache.TryGetValue(executablePath, out var cached))
-            return cached;
+        lock (CacheGate)
+        {
+            if (Cache.TryGetValue(executablePath, out var cached))
+                return cached;
+        }
 
         ImageSource? result = FromShellImageFactory(executablePath);
 
@@ -101,7 +105,8 @@ public static class IconHelper
             }
         }
 
-        Cache[executablePath] = result;
+        lock (CacheGate)
+            Cache[executablePath] = result;
         return result;
     }
 
@@ -117,10 +122,20 @@ public static class IconHelper
         }
     }
 
+    /// <summary>Foreign windows may be hung; icon lookup must never hold up the scan.</summary>
+    private static IntPtr GetWindowIcon(IntPtr hWnd, int iconType)
+    {
+        return NativeMethods.SendMessageTimeout(hWnd, NativeMethods.WM_GETICON, (IntPtr)iconType, IntPtr.Zero,
+            NativeMethods.SMTO_ABORTIFHUNG, 100, out var icon) != IntPtr.Zero ? icon : IntPtr.Zero;
+    }
+
     private static ImageSource? FromShellImageFactory(string path)
     {
-        if (Cache.TryGetValue(path, out var cached))
-            return cached;
+        lock (CacheGate)
+        {
+            if (Cache.TryGetValue(path, out var cached))
+                return cached;
+        }
 
         IShellItemImageFactory? factory = null;
         IntPtr hBitmap = IntPtr.Zero;
@@ -144,7 +159,8 @@ public static class IconHelper
             var source = Imaging.CreateBitmapSourceFromHBitmap(
                 hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
             source.Freeze();
-            Cache[path] = source;
+            lock (CacheGate)
+                Cache[path] = source;
             return source;
         }
         catch

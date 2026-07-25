@@ -42,6 +42,7 @@ public sealed class CellAssigner
             {
                 cell.WindowHandle = match.Handle;
                 cell.ProcessId = match.ProcessId;
+                cell.ProcessCreationFileTime = match.ProcessCreationFileTime;
                 cell.ProcessName = match.ProcessName;
                 cell.Title = match.Title;
                 cell.Icon = match.Icon;

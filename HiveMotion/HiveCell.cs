@@ -12,6 +12,7 @@ public sealed class HiveCell
     public ImageSource? Icon { get; set; }
     public IntPtr WindowHandle { get; set; }
     public uint ProcessId { get; set; }
+    public long ProcessCreationFileTime { get; set; }
     public string ProcessName { get; set; } = string.Empty;
     /// <summary>Full image path of the owning process, captured at scan time; null when unreadable or not running.</summary>
     public string? ExecutablePath { get; set; }
@@ -30,6 +31,7 @@ public sealed class HiveCell
         Icon = window.Icon,
         WindowHandle = window.Handle,
         ProcessId = window.ProcessId,
+        ProcessCreationFileTime = window.ProcessCreationFileTime,
         ProcessName = window.ProcessName,
         ExecutablePath = window.ExecutablePath,
         CommandLineArguments = window.CommandLineArguments

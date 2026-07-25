@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Threading;
 using HiveMotion.Localization;
 
 namespace HiveMotion;
@@ -23,6 +24,7 @@ public partial class App : System.Windows.Application
     private TrayIconManager? _trayIconManager;
     private AutoStartManager? _autoStartManager;
     private WindowScanner? _windowScanner;
+    private WindowSnapshotService? _windowSnapshots;
     private CellAssigner? _cellAssigner;
     private PinStore? _pinStore;
     private HistoryStore? _historyStore;
@@ -33,6 +35,7 @@ public partial class App : System.Windows.Application
     private OverlayState _state = OverlayState.Hidden;
     private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
     private IntPtr _previousForeground;
+    private int _overlayGeneration;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -50,6 +53,9 @@ public partial class App : System.Windows.Application
         _settingsStore = new SettingsStore();
         LocalizationManager.Instance.ApplyLanguageSetting(_settingsStore.Settings.Language);
         _windowScanner = new WindowScanner(_settingsStore.Settings.PriorityProcessNames);
+        _windowSnapshots = new WindowSnapshotService(_windowScanner);
+        _windowSnapshots.SnapshotPublished += OnSnapshotPublished;
+        _windowSnapshots.Start();
         _cellAssigner = new CellAssigner(_pinStore.Pins);
         _overlayWindow = new OverlayWindow();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
@@ -64,6 +70,8 @@ public partial class App : System.Windows.Application
             if (_state == OverlayState.TaskGrid)
                 CloseOverlay(restoreFocus: false);
         };
+        // Materialize the HWND while hidden so first activation does not pay window creation.
+        _overlayWindow.PrepareHandle();
         _overlayWindow.Hide();
 
         _autoStartManager = new AutoStartManager();
@@ -90,11 +98,11 @@ public partial class App : System.Windows.Application
         {
             PassThroughOnSecondPress = settings.SecondPressPassthrough
         };
-        hook.HotkeyOpenRequested += (_, _) => Dispatcher.BeginInvoke(() =>
+        hook.HotkeyOpenRequested += (_, request) => Dispatcher.BeginInvoke(() =>
         {
             try
             {
-                OpenTaskGrid();
+                OpenTaskGrid(new ActivationTiming(request.ReceiptTimestamp));
             }
             catch (Exception ex)
             {
@@ -128,6 +136,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _windowSnapshots?.Dispose();
         _keyboardHook?.Dispose();
         _trayIconManager?.Dispose();
         _manageWindow?.Close();
@@ -137,20 +146,28 @@ public partial class App : System.Windows.Application
             _singleInstanceMutex?.ReleaseMutex();
         }
         _singleInstanceMutex?.Dispose();
+        Logger.Shutdown();
         base.OnExit(e);
     }
 
-    private void OpenTaskGrid()
+    private void OpenTaskGrid(ActivationTiming? timing = null)
     {
+        timing ??= new ActivationTiming();
+        timing.Checkpoint("hotkey-received-ui");
         _previousForeground = NativeMethods.GetForegroundWindow();
 
-        var windows = _windowScanner!.Scan();
-        _historyStore!.RecordScan(windows);
-        var cells = _cellAssigner!.Assign(windows);
+        ++_overlayGeneration;
+        var snapshot = _windowSnapshots!.Latest;
+        timing.Checkpoint(snapshot == null ? "snapshot-empty-shell" : "snapshot-ready");
+        var cells = snapshot == null ? Array.Empty<HiveCell>() : _cellAssigner!.Assign(snapshot.Windows);
+        timing.Checkpoint("cell-assignment-complete");
         _currentCells = cells;
         _state = OverlayState.TaskGrid;
         _keyboardHook!.IsOverlayOpen = true;
-        _overlayWindow!.ShowTaskGrid(cells);
+        _overlayWindow!.ShowTaskGrid(cells, timing);
+        if (snapshot != null)
+            RecordHistoryWhenIdle(snapshot.Windows);
+        _windowSnapshots.RequestRefresh();
     }
 
     /// <summary>Re-scans and rebuilds the grid in place after a pin/unpin, keeping the overlay open.</summary>
@@ -158,9 +175,13 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            var windows = _windowScanner!.Scan();
-            _historyStore!.RecordScan(windows);
-            var cells = _cellAssigner!.Assign(windows);
+            var snapshot = _windowSnapshots!.Latest;
+            if (snapshot == null)
+            {
+                _windowSnapshots.RequestRefresh();
+                return;
+            }
+            var cells = _cellAssigner!.Assign(snapshot.Windows);
             _currentCells = cells;
             _overlayWindow!.UpdateCells(cells);
         }
@@ -170,13 +191,47 @@ public partial class App : System.Windows.Application
         }
     }
 
+    private void OnSnapshotPublished(object? sender, WindowSnapshot snapshot)
+    {
+        // The worker never touches WPF or history state. A newer snapshot may replace an empty/older grid.
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_state != OverlayState.TaskGrid)
+                return;
+            int generation = _overlayGeneration;
+            var cells = _cellAssigner!.Assign(snapshot.Windows);
+            if (_state == OverlayState.TaskGrid && generation == _overlayGeneration)
+            {
+                _currentCells = cells;
+                _overlayWindow!.UpdateCells(cells);
+            }
+        });
+    }
+
+    /// <summary>History owns UI-thread state; defer synchronous persistence beyond interaction work.</summary>
+    private void RecordHistoryWhenIdle(IReadOnlyList<RunningWindow> windows)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                _historyStore!.RecordScan(windows);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+            }
+        }, DispatcherPriority.ApplicationIdle);
+    }
+
     /// <summary>Manage center is a singleton normal window; reopening just brings it forward.</summary>
     private void ShowManageWindow()
     {
         if (_manageWindow == null)
         {
+            // Manage's occasional UI-thread scans use their own cache; the snapshot scanner is single-worker.
             _manageWindow = new ManageWindow(_pinStore!, _historyStore!, _settingsStore!,
-                _autoStartManager!, _windowScanner!, ApplyHotkeySettings);
+                _autoStartManager!, new WindowScanner(_settingsStore!.Settings.PriorityProcessNames), ApplyHotkeySettings);
             _manageWindow.Closed += (_, _) => _manageWindow = null;
             _manageWindow.Show();
         }
@@ -213,6 +268,12 @@ public partial class App : System.Windows.Application
 
         if (!cell.IsRunning)
             return;
+
+        if (!IsCurrentWindowInstance(cell))
+        {
+            _windowSnapshots!.RequestRefresh();
+            return;
+        }
 
         // UWP apps all share ApplicationFrameHost.exe; that identity cannot be relaunched.
         if (IsUwpCell(cell))
@@ -357,7 +418,18 @@ public partial class App : System.Windows.Application
 
         if (cell.IsRunning)
         {
-            WindowManager.ActivateWindow(cell.WindowHandle);
+            if (IsCurrentWindowInstance(cell))
+            {
+                WindowManager.ActivateWindow(cell.WindowHandle);
+            }
+            else
+            {
+                // Do not activate an HWND recycled for another process. Keep the launcher usable and refresh it.
+                _state = OverlayState.TaskGrid;
+                _keyboardHook!.IsOverlayOpen = true;
+                _windowSnapshots!.RequestRefresh();
+                return;
+            }
         }
         else if (cell.Pin != null)
         {
@@ -369,6 +441,7 @@ public partial class App : System.Windows.Application
 
     private void CloseOverlay(bool restoreFocus)
     {
+        ++_overlayGeneration;
         _state = OverlayState.Hidden;
         if (_keyboardHook != null)
             _keyboardHook.IsOverlayOpen = false;
@@ -385,5 +458,23 @@ public partial class App : System.Windows.Application
         {
             _previousForeground = IntPtr.Zero;
         }
+    }
+
+    private static bool IsCurrentWindowInstance(HiveCell cell)
+    {
+        if (cell.ProcessCreationFileTime == 0 || !NativeMethods.IsWindow(cell.WindowHandle))
+            return false;
+        NativeMethods.GetWindowThreadProcessId(cell.WindowHandle, out uint pid);
+        if (pid != cell.ProcessId)
+            return false;
+        IntPtr process = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (process == IntPtr.Zero)
+            return false;
+        try
+        {
+            return NativeMethods.GetProcessTimes(process, out long created, out _, out _, out _) &&
+                   created == cell.ProcessCreationFileTime;
+        }
+        finally { NativeMethods.CloseHandle(process); }
     }
 }

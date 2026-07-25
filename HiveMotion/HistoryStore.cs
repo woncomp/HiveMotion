@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace HiveMotion;
 
 /// <summary>
-/// Persists observed launch identities to history.json. Every hive scan feeds in:
+/// Persists identities consumed when the hive opens to history.json. Each consumed snapshot feeds in:
 /// an identity absent from the previous scan counts as a fresh launch (LaunchCount++),
 /// everything refreshes LastSeen. Identities with unreadable arguments are kept as
 /// exe-only entries, matching the exe-only pin fallback.

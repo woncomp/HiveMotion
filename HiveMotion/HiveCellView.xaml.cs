@@ -13,6 +13,9 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
 {
     private HiveCell? _cell;
 
+    /// <summary>Stable physical slot used by the task-grid visual pool.</summary>
+    public char PoolLetter { get; set; }
+
     public event EventHandler<HiveCell>? Clicked;
     public event EventHandler<HiveCell>? Hovered;
     public event EventHandler<HiveCell>? Unhovered;
