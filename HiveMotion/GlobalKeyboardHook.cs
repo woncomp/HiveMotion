@@ -17,7 +17,7 @@ public sealed class GlobalKeyboardHook : IDisposable
     private const int VkUnassigned = 0xE8;
 
     private readonly IReadOnlyList<HotkeyRule> _rules;
-    private readonly HashSet<int> _swallowedKeys = new();
+    private readonly Dictionary<int, string> _swallowedKeys = new();
     private readonly ManualResetEvent _ready = new(false);
     private Thread? _hookThread;
     private uint _hookThreadId;
@@ -49,6 +49,7 @@ public sealed class GlobalKeyboardHook : IDisposable
         if (_hookThread != null)
             return;
 
+        Logger.ActivationInfo($"Starting global keyboard hook with {_rules.Count} configured rules.");
         _hookThread = new Thread(HookThreadProc)
         {
             IsBackground = true,
@@ -61,16 +62,19 @@ public sealed class GlobalKeyboardHook : IDisposable
 
     public void Stop()
     {
+        Logger.ActivationInfo("Stopping global keyboard hook.");
         if (_hookHandle != IntPtr.Zero)
         {
-            NativeMethods.UnhookWindowsHookEx(_hookHandle);
+            bool removed = NativeMethods.UnhookWindowsHookEx(_hookHandle);
+            Logger.ActivationInfo($"UnhookWindowsHookEx completed; success={removed}.");
             _hookHandle = IntPtr.Zero;
         }
 
         if (_hookThread != null && _hookThread.IsAlive && _hookThreadId != 0)
         {
             NativeMethods.PostThreadMessage(_hookThreadId, NativeMethods.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
-            _hookThread.Join(TimeSpan.FromSeconds(2));
+            bool joined = _hookThread.Join(TimeSpan.FromSeconds(2));
+            Logger.ActivationInfo($"Keyboard hook thread stop request completed; joined={joined}.");
             _hookThread = null;
         }
     }
@@ -78,12 +82,14 @@ public sealed class GlobalKeyboardHook : IDisposable
     private void HookThreadProc()
     {
         _hookThreadId = NativeMethods.GetCurrentThreadId();
+        Logger.ActivationInfo($"Keyboard hook thread started; threadId={_hookThreadId}.");
         _hookProc = new NativeMethods.LowLevelKeyboardProc(HookCallback);
         _hookHandle = NativeMethods.SetWindowsHookEx(NativeMethods.WH_KEYBOARD_LL, _hookProc, IntPtr.Zero, 0);
 
         if (_hookHandle == IntPtr.Zero)
             throw new Win32Exception(Marshal.GetLastWin32Error());
 
+        Logger.ActivationInfo($"Keyboard hook installed; handle={FormatHandle(_hookHandle)}.");
         _ready.Set();
 
         NativeMethods.MSG msg;
@@ -92,6 +98,7 @@ public sealed class GlobalKeyboardHook : IDisposable
             NativeMethods.TranslateMessage(ref msg);
             NativeMethods.DispatchMessage(ref msg);
         }
+        Logger.ActivationInfo("Keyboard hook message loop exited.");
     }
 
     /// <summary>
@@ -99,7 +106,7 @@ public sealed class GlobalKeyboardHook : IDisposable
     /// inject a harmless unassigned key while Win is still held: the shell sees a chord and
     /// stays quiet, and the Win key state never gets stuck.
     /// </summary>
-    private static void InjectBenignChordKey()
+    private static uint InjectBenignChordKey()
     {
         var inputs = new[]
         {
@@ -114,7 +121,7 @@ public sealed class GlobalKeyboardHook : IDisposable
                 u = new NativeMethods.KEYBDINPUT { wVk = VkUnassigned, dwFlags = NativeMethods.KEYEVENTF_KEYUP, dwExtraInfo = (IntPtr)InjectedExtraInfo }
             }
         };
-        NativeMethods.SendInput(2, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
+        return NativeMethods.SendInput(2, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -135,9 +142,9 @@ public sealed class GlobalKeyboardHook : IDisposable
         int vk = (int)kbd.vkCode;
 
         // Swallow key-ups of combo keys we swallowed on the way down (no orphan key-ups).
-        if (isUp && _swallowedKeys.Contains(vk))
+        if (isUp && _swallowedKeys.Remove(vk, out string? keyUpCorrelation))
         {
-            _swallowedKeys.Remove(vk);
+            Logger.ActivationInfo($"Swallowed matching key-up; vk=0x{vk:X2}.", keyUpCorrelation);
             return (IntPtr)1;
         }
         if (!isDown)
@@ -149,37 +156,51 @@ public sealed class GlobalKeyboardHook : IDisposable
                 continue;
 
             long receiptTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
-            Logger.Info($"hotkey {rule.Name}: overlayOpen={IsOverlayOpen} foreground={DescribeForeground()}");
-            var request = new HotkeyEventArgs(rule, receiptTimestamp);
+            string correlationId = Logger.NewCorrelationId();
+            Logger.ActivationInfo($"Recognized hotkey {rule.Name}; overlayOpen={IsOverlayOpen}; foreground={DescribeForeground()}.", correlationId);
+            var request = new HotkeyEventArgs(rule, receiptTimestamp, correlationId);
 
             // The combo's own native UI (Task View, Game Bar…) is foreground: let the key
             // reach it so the native UI toggles itself closed instead of reopening our overlay.
-            if (IsForegroundNativeUi(rule))
+            if (IsForegroundNativeUi(rule, out string nativeUiReason))
+            {
+                Logger.ActivationInfo($"Foreground native UI matched ({nativeUiReason}); passing key through unchanged.", correlationId);
                 return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+            }
+            Logger.ActivationInfo("Foreground native-UI check did not match.", correlationId);
 
             if (IsOverlayOpen)
             {
+                Logger.ActivationInfo($"Overlay already open; notifying pass-through listeners; passThrough={PassThroughOnSecondPress}.", correlationId);
                 HotkeyPassthrough?.Invoke(this, request);
                 if (PassThroughOnSecondPress)
                 {
-                    // Generic rule: a second press goes to the system (Task View, Game Bar…).
+                    Logger.ActivationInfo("Second press passed through to Windows.", correlationId);
                     return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
                 }
                 // Close-only mode: swallow the combo so its native UI never fires.
-                _swallowedKeys.Add(vk);
-                if (rule.Win)
-                    InjectBenignChordKey();
+                SwallowKey(vk, rule, correlationId);
                 return (IntPtr)1;
             }
 
-            _swallowedKeys.Add(vk);
+            Logger.ActivationInfo("Overlay hidden; notifying overlay-open listeners.", correlationId);
             HotkeyOpenRequested?.Invoke(this, request);
-            if (rule.Win)
-                InjectBenignChordKey();
+            SwallowKey(vk, rule, correlationId);
             return (IntPtr)1;
         }
 
         return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+    }
+
+    private void SwallowKey(int vk, HotkeyRule rule, string correlationId)
+    {
+        _swallowedKeys[vk] = correlationId;
+        Logger.ActivationInfo($"Swallowed key-down; vk=0x{vk:X2}.", correlationId);
+        if (!rule.Win)
+            return;
+
+        uint sent = InjectBenignChordKey();
+        Logger.ActivationInfo($"Injected benign Win chord; sent={sent}/2.", correlationId);
     }
 
     private static string DescribeForeground()
@@ -189,22 +210,28 @@ public sealed class GlobalKeyboardHook : IDisposable
             IntPtr foreground = NativeMethods.GetForegroundWindow();
             var className = new System.Text.StringBuilder(256);
             NativeMethods.GetClassName(foreground, className, className.Capacity);
-            return className.ToString();
+            NativeMethods.GetWindowThreadProcessId(foreground, out uint pid);
+            return $"handle={FormatHandle(foreground)}, class={className}, pid={pid}";
         }
-        catch
+        catch (Exception ex)
         {
-            return "?";
+            Logger.ActivationWarning($"Unable to inspect foreground window: {ex.GetType().Name}.");
+            return "unavailable";
         }
     }
 
-    private static bool IsForegroundNativeUi(HotkeyRule rule)
+    private static bool IsForegroundNativeUi(HotkeyRule rule, out string reason)
     {
+        reason = "no configured native UI";
         if (rule.NativeClassNames.Length == 0 && rule.NativeProcessNames.Length == 0)
             return false;
 
         IntPtr foreground = NativeMethods.GetForegroundWindow();
         if (foreground == IntPtr.Zero)
+        {
+            reason = "no foreground window";
             return false;
+        }
 
         if (rule.NativeClassNames.Length > 0)
         {
@@ -213,7 +240,10 @@ public sealed class GlobalKeyboardHook : IDisposable
             foreach (string name in rule.NativeClassNames)
             {
                 if (string.Equals(className.ToString(), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "window class";
                     return true;
+                }
             }
         }
 
@@ -226,12 +256,15 @@ public sealed class GlobalKeyboardHook : IDisposable
                 foreach (string name in rule.NativeProcessNames)
                 {
                     if (string.Equals(processName, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = "window process";
                         return true;
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // process may have exited between the two calls
+                reason = $"process inspection failed ({ex.GetType().Name})";
             }
         }
 
@@ -249,6 +282,8 @@ public sealed class GlobalKeyboardHook : IDisposable
         return rule.Win == win && rule.Ctrl == ctrl && rule.Alt == alt && rule.Shift == shift;
     }
 
+    private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
+
     public void Dispose()
     {
         if (_disposed)
@@ -262,12 +297,14 @@ public sealed class GlobalKeyboardHook : IDisposable
 
 public sealed class HotkeyEventArgs : EventArgs
 {
-    public HotkeyEventArgs(HotkeyRule rule, long receiptTimestamp)
+    public HotkeyEventArgs(HotkeyRule rule, long receiptTimestamp, string correlationId)
     {
         Rule = rule;
         ReceiptTimestamp = receiptTimestamp;
+        CorrelationId = correlationId;
     }
 
     public HotkeyRule Rule { get; }
     public long ReceiptTimestamp { get; }
+    public string CorrelationId { get; }
 }

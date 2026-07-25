@@ -68,6 +68,7 @@ public partial class ManageWindow : Window
         InitAboutPage();
 
         AutoStartBox.IsChecked = _autoStartManager.IsAutoStartEnabled();
+        VerboseLoggingBox.IsChecked = _settingsStore.Settings.VerboseLogging;
         ConfigPathText.Text = PinStore.StoreDirectoryPath;
         UpdateHistoryCount();
 
@@ -935,6 +936,20 @@ public partial class ManageWindow : Window
 
     private void OnAutoStartChecked(object sender, RoutedEventArgs e) => _autoStartManager.EnableAutoStart();
     private void OnAutoStartUnchecked(object sender, RoutedEventArgs e) => _autoStartManager.DisableAutoStart();
+
+    private void OnVerboseLoggingChecked(object sender, RoutedEventArgs e)
+    {
+        _settingsStore.Settings.VerboseLogging = true;
+        Logger.IsVerboseEnabled = true;
+        _settingsStore.Save();
+    }
+
+    private void OnVerboseLoggingUnchecked(object sender, RoutedEventArgs e)
+    {
+        _settingsStore.Settings.VerboseLogging = false;
+        Logger.IsVerboseEnabled = false;
+        _settingsStore.Save();
+    }
 
     private void OnLanguageSystemClick(object sender, MouseButtonEventArgs e) => SetLanguage(LocalizationManager.SystemSetting);
     private void OnLanguageZhClick(object sender, MouseButtonEventArgs e) => SetLanguage(LocalizationManager.ChineseCulture);

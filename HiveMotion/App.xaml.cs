@@ -30,6 +30,7 @@ public partial class App : System.Windows.Application
     private HistoryStore? _historyStore;
     private SettingsStore? _settingsStore;
     private ManageWindow? _manageWindow;
+    private LogWindow? _logWindow;
     private string _activeHotkeyJson = string.Empty;
 
     private OverlayState _state = OverlayState.Hidden;
@@ -51,7 +52,9 @@ public partial class App : System.Windows.Application
         _pinStore = new PinStore();
         _historyStore = new HistoryStore();
         _settingsStore = new SettingsStore();
+        Logger.IsVerboseEnabled = _settingsStore.Settings.VerboseLogging;
         LocalizationManager.Instance.ApplyLanguageSetting(_settingsStore.Settings.Language);
+        Logger.Info("Application startup completed single-instance check.");
         _windowScanner = new WindowScanner(_settingsStore.Settings.PriorityProcessNames);
         _windowSnapshots = new WindowSnapshotService(_windowScanner);
         _windowSnapshots.SnapshotPublished += OnSnapshotPublished;
@@ -78,6 +81,7 @@ public partial class App : System.Windows.Application
         _trayIconManager = new TrayIconManager(_autoStartManager);
         _trayIconManager.ExitRequested += (_, _) => Shutdown();
         _trayIconManager.ManageRequested += (_, _) => Dispatcher.BeginInvoke(ShowManageWindow);
+        _trayIconManager.LogRequested += (_, _) => Dispatcher.BeginInvoke(ShowLogWindow);
         _trayIconManager.ShowRequested += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             if (_state == OverlayState.Hidden)
@@ -88,6 +92,7 @@ public partial class App : System.Windows.Application
 
         _keyboardHook = BuildKeyboardHook();
         _keyboardHook.Start();
+        Logger.Info("Application startup initialized tray icon and global keyboard hook.");
     }
 
     private GlobalKeyboardHook BuildKeyboardHook()
@@ -98,22 +103,32 @@ public partial class App : System.Windows.Application
         {
             PassThroughOnSecondPress = settings.SecondPressPassthrough
         };
-        hook.HotkeyOpenRequested += (_, request) => Dispatcher.BeginInvoke(() =>
+        hook.HotkeyOpenRequested += (_, request) =>
         {
-            try
+            Logger.ActivationInfo("Queued overlay-open work on the UI dispatcher.", request.CorrelationId);
+            Dispatcher.BeginInvoke(() =>
             {
-                OpenTaskGrid(new ActivationTiming(request.ReceiptTimestamp));
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex);
-            }
-        });
-        hook.HotkeyPassthrough += (_, _) => Dispatcher.BeginInvoke(() =>
+                try
+                {
+                    Logger.ActivationInfo("Executing overlay-open work on the UI dispatcher.", request.CorrelationId);
+                    OpenTaskGrid(new ActivationTiming(request.ReceiptTimestamp), request.CorrelationId, "hotkey");
+                }
+                catch (Exception ex)
+                {
+                    Logger.ActivationError(ex, "Opening overlay from hotkey", request.CorrelationId);
+                }
+            });
+        };
+        hook.HotkeyPassthrough += (_, request) =>
         {
-            // The combo went to the system (Task View & co.); the native UI takes over.
-            CloseOverlay(restoreFocus: false);
-        });
+            Logger.ActivationInfo("Queued overlay close after hotkey pass-through.", request.CorrelationId);
+            Dispatcher.BeginInvoke(() =>
+            {
+                Logger.ActivationInfo("Executing overlay close after hotkey pass-through.", request.CorrelationId);
+                // The combo went to the system (Task View & co.); the native UI takes over.
+                CloseOverlay(restoreFocus: false, request.CorrelationId, LogChannel.Activation);
+            });
+        };
         return hook;
     }
 
@@ -140,6 +155,7 @@ public partial class App : System.Windows.Application
         _keyboardHook?.Dispose();
         _trayIconManager?.Dispose();
         _manageWindow?.Close();
+        _logWindow?.Close();
         _overlayWindow?.Close();
         if (_ownsMutex)
         {
@@ -150,21 +166,27 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 
-    private void OpenTaskGrid(ActivationTiming? timing = null)
+    private void OpenTaskGrid(ActivationTiming? timing = null, string? correlationId = null, string source = "tray")
     {
         timing ??= new ActivationTiming();
+        LogChannel channel = source == "hotkey" ? LogChannel.Activation : LogChannel.Default;
+        Logger.Info($"Overlay open requested from {source}; state={_state}.", correlationId, channel);
         timing.Checkpoint("hotkey-received-ui");
         _previousForeground = NativeMethods.GetForegroundWindow();
+        Logger.Info($"Captured previous foreground handle={FormatHandle(_previousForeground)}.", correlationId, channel);
 
         ++_overlayGeneration;
         var snapshot = _windowSnapshots!.Latest;
+        Logger.Info($"Snapshot state: {(snapshot == null ? "empty" : $"ready with {snapshot.Windows.Count} windows")}.", correlationId, channel);
         timing.Checkpoint(snapshot == null ? "snapshot-empty-shell" : "snapshot-ready");
         var cells = snapshot == null ? Array.Empty<HiveCell>() : _cellAssigner!.Assign(snapshot.Windows);
+        Logger.Info($"Assigned {cells.Count} overlay cells.", correlationId, channel);
         timing.Checkpoint("cell-assignment-complete");
         _currentCells = cells;
         _state = OverlayState.TaskGrid;
         _keyboardHook!.IsOverlayOpen = true;
-        _overlayWindow!.ShowTaskGrid(cells, timing);
+        Logger.Info("Updated overlay and keyboard-hook state to open.", correlationId, channel);
+        _overlayWindow!.ShowTaskGrid(cells, timing, correlationId, channel);
         if (snapshot != null)
             RecordHistoryWhenIdle(snapshot.Windows);
         _windowSnapshots.RequestRefresh();
@@ -242,6 +264,24 @@ public partial class App : System.Windows.Application
 
         // Plain Activate() is denied for a background process; use the attach-input recipe.
         WindowManager.ActivateWindow(new System.Windows.Interop.WindowInteropHelper(_manageWindow).Handle);
+    }
+
+    /// <summary>Log viewer is a singleton normal window; reopening restores and focuses it.</summary>
+    private void ShowLogWindow()
+    {
+        if (_logWindow == null)
+        {
+            _logWindow = new LogWindow();
+            _logWindow.Closed += (_, _) => _logWindow = null;
+            _logWindow.Show();
+            Logger.Info("Opened live log window.");
+        }
+        else
+        {
+            if (_logWindow.WindowState == WindowState.Minimized)
+                _logWindow.WindowState = WindowState.Normal;
+            _logWindow.Activate();
+        }
     }
 
     /// <summary>
@@ -439,8 +479,9 @@ public partial class App : System.Windows.Application
         CloseOverlay(restoreFocus: false);
     }
 
-    private void CloseOverlay(bool restoreFocus)
+    private void CloseOverlay(bool restoreFocus, string? correlationId = null, LogChannel channel = LogChannel.Default)
     {
+        Logger.Info($"Closing overlay; restoreFocus={restoreFocus}; state={_state}.", correlationId, channel);
         ++_overlayGeneration;
         _state = OverlayState.Hidden;
         if (_keyboardHook != null)
@@ -452,13 +493,19 @@ public partial class App : System.Windows.Application
         {
             var target = _previousForeground;
             _previousForeground = IntPtr.Zero;
-            Dispatcher.BeginInvoke(() => WindowManager.ActivateWindow(target));
+            Dispatcher.BeginInvoke(() =>
+            {
+                Logger.Info($"Restoring foreground handle={FormatHandle(target)}.", correlationId, LogChannel.Activation);
+                WindowManager.ActivateWindow(target);
+            });
         }
         else
         {
             _previousForeground = IntPtr.Zero;
         }
     }
+
+    private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
 
     private static bool IsCurrentWindowInstance(HiveCell cell)
     {

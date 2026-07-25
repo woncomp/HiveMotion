@@ -11,6 +11,7 @@ public sealed class TrayIconManager : IDisposable
     private readonly ContextMenuStrip _contextMenu;
     private readonly ToolStripMenuItem _showItem;
     private readonly ToolStripMenuItem _manageItem;
+    private readonly ToolStripMenuItem _logItem;
     private readonly ToolStripMenuItem _autoStartItem;
     private readonly ToolStripMenuItem _exitItem;
     private bool _disposed;
@@ -20,6 +21,8 @@ public sealed class TrayIconManager : IDisposable
     public event EventHandler? ShowRequested;
     /// <summary>"Manage center…" menu item: open the manage window.</summary>
     public event EventHandler? ManageRequested;
+    /// <summary>"View logs…" menu item: open the live log viewer.</summary>
+    public event EventHandler? LogRequested;
 
     public TrayIconManager(AutoStartManager autoStartManager)
     {
@@ -32,6 +35,10 @@ public sealed class TrayIconManager : IDisposable
         _manageItem = new ToolStripMenuItem();
         _manageItem.Click += (_, _) => ManageRequested?.Invoke(this, EventArgs.Empty);
         _contextMenu.Items.Add(_manageItem);
+
+        _logItem = new ToolStripMenuItem();
+        _logItem.Click += (_, _) => LogRequested?.Invoke(this, EventArgs.Empty);
+        _contextMenu.Items.Add(_logItem);
 
         _contextMenu.Items.Add(new ToolStripSeparator());
 
@@ -79,6 +86,7 @@ public sealed class TrayIconManager : IDisposable
     {
         _showItem.Text = Loc.Get("Tray_OpenHive");
         _manageItem.Text = Loc.Get("Tray_Manage");
+        _logItem.Text = Loc.Get("Tray_ViewLogs");
         _autoStartItem.Text = Loc.Get("Tray_AutoStart");
         _exitItem.Text = Loc.Get("Tray_Exit");
     }

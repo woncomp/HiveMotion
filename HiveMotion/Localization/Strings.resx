@@ -429,4 +429,58 @@
   <data name="Cheat_CopyCmd" xml:space="preserve">
     <value>复制完整命令行</value>
   </data>
+  <data name="Tray_ViewLogs" xml:space="preserve">
+    <value>查看日志…</value>
+  </data>
+  <data name="Log_Title" xml:space="preserve">
+    <value>HiveMotion 日志</value>
+  </data>
+  <data name="Log_Header" xml:space="preserve">
+    <value>实时诊断</value>
+  </data>
+  <data name="Log_SearchHint" xml:space="preserve">
+    <value>搜索日志</value>
+  </data>
+  <data name="Log_Follow" xml:space="preserve">
+    <value>跟随</value>
+  </data>
+  <data name="Log_CopySelected" xml:space="preserve">
+    <value>复制选中项</value>
+  </data>
+  <data name="Log_CopyVisible" xml:space="preserve">
+    <value>复制可见项</value>
+  </data>
+  <data name="Log_ClearView" xml:space="preserve">
+    <value>清空视图</value>
+  </data>
+  <data name="Log_OpenFolder" xml:space="preserve">
+    <value>打开文件夹</value>
+  </data>
+  <data name="Log_EntryCount" xml:space="preserve">
+    <value>{0} 条</value>
+  </data>
+  <data name="Log_EntryCount_One" xml:space="preserve">
+    <value>{0} 条</value>
+  </data>
+  <data name="Log_Channel" xml:space="preserve">
+    <value>通道</value>
+  </data>
+  <data name="Log_ChannelAll" xml:space="preserve">
+    <value>所有通道</value>
+  </data>
+  <data name="Log_ChannelDefault" xml:space="preserve">
+    <value>默认</value>
+  </data>
+  <data name="Log_ChannelActivation" xml:space="preserve">
+    <value>窗口激活</value>
+  </data>
+  <data name="General_Diagnostics" xml:space="preserve">
+    <value>诊断</value>
+  </data>
+  <data name="General_VerboseLogging" xml:space="preserve">
+    <value>详细日志</value>
+  </data>
+  <data name="General_VerboseLoggingDesc" xml:space="preserve">
+    <value>将详细诊断信息写入日志文件并在实时日志查看器中显示。日常使用时建议关闭。</value>
+  </data>
 </root>

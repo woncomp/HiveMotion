@@ -33,4 +33,11 @@ public sealed class AppSettings
     /// or an explicit culture: "zh-CN" / "en".
     /// </summary>
     public string Language { get; set; } = "system";
+
+    /// <summary>
+    /// When true, writes detailed diagnostics to the log file and publishes them to the
+    /// live log viewer. Kept off by default to avoid I/O and allocation overhead on the
+    /// hot activation path.
+    /// </summary>
+    public bool VerboseLogging { get; set; }
 }

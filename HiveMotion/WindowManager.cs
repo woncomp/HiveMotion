@@ -6,14 +6,24 @@ namespace HiveMotion;
 
 public static class WindowManager
 {
+    private const LogChannel ActivationChannel = LogChannel.Activation;
+
     /// <summary>Performs one foreground attempt without retrying or sleeping.</summary>
-    public static void ActivateWindowOnce(IntPtr hWnd)
+    public static void ActivateWindowOnce(IntPtr hWnd, string? correlationId = null)
     {
         if (hWnd == IntPtr.Zero)
+        {
+            Logger.Warning("Window activation skipped because the handle was zero.", correlationId, ActivationChannel);
             return;
+        }
+
+        Logger.Info($"Starting window activation; handle={FormatHandle(hWnd)}.", correlationId, ActivationChannel);
 
         if (NativeMethods.IsIconic(hWnd))
+        {
             NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+            Logger.Info("Restored minimized target window before activation.", correlationId, ActivationChannel);
+        }
 
         IntPtr foreground = NativeMethods.GetForegroundWindow();
         uint foregroundThread = foreground != IntPtr.Zero
@@ -30,10 +40,14 @@ public static class WindowManager
             && targetThread != foregroundThread
             && NativeMethods.AttachThreadInput(targetThread, currentThread, true);
 
+        if (attachedForeground || attachedTarget)
+            Logger.Info($"Attached input threads; foreground={attachedForeground}; target={attachedTarget}.", correlationId, ActivationChannel);
+
         try
         {
             NativeMethods.BringWindowToTop(hWnd);
-            NativeMethods.SetForegroundWindow(hWnd);
+            bool setForeground = NativeMethods.SetForegroundWindow(hWnd);
+            Logger.Info($"SetForegroundWindow completed; success={setForeground}.", correlationId, ActivationChannel);
         }
         finally
         {
@@ -41,6 +55,8 @@ public static class WindowManager
                 NativeMethods.AttachThreadInput(targetThread, currentThread, false);
             if (attachedForeground)
                 NativeMethods.AttachThreadInput(foregroundThread, currentThread, false);
+            if (attachedForeground || attachedTarget)
+                Logger.Info("Detached input threads.", correlationId, ActivationChannel);
         }
     }
 
@@ -71,27 +87,43 @@ public static class WindowManager
     /// The denial can still stick (elevated or hung foreground window, shell UI
     /// transitions), so the result is verified and retried before giving up.
     /// </summary>
-    public static void ActivateWindow(IntPtr hWnd)
+    public static void ActivateWindow(IntPtr hWnd, string? correlationId = null)
     {
         if (hWnd == IntPtr.Zero)
+        {
+            Logger.Warning("Window activation skipped because the handle was zero.", correlationId, ActivationChannel);
             return;
+        }
+
+        Logger.Info($"Activating window with retry; handle={FormatHandle(hWnd)}.", correlationId, ActivationChannel);
 
         if (NativeMethods.IsIconic(hWnd))
+        {
             NativeMethods.ShowWindow(hWnd, NativeMethods.SW_RESTORE);
+            Logger.Info("Restored minimized target window before activation.", correlationId, ActivationChannel);
+        }
 
         for (int attempt = 0; attempt < 3; attempt++)
         {
             if (NativeMethods.GetForegroundWindow() == hWnd)
+            {
+                Logger.Info($"Target window became foreground after {attempt} attempt(s).", correlationId, ActivationChannel);
                 return;
+            }
 
-            ActivateWindowOnce(hWnd);
+            ActivateWindowOnce(hWnd, correlationId);
 
             if (NativeMethods.GetForegroundWindow() == hWnd)
+            {
+                Logger.Info($"Target window became foreground after {attempt + 1} attempt(s).", correlationId, ActivationChannel);
                 return;
+            }
 
             System.Threading.Thread.Sleep(50);
         }
 
-        Logger.Info($"ActivateWindow: foreground denied for hwnd 0x{hWnd.ToInt64():X}");
+        Logger.Warning($"Foreground denied after retry for handle={FormatHandle(hWnd)}.", correlationId, ActivationChannel);
     }
+
+    private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
 }

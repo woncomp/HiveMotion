@@ -84,24 +84,27 @@ public partial class OverlayWindow : Window
         Dispatcher.BeginInvoke(new Action(WarmBackdropForCursorMonitor), DispatcherPriority.ApplicationIdle);
     }
 
-    internal void ShowTaskGrid(IReadOnlyList<HiveCell> cells, ActivationTiming? timing = null)
+    internal void ShowTaskGrid(IReadOnlyList<HiveCell> cells, ActivationTiming? timing = null,
+        string? correlationId = null, LogChannel channel = LogChannel.Default)
     {
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(() => ShowTaskGrid(cells, timing));
+            Dispatcher.BeginInvoke(() => ShowTaskGrid(cells, timing, correlationId, channel));
             return;
         }
+        Logger.Info($"Queued overlay visual presentation for {cells.Count} cells.", correlationId, channel);
         _activationTiming = timing;
         _activationTiming?.Checkpoint("overlay-ui-start");
         int generation = ++_activationGeneration;
         _firstWpfRenderForActivation = false;
         DisarmFirstRenderNotification();
         CancelActivationRetries();
-        MoveToCursorScreen();
-        Logger.Info($"ShowTaskGrid: {DescribeGeometry()}");
+        MoveToCursorScreen(correlationId, channel);
+        Logger.Info($"Selected overlay screen; {DescribeGeometry()}.", correlationId, channel);
         if (TryGetCachedBackdrop(_screen, out var backdrop))
         {
             _activationTiming?.Checkpoint("backdrop-cache-hit");
+            Logger.Info("Using cached blurred backdrop.", correlationId, channel);
             TaskGrid.SetBackdrop(backdrop);
         }
         else
@@ -109,23 +112,31 @@ public partial class OverlayWindow : Window
             // Do not capture while activating: the dim layer is the safe fallback until a
             // hidden-period cache warm succeeds.
             _activationTiming?.Checkpoint("backdrop-cache-miss");
+            Logger.Info("No cached blurred backdrop available.", correlationId, channel);
             TaskGrid.SetBackdrop(null);
         }
         TaskGrid.SetCells(cells);
+        Logger.Info($"Updated overlay grid with {cells.Count} cells.", correlationId, channel);
         // Hide the cursor and suspend hover/clicks until the user actually moves the mouse.
         TaskGrid.DisarmMouse();
         ArmFirstRenderNotification(generation);
         Show();
         _activationTiming?.Checkpoint("overlay-shown");
-        Focus();
+        Logger.Info("Overlay window Show completed.", correlationId, channel);
+        bool focused = Focus();
+        Logger.Info($"Overlay focus requested; result={focused}.", correlationId, channel);
         // Re-assert the top of the topmost band: when activation is denied, another
         // always-on-top window would otherwise cover the grid.
         NativeMethods.SetWindowPos(TaskGrid.OverlayHwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
         // One non-sleeping foreground attempt is allowed on the activation path.
-        WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd);
+        WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd, correlationId);
         // Windows may apply its own DPI-suggested rect on the cross-DPI hop; re-assert ours.
-        Dispatcher.BeginInvoke(ApplyScreenBounds);
+        Dispatcher.BeginInvoke(() =>
+        {
+            ApplyScreenBounds();
+            Logger.Info($"Re-applied screen bounds; {DescribeGeometry()}.", correlationId, channel);
+        });
         ScheduleActivationRetries(generation);
     }
 
@@ -218,19 +229,24 @@ public partial class OverlayWindow : Window
     /// converts through the window's CURRENT monitor DPI, which lands the window in empty
     /// space when moving between monitors with different scaling.
     /// </summary>
-    private void MoveToCursorScreen()
+    private void MoveToCursorScreen(string? correlationId = null, LogChannel channel = LogChannel.Default)
     {
         try
         {
             if (!NativeMethods.GetCursorPos(out var point))
+            {
+                Logger.Warning("Unable to read cursor position; retaining the existing screen.", correlationId, channel);
                 return;
+            }
 
             _screen = System.Windows.Forms.Screen.FromPoint(
                 new System.Drawing.Point(point.x, point.y));
             ApplyScreenBounds();
+            Logger.Info($"Moved overlay to cursor screen {_screen.DeviceName}; cursor=({point.x},{point.y}).", correlationId, channel);
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Error(ex, "Selecting the cursor screen for the overlay", correlationId, channel);
             // fall back to wherever the window already is
         }
     }
@@ -248,7 +264,8 @@ public partial class OverlayWindow : Window
     /// Snapshot one display directly to a low-resolution bitmap. Its device DC preserves
     /// PerMonitorV2 physical bounds, including negative and stacked monitor layouts.
     /// </summary>
-    private static System.Windows.Media.ImageSource? CaptureBlurredBackdrop(System.Windows.Forms.Screen screen)
+    private static System.Windows.Media.ImageSource? CaptureBlurredBackdrop(System.Windows.Forms.Screen screen,
+        string? correlationId = null, LogChannel channel = LogChannel.Default)
     {
         int width = screen.Bounds.Width;
         int height = screen.Bounds.Height;
@@ -273,16 +290,22 @@ public partial class OverlayWindow : Window
             hOld = NativeMethods.SelectObject(hdcMem, hBitmap);
             if (hOld == IntPtr.Zero || hOld == NativeMethods.HGDI_ERROR)
                 return null;
+            Logger.Info($"Capturing blurred backdrop; screen={screen.DeviceName} ({width}x{height}).", correlationId, channel);
             NativeMethods.SetStretchBltMode(hdcMem, NativeMethods.HALFTONE);
             if (!NativeMethods.StretchBlt(hdcMem, 0, 0, smallWidth, smallHeight, hdcScreen, 0, 0, width, height, NativeMethods.SRCCOPY))
+            {
+                Logger.Warning("StretchBlt failed while capturing blurred backdrop.", correlationId, channel);
                 return null;
+            }
             var source = Imaging.CreateBitmapSourceFromHBitmap(
                 hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
             source.Freeze();
+            Logger.Info("Blurred-backdrop capture completed.", correlationId, channel);
             return source;
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Error(ex, "Capturing the blurred overlay backdrop", correlationId, channel);
             return null;
         }
         finally

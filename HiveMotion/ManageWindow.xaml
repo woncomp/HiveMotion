@@ -322,6 +322,17 @@
 
                     <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0">
                         <StackPanel>
+                            <TextBlock Text="{l:Loc General_Diagnostics}" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,10" />
+                            <CheckBox x:Name="VerboseLoggingBox" Content="{l:Loc General_VerboseLogging}" FontSize="13"
+                                      Foreground="#E6FFFFFF" Margin="2,0,0,0"
+                                      Checked="OnVerboseLoggingChecked" Unchecked="OnVerboseLoggingUnchecked" />
+                            <TextBlock Text="{l:Loc General_VerboseLoggingDesc}"
+                                       FontSize="10" Foreground="#40FFFFFF" Margin="24,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}" Margin="0,12,0,0">
+                        <StackPanel>
                             <TextBlock Text="{l:Loc General_Language}" FontSize="12" Foreground="#99F5C542" Margin="2,0,0,10" />
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="LangSystemButton" Style="{StaticResource ButtonStyle}"

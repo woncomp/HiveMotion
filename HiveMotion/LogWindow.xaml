@@ -1,0 +1,92 @@
+<Window x:Class="HiveMotion.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:HiveMotion.Localization"
+        Title="{l:Loc Log_Title}" Width="980" Height="640" MinWidth="700" MinHeight="420"
+        Background="#F214161D" Foreground="#E6FFFFFF"
+        FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#14FFFFFF" />
+            <Setter Property="BorderBrush" Value="#33FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#E6FFFFFF" />
+            <Setter Property="CaretBrush" Value="#F5C542" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style x:Key="ActionButton" TargetType="Button">
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+            <Setter Property="Background" Value="#14FFFFFF" />
+            <Setter Property="BorderBrush" Value="#33FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#E6FFFFFF" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#E6FFFFFF" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#1AFFFFFF" />
+            <Setter Property="Foreground" Value="#E6FFFFFF" />
+            <Setter Property="BorderBrush" Value="#33FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="#F214161D" />
+            <Setter Property="Foreground" Value="#E6FFFFFF" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+    </Window.Resources>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{l:Loc Log_Header}" FontSize="18" FontWeight="SemiBold" Foreground="#F2FFFFFF" />
+                <TextBlock x:Name="EntryCountText" Margin="12,4,0,0" Foreground="#66FFFFFF" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource ActionButton}" Content="{l:Loc Log_CopySelected}" Click="OnCopySelectedClick" />
+                <Button Style="{StaticResource ActionButton}" Content="{l:Loc Log_CopyVisible}" Click="OnCopyVisibleClick" />
+                <Button Style="{StaticResource ActionButton}" Content="{l:Loc Log_ClearView}" Click="OnClearViewClick" />
+                <Button Style="{StaticResource ActionButton}" Content="{l:Loc Log_OpenFolder}" Click="OnOpenFolderClick" />
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Margin="0,14,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="SearchInput" VerticalContentAlignment="Center" TextChanged="OnFilterChanged"
+                     ToolTip="{l:Loc Log_SearchHint}" />
+            <CheckBox x:Name="InfoFilter" Grid.Column="1" Content="INFO" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" Checked="OnFilterChanged" Unchecked="OnFilterChanged" />
+            <CheckBox x:Name="WarningFilter" Grid.Column="2" Content="WARNING" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" Checked="OnFilterChanged" Unchecked="OnFilterChanged" />
+            <CheckBox x:Name="ErrorFilter" Grid.Column="3" Content="ERROR" IsChecked="True" Margin="12,0,0,0" VerticalAlignment="Center" Checked="OnFilterChanged" Unchecked="OnFilterChanged" />
+            <ComboBox x:Name="ChannelFilter" Grid.Column="4" SelectedIndex="0" Margin="16,0,0,0" MinWidth="135"
+                      VerticalContentAlignment="Center" SelectionChanged="OnFilterChanged" ToolTip="{l:Loc Log_Channel}">
+                <ComboBoxItem Content="{l:Loc Log_ChannelAll}" />
+                <ComboBoxItem Content="{l:Loc Log_ChannelDefault}" />
+                <ComboBoxItem Content="{l:Loc Log_ChannelActivation}" />
+            </ComboBox>
+            <CheckBox x:Name="FollowToggle" Grid.Column="5" Content="{l:Loc Log_Follow}" IsChecked="True" Margin="18,0,0,0" VerticalAlignment="Center" Checked="OnFollowChanged" Unchecked="OnFollowChanged" />
+        </Grid>
+        <Border Grid.Row="2" Background="#0AFFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="8">
+            <TextBox x:Name="LogOutput" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top" FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                     Padding="8" BorderThickness="0" />
+        </Border>
+        <TextBlock Grid.Row="3" x:Name="PathText" Margin="2,9,2,0" FontSize="11" Foreground="#66FFFFFF" TextTrimming="CharacterEllipsis" />
+    </Grid>
+</Window>
