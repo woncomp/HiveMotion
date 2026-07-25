@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -31,6 +32,10 @@ public partial class OverlayWindow : Window
     public OverlayWindow()
     {
         InitializeComponent();
+
+        // Grid hotkeys must reach WPF unprocessed by any IME; the search box
+        // re-enables IME locally on SearchInput (the property is inherited).
+        InputMethod.SetIsInputMethodEnabled(this, false);
 
         TaskGrid.CellChosen += (_, cell) => CellChosen?.Invoke(this, cell);
         TaskGrid.CloseRequested += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);

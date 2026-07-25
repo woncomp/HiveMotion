@@ -62,6 +62,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     public TaskGridView()
     {
         InitializeComponent();
+        // Search typing keeps full IME support even though the overlay window
+        // disables it; this local value wins over the inherited one.
+        InputMethod.SetIsInputMethodEnabled(SearchInput, true);
         ApplyLocalizedStrings();
         // Lives for the whole app lifetime, so no unsubscribe is needed.
         LocalizationManager.Instance.CultureChanged += (_, _) => ApplyLocalizedStrings();
@@ -343,11 +346,15 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (e.Handled)
             return;
 
+        // If an IME still sneaks a keystroke through, WPF reports ImeProcessed and
+        // hides the real key in ImeProcessedKey — unwrap it so hotkeys keep firing.
+        var key = e.Key == Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
+
         if (ConfirmVisible)
         {
-            if (e.Key == Key.Enter)
+            if (key == Key.Enter)
                 CommitConfirm();
-            else if (e.Key == Key.Escape)
+            else if (key == Key.Escape)
                 HideConfirm();
             e.Handled = true;
             return;
@@ -356,19 +363,19 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (_searching)
             return;
 
-        if (e.Key == Key.Escape)
+        if (key == Key.Escape)
         {
             CloseRequested?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
             return;
         }
-        if (e.Key == Key.Space)
+        if (key == Key.Space)
         {
             EnterSearch();
             e.Handled = true;
             return;
         }
-        if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
+        if (key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
         {
             if (_hoveredCell != null)
                 PinToggleRequested?.Invoke(this, _hoveredCell);
@@ -376,9 +383,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             return;
         }
         // Plain letters only: modified chords (Ctrl+P etc.) must not trigger a cell.
-        if (e.Key is >= Key.A and <= Key.Z && Keyboard.Modifiers == ModifierKeys.None)
+        if (key is >= Key.A and <= Key.Z && Keyboard.Modifiers == ModifierKeys.None)
         {
-            char letter = (char)('A' + (e.Key - Key.A));
+            char letter = (char)('A' + (key - Key.A));
             var cell = _cells.FirstOrDefault(c => c.Letter == letter);
             if (cell != null)
             {
