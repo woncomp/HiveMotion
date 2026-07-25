@@ -9,7 +9,7 @@
   -->
   <Package Name="HiveMotion"
            Language="1033"
-           Version="1.0.0.0"
+           Version="0.1.2.0"
            Manufacturer="HiveMotion"
            UpgradeCode="dc3c998d-85cc-40f9-91c8-20958f9dfd28"
            InstallerVersion="500"

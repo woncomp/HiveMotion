@@ -1113,7 +1113,7 @@ public partial class ManageWindow : Window
     private void InitAboutPage()
     {
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        VersionText.Text = Loc.Format("About_Version", version?.ToString(3) ?? "?", PinStore.StoreDirectoryPath);
+        VersionText.Text = Loc.Format("About_Version", version?.ToString() ?? "?", PinStore.StoreDirectoryPath);
         UpdateCheatsheet();
     }
 
