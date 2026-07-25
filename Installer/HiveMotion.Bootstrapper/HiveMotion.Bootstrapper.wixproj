@@ -1,0 +1,24 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <Platforms>x64</Platforms>
+    <Platform>x64</Platform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.BootstrapperApplications.wixext" Version="5.0.2" />
+    <PackageReference Include="WixToolset.Netfx.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HiveMotion.Setup\HiveMotion.Setup.wixproj" />
+  </ItemGroup>
+
+  <!--
+    Bundle.wxs is compiled automatically by the WiX SDK (EnableDefaultCompileItems
+    globs **/*.wxs). Do not add an explicit Compile item for it or the file is
+    compiled twice, which surfaces as cascading errors (e.g. WIX0044).
+  -->
+
+</Project>

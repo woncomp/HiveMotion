@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+
+  <!--
+    UpgradeCode must stay the same for the lifetime of this bundle so that
+    upgrades and uninstalls work correctly.
+  -->
+  <Bundle Name="HiveMotion"
+          Version="1.0.0.0"
+          Manufacturer="HiveMotion"
+          UpgradeCode="6d20a3e6-69bc-481d-a1c7-670012a91052"
+          IconSourceFile="..\..\HiveMotion\Resources\hive_icon.ico"
+          Copyright="Copyright (c) HiveMotion">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication LicenseUrl=""
+                                               Theme="hyperlinkLicense"
+                                               ShowVersion="yes"
+                                               SuppressOptionsUI="no" />
+    </BootstrapperApplication>
+
+    <!--
+      Detect whether the .NET 8 Desktop Runtime (x64) is installed.
+      DotNetCoreSearch is provided by WixToolset.Netfx.wixext.
+    -->
+    <netfx:DotNetCoreSearch RuntimeType="desktop"
+                            Platform="x64"
+                            MajorVersion="8"
+                            Variable="DOT_NET_DESKTOP_VER" />
+
+    <Variable Name="InstallFolder" Value="[ProgramFiles64Folder]HiveMotion" />
+
+    <Chain>
+      <!--
+        Install the .NET 8 Desktop Runtime only when it is missing or older
+        than 8.0.0. The default payload downloads the installer from Microsoft
+        at install time, keeping the bootstrapper small.
+
+        To create an offline installer, download the runtime executable and
+        place it next to this file as:
+          Redist\windowsdesktop-runtime-8.0.8-win-x64.exe
+        Then replace the ExePackagePayload below with:
+          <ExePackagePayload SourceFile="Redist\windowsdesktop-runtime-8.0.8-win-x64.exe" />
+        and update the version/hash attributes accordingly.
+      -->
+      <ExePackage Id="Net8DesktopRedist"
+                  DisplayName="Microsoft .NET 8.0 Desktop Runtime"
+                  Cache="keep"
+                  PerMachine="yes"
+                  Permanent="yes"
+                  Vital="yes"
+                  DetectCondition="DOT_NET_DESKTOP_VER &gt;= v8.0.0"
+                  InstallArguments="/install /quiet /norestart"
+                  RepairArguments="/repair /quiet /norestart"
+                  UninstallArguments="/uninstall /quiet /norestart">
+        <ExePackagePayload
+          Name="windowsdesktop-runtime-8.0.8-win-x64.exe"
+          Description="Microsoft .NET 8.0 Desktop Runtime (v8.0.8) - Windows x64"
+          ProductName="Microsoft .NET Desktop Runtime - 8.0.8 (x64)"
+          DownloadUrl="https://download.visualstudio.microsoft.com/download/pr/907765b0-2bf8-494e-93aa-5ef9553c5d68/a9308dc010617e6716c0e6abd53b05ce/windowsdesktop-runtime-8.0.8-win-x64.exe"
+          Hash="27484FFB1E9CE5E6290CDA8F5F49563CF4A9E2692AA57429FCD0D3DE4F30FC2FCE204B1B120349ED50712E95D3FA51037EBAF9B7FD60C41856857B1372E0EAC7"
+          Size="58492592"
+          Version="8.0.8.33916" />
+      </ExePackage>
+
+      <MsiPackage Id="HiveMotionMsi"
+                  SourceFile="$(var.HiveMotion.Setup.TargetPath)"
+                  Vital="yes"
+                  bal:DisplayInternalUICondition="WixBundleExecutePackageAction = 2" />
+    </Chain>
+  </Bundle>
+</Wix>

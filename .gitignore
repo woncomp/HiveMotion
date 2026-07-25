@@ -41,6 +41,15 @@ $RECYCLE.BIN/
 # Publish profiles
 *.pubxml
 *.publishproj
+!HiveMotion/Properties/PublishProfiles/FrameworkDependent.pubxml
+
+# Installer outputs
+Installer/publish/
+Installer/artifacts/
+*.msi
+*.wixpdb
+*.wixobj
+Installer/HiveMotion.Bootstrapper/Redist/
 
 # Test results
 TestResults/

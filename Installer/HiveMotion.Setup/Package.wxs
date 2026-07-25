@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!--
+    UpgradeCode must stay the same for all versions of this product so that
+    major upgrades work correctly. Generate a new GUID only if you fork the
+    product into a different installer family.
+  -->
+  <Package Name="HiveMotion"
+           Language="1033"
+           Version="1.0.0.0"
+           Manufacturer="HiveMotion"
+           UpgradeCode="dc3c998d-85cc-40f9-91c8-20958f9dfd28"
+           InstallerVersion="500"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="HiveMotion" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="HiveMotion" />
+    </StandardDirectory>
+
+    <!--
+      Files are harvested from Installer\publish\ by the HarvestDirectory item
+      in HiveMotion.Setup.wixproj and exposed as the HarvestedAppComponents
+      component group.
+    -->
+
+    <!-- Start Menu shortcut for the main executable. -->
+    <ComponentGroup Id="ShortcutComponents" Directory="ApplicationProgramsFolder">
+      <Component Guid="8b99ac7f-ff02-47c5-bfe7-f68ab05db677">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Name="HiveMotion"
+                  Description="HiveMotion"
+                  Target="[INSTALLFOLDER]HiveMotion.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\HiveMotion" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="MainFeature" Title="HiveMotion" Level="1">
+      <ComponentGroupRef Id="HarvestedAppComponents" />
+      <ComponentGroupRef Id="ShortcutComponents" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+  </Package>
+</Wix>
