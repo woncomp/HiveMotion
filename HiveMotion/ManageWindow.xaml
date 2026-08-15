@@ -303,6 +303,54 @@
                                 </StackPanel>
                             </ScrollViewer>
                         </Grid>
+                        <!-- System action editor -->
+                        <Grid x:Name="SystemActionEditorPanel" Visibility="Collapsed">
+                            <StackPanel>
+                                <!-- Header: glyph + letter badge + action name -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
+                                            BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top">
+                                        <Image x:Name="SystemActionEditorIcon" Width="28" Height="28" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border x:Name="SystemActionBackButton" Padding="8,3" CornerRadius="6"
+                                                    Background="#14FFFFFF" BorderBrush="#33FFFFFF" BorderThickness="1"
+                                                    Cursor="Hand" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                    Visibility="Collapsed" MouseLeftButtonUp="OnEditorBackClick">
+                                                <TextBlock x:Name="SystemActionBackText" Text="{l:Loc Folder_BackToFolder}"
+                                                           FontSize="11" Foreground="#BFFFFFFF" />
+                                            </Border>
+                                            <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
+                                                    BorderBrush="#80F5B301" BorderThickness="1"
+                                                    VerticalAlignment="Center" Margin="0,0,8,0">
+                                                <TextBlock x:Name="SystemActionLetterBadge" Text="N" FontSize="12"
+                                                           FontWeight="Bold" Foreground="#FFFFD97A" />
+                                            </Border>
+                                            <TextBlock x:Name="SystemActionName" FontSize="15" FontWeight="SemiBold"
+                                                       Foreground="#F2FFFFFF" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="SystemActionStatus" FontSize="11"
+                                                   Foreground="#66FFFFFF" Margin="2,6,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="{l:Loc SystemAction_ActionsHeader}" FontSize="11"
+                                           Foreground="#59FFFFFF" Margin="2,14,0,6" />
+                                <StackPanel x:Name="SystemActionList" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                    <Border Style="{StaticResource ButtonStyle}" BorderBrush="#80E5484D"
+                                            MouseLeftButtonUp="OnDeleteSystemActionClick">
+                                        <TextBlock Text="{l:Loc SystemAction_Delete}" FontSize="12" Foreground="#FFE5484D" />
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>
@@ -526,6 +574,10 @@
                                     Margin="0,0,10,0" MouseLeftButtonUp="OnPickerNewFolderClick">
                                 <TextBlock Text="{l:Loc Picker_NewFolder}" FontSize="12" Foreground="#BFFFFFFF" />
                             </Border>
+                            <Border x:Name="PickerSystemActionButton" Style="{StaticResource ButtonStyle}" Padding="12,5"
+                                    Margin="0,0,10,0" MouseLeftButtonUp="OnPickerSystemActionClick">
+                                <TextBlock Text="{l:Loc Picker_AddSystemAction}" FontSize="12" Foreground="#BFFFFFFF" />
+                            </Border>
                             <Border Style="{StaticResource ButtonStyle}" Padding="12,5"
                                     MouseLeftButtonUp="OnPickerManualClick">
                                 <TextBlock Text="{l:Loc Picker_Manual}" FontSize="12" Foreground="#BFFFFFFF" />
@@ -558,6 +610,30 @@
                         </Border>
                         <Border Style="{StaticResource ButtonStyle}" Padding="16,6"
                                 MouseLeftButtonUp="OnConfirmNoClick">
+                            <TextBlock Text="{l:Loc Common_Cancel}" FontSize="12" Foreground="#BFFFFFFF" />
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- System action catalog picker (modal) -->
+        <Grid x:Name="SystemActionPickerOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
+              MouseLeftButtonDown="OnSystemActionPickerBackdropClick">
+            <Border Width="460" CornerRadius="14" Background="#F214161D"
+                    BorderBrush="#59F5B301" BorderThickness="1" Padding="18"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    MouseLeftButtonDown="OnSystemActionPickerDialogClick">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="32" ShadowDepth="12" />
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock x:Name="SystemActionPickerTitle" FontSize="15" FontWeight="SemiBold"
+                               Foreground="#F2FFFFFF" />
+                    <StackPanel x:Name="SystemActionPickerList" Margin="0,12,0,0" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                        <Border Style="{StaticResource ButtonStyle}" Padding="12,5"
+                                MouseLeftButtonUp="OnSystemActionPickerCancelClick">
                             <TextBlock Text="{l:Loc Common_Cancel}" FontSize="12" Foreground="#BFFFFFFF" />
                         </Border>
                     </StackPanel>

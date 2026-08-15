@@ -43,8 +43,11 @@ public partial class ManageWindow : Window
     private IReadOnlyList<RunningWindow> _windows = Array.Empty<RunningWindow>();
     private ApplicationMotion? _selectedApp;
     private FolderMotion? _selectedFolder;
+    private SystemActionMotion? _selectedSystemAction;
     /// <summary>Parent folder when the app editor edits a folder child; null for home-layer apps.</summary>
     private FolderMotion? _selectedAppFolder;
+    /// <summary>Parent folder when the system action editor edits a folder child; null for home layer.</summary>
+    private FolderMotion? _selectedSystemActionFolder;
     private char _pickerLetter;
     /// <summary>Folder the picker is adding a child to; null when picking for the home layer.</summary>
     private FolderMotion? _pickerFolder;
@@ -104,13 +107,19 @@ public partial class ManageWindow : Window
         UpdateFolderStatus();
         if (_selectedFolder != null)
             BuildFolderChildTiles();
+        if (_selectedSystemAction != null)
+            UpdateSystemActionEditor();
         if (_selectedAppFolder != null)
             EditorBackText.Text = Loc.Get("Folder_BackToFolder");
+        if (_selectedSystemActionFolder != null)
+            SystemActionBackText.Text = Loc.Get("Folder_BackToFolder");
         UpdateHistoryCount();
         RefreshHotkeyUi();
         InitAboutPage();
         if (PickerOverlay.Visibility == Visibility.Visible)
             RebuildPickerList();
+        if (SystemActionPickerOverlay.Visibility == Visibility.Visible)
+            BuildSystemActionPickerList();
         UpdateLanguageButtons();
     }
 
@@ -193,7 +202,7 @@ public partial class ManageWindow : Window
             AllowDrop = true,
             Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(motion != null ? "#1AFFFFFF" : "#0AFFFFFF")),
             BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(motion != null ? "#80F5B301" : "#26FFFFFF")),
-            ToolTip = motion != null ? $"{letter}: {motion.DisplayName}" : Loc.Format("Pins_PinToLetter", letter)
+            ToolTip = motion != null ? $"{letter}: {MotionDisplayName(motion)}" : Loc.Format("Pins_PinToLetter", letter)
         };
 
         var content = new Grid();
@@ -276,6 +285,29 @@ public partial class ManageWindow : Window
             tile.PreviewMouseMove += OnTileDragMove;
             tile.MouseLeftButtonUp += OnOccupiedTileClick;
         }
+        else if (motion is SystemActionMotion systemAction)
+        {
+            var icon = GlyphIcon.ForAction(systemAction.ActionId);
+            if (icon != null)
+            {
+                content.Children.Add(new Image
+                {
+                    Width = 28,
+                    Height = 28,
+                    Source = icon,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+
+            content.Children.Add(BuildTileLetterBadge(letter));
+            // System actions are never running; no status dot.
+
+            tile.Cursor = Cursors.Hand;
+            tile.PreviewMouseLeftButtonDown += OnTileDragStart;
+            tile.PreviewMouseMove += OnTileDragMove;
+            tile.MouseLeftButtonUp += OnOccupiedTileClick;
+        }
         else
         {
             content.Children.Add(new TextBlock
@@ -307,6 +339,12 @@ public partial class ManageWindow : Window
         VerticalAlignment = VerticalAlignment.Top,
         Margin = new Thickness(6, 4, 0, 0)
     };
+
+    /// <summary>System actions take their localized catalog name; other kinds store their own.</summary>
+    private static string MotionDisplayName(Motion motion) =>
+        motion is SystemActionMotion systemAction
+            ? SystemActions.DisplayNameOf(systemAction.ActionId)
+            : motion.DisplayName;
 
     /// <summary>Shared folder silhouette (overlay badge, tiles, folder editor).</summary>
     private static System.Windows.Shapes.Path BuildFolderGlyph(double width)
@@ -423,12 +461,15 @@ public partial class ManageWindow : Window
     {
         _selectedApp = motion as ApplicationMotion;
         _selectedFolder = motion as FolderMotion;
+        _selectedSystemAction = motion as SystemActionMotion;
         _selectedAppFolder = _selectedApp != null ? childParent : null;
+        _selectedSystemActionFolder = _selectedSystemAction != null ? childParent : null;
         _editorLoading = true;
 
         EditorEmpty.Visibility = motion == null ? Visibility.Visible : Visibility.Collapsed;
         EditorPanel.Visibility = _selectedApp != null ? Visibility.Visible : Visibility.Collapsed;
         FolderEditorPanel.Visibility = _selectedFolder != null ? Visibility.Visible : Visibility.Collapsed;
+        SystemActionEditorPanel.Visibility = _selectedSystemAction != null ? Visibility.Visible : Visibility.Collapsed;
 
         if (_selectedApp is { } app)
         {
@@ -453,6 +494,13 @@ public partial class ManageWindow : Window
             UpdateFolderStatus();
             BuildFolderChildTiles();
         }
+        else if (_selectedSystemAction is { } systemAction)
+        {
+            SystemActionLetterBadge.Text = systemAction.Key.ToString();
+            SystemActionBackButton.Visibility = _selectedSystemActionFolder != null ? Visibility.Visible : Visibility.Collapsed;
+            SystemActionBackText.Text = Loc.Get("Folder_BackToFolder");
+            UpdateSystemActionEditor();
+        }
 
         _editorLoading = false;
     }
@@ -461,6 +509,8 @@ public partial class ManageWindow : Window
     {
         if (_selectedAppFolder != null)
             ShowEditor(_selectedAppFolder);
+        else if (_selectedSystemActionFolder != null)
+            ShowEditor(_selectedSystemActionFolder);
         e.Handled = true;
     }
 
@@ -679,6 +729,190 @@ public partial class ManageWindow : Window
         e.Handled = true;
     }
 
+    // ---------- system action editor ----------
+
+    /// <summary>Fills the header and rebuilds the action list with the current action highlighted.</summary>
+    private void UpdateSystemActionEditor()
+    {
+        if (_selectedSystemAction == null)
+            return;
+        SystemActionEditorIcon.Source = GlyphIcon.ForAction(_selectedSystemAction.ActionId);
+        SystemActionName.Text = SystemActions.DisplayNameOf(_selectedSystemAction.ActionId);
+        SystemActionStatus.Text = SystemActions.DescriptionOf(_selectedSystemAction.ActionId);
+        BuildSystemActionList();
+    }
+
+    private void BuildSystemActionList()
+    {
+        SystemActionList.Children.Clear();
+        if (_selectedSystemAction == null)
+            return;
+        foreach (var action in SystemActions.All)
+            SystemActionList.Children.Add(BuildSystemActionRow(action, action.Id == _selectedSystemAction.ActionId,
+                () => SwitchSystemAction(action)));
+    }
+
+    /// <summary>The only per-cell configuration: which catalog action this cell fires.</summary>
+    private void SwitchSystemAction(SystemAction action)
+    {
+        if (_selectedSystemAction == null || _selectedSystemAction.ActionId == action.Id)
+            return;
+        _selectedSystemAction.ActionId = action.Id;
+        _motionStore.Save();
+        if (_selectedSystemActionFolder != null)
+            BuildFolderChildTiles();
+        else
+            BuildLetterTiles();
+        UpdateSystemActionEditor();
+    }
+
+    /// <summary>Glyph + name + description row, shared by the editor list and the catalog picker.</summary>
+    private static Border BuildSystemActionRow(SystemAction action, bool current, Action onClick)
+    {
+        var icon = new Image
+        {
+            Width = 22,
+            Height = 22,
+            Source = GlyphIcon.ForGlyph(action.IconGlyph),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var texts = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        texts.Children.Add(new TextBlock
+        {
+            Text = Loc.Get(action.NameKey),
+            FontSize = 13,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E6FFFFFF"))
+        });
+        texts.Children.Add(new TextBlock
+        {
+            Text = Loc.Get(action.DescriptionKey),
+            FontSize = 10,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#66FFFFFF")),
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(icon, 0);
+        Grid.SetColumn(texts, 1);
+        grid.Children.Add(icon);
+        grid.Children.Add(texts);
+
+        var row = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 7, 10, 7),
+            Margin = new Thickness(2),
+            Cursor = Cursors.Hand,
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(current ? "#80F5B301" : "#26FFFFFF")),
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(current ? "#1FF5B301" : "#00000000")),
+            Child = grid
+        };
+        row.MouseEnter += (_, _) =>
+        {
+            if (!current)
+                row.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#14F5B301"));
+        };
+        row.MouseLeave += (_, _) =>
+        {
+            if (!current)
+                row.Background = Brushes.Transparent;
+        };
+        row.MouseLeftButtonUp += (_, e) =>
+        {
+            onClick();
+            e.Handled = true;
+        };
+        return row;
+    }
+
+    private void OnDeleteSystemActionClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_selectedSystemAction == null)
+            return;
+        var systemAction = _selectedSystemAction;
+        var parent = _selectedSystemActionFolder;
+        ShowConfirm(Loc.Format("App_RemoveSystemActionMessage", systemAction.Key,
+            SystemActions.DisplayNameOf(systemAction.ActionId)), () =>
+        {
+            if (parent != null)
+            {
+                parent.Items.RemoveAll(i => i.Key == systemAction.Key);
+                _motionStore.Save();
+                ShowEditor(parent);
+            }
+            else
+            {
+                _motionStore.Remove(systemAction.Key);
+                BuildLetterTiles();
+                ShowEditor(null);
+            }
+        });
+        e.Handled = true;
+    }
+
+    // ---------- system action catalog picker ----------
+
+    private void OnPickerSystemActionClick(object sender, MouseButtonEventArgs e)
+    {
+        SystemActionPickerTitle.Text = Loc.Format("SystemAction_PickerTitle", _pickerLetter);
+        BuildSystemActionPickerList();
+        SystemActionPickerOverlay.Visibility = Visibility.Visible;
+        e.Handled = true;
+    }
+
+    private void BuildSystemActionPickerList()
+    {
+        SystemActionPickerList.Children.Clear();
+        foreach (var action in SystemActions.All)
+            SystemActionPickerList.Children.Add(BuildSystemActionRow(action, current: false, () => PickSystemAction(action)));
+    }
+
+    private void PickSystemAction(SystemAction action)
+    {
+        var motion = new SystemActionMotion { Key = _pickerLetter, ActionId = action.Id };
+        CloseSystemActionPicker();
+        if (_pickerFolder is { } folder)
+        {
+            folder.Items.RemoveAll(i => i.Key == motion.Key);
+            folder.Items.Add(motion);
+            _motionStore.Save();
+            ClosePicker();
+            // Rebuild the child grid, then open the new child in the system action editor.
+            ShowEditor(folder);
+            ShowEditor(motion, folder);
+        }
+        else
+        {
+            _motionStore.Set(motion);
+            ClosePicker();
+            BuildLetterTiles();
+            ShowEditor(motion);
+        }
+    }
+
+    private void CloseSystemActionPicker()
+    {
+        SystemActionPickerOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnSystemActionPickerCancelClick(object sender, MouseButtonEventArgs e)
+    {
+        CloseSystemActionPicker();
+        e.Handled = true;
+    }
+
+    private void OnSystemActionPickerBackdropClick(object sender, MouseButtonEventArgs e)
+    {
+        CloseSystemActionPicker();
+        e.Handled = true;
+    }
+
+    private void OnSystemActionPickerDialogClick(object sender, MouseButtonEventArgs e) => e.Handled = true;
+
     // ---------- folder child tiles ----------
 
     private void BuildFolderChildTiles()
@@ -718,7 +952,7 @@ public partial class ManageWindow : Window
             AllowDrop = true,
             Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item != null ? "#1AFFFFFF" : "#0AFFFFFF")),
             BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item != null ? "#80F5B301" : "#26FFFFFF")),
-            ToolTip = item != null ? $"{letter}: {item.DisplayName}" : Loc.Format("Pins_PinToLetter", letter)
+            ToolTip = item != null ? $"{letter}: {MotionDisplayName(item)}" : Loc.Format("Pins_PinToLetter", letter)
         };
 
         var content = new Grid();
@@ -769,6 +1003,38 @@ public partial class ManageWindow : Window
             };
             content.Children.Add(dot);
             _childTileDots.Add((dot, app));
+
+            tile.Cursor = Cursors.Hand;
+            tile.PreviewMouseLeftButtonDown += OnChildDragStart;
+            tile.PreviewMouseMove += OnChildDragMove;
+            tile.MouseLeftButtonUp += OnChildTileClick;
+        }
+        else if (item is SystemActionMotion systemAction)
+        {
+            var icon = GlyphIcon.ForAction(systemAction.ActionId);
+            if (icon != null)
+            {
+                content.Children.Add(new Image
+                {
+                    Width = 20,
+                    Height = 20,
+                    Source = icon,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+
+            content.Children.Add(new TextBlock
+            {
+                Text = letter.ToString(),
+                FontSize = 8,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCFFD97A")),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(4, 3, 0, 0)
+            });
+            // System actions are never running; no status dot.
 
             tile.Cursor = Cursors.Hand;
             tile.PreviewMouseLeftButtonDown += OnChildDragStart;
@@ -1653,6 +1919,11 @@ public partial class ManageWindow : Window
         if (ConfirmOverlay.Visibility == Visibility.Visible)
         {
             HideConfirm();
+            e.Handled = true;
+        }
+        else if (SystemActionPickerOverlay.Visibility == Visibility.Visible)
+        {
+            CloseSystemActionPicker();
             e.Handled = true;
         }
         else if (PickerOverlay.Visibility == Visibility.Visible)

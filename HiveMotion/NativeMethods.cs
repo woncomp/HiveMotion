@@ -139,6 +139,12 @@ internal static class NativeMethods
     public const uint INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_KEYUP = 0x0002;
 
+    /// <summary>
+    /// 'HMOT': dwExtraInfo marker for key events we inject ourselves (the benign chord
+    /// key). The low-level hook passes these through untouched.
+    /// </summary>
+    public const uint InjectedExtraInfo = 0x484D4F54;
+
     [StructLayout(LayoutKind.Explicit, Size = 40)]
     public struct INPUT
     {
@@ -212,6 +218,10 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LockWorkStation();
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

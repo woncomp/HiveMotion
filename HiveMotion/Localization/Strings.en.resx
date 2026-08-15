@@ -534,4 +534,58 @@ Working directory: {1}</value>
   <data name="Cheat_Back" xml:space="preserve">
     <value>Back one level</value>
   </data>
+  <data name="SystemAction_TaskView_Name" xml:space="preserve">
+    <value>Task View</value>
+  </data>
+  <data name="SystemAction_TaskView_Desc" xml:space="preserve">
+    <value>Open Windows Task View (Win+Tab)</value>
+  </data>
+  <data name="SystemAction_GameBar_Name" xml:space="preserve">
+    <value>Xbox Game Bar</value>
+  </data>
+  <data name="SystemAction_GameBar_Desc" xml:space="preserve">
+    <value>Open the Xbox Game Bar overlay</value>
+  </data>
+  <data name="SystemAction_Settings_Name" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SystemAction_Settings_Desc" xml:space="preserve">
+    <value>Open Windows Settings (Win+I)</value>
+  </data>
+  <data name="SystemAction_Explorer_Name" xml:space="preserve">
+    <value>File Explorer</value>
+  </data>
+  <data name="SystemAction_Explorer_Desc" xml:space="preserve">
+    <value>Open File Explorer (Win+E)</value>
+  </data>
+  <data name="SystemAction_Project_Name" xml:space="preserve">
+    <value>Project</value>
+  </data>
+  <data name="SystemAction_Project_Desc" xml:space="preserve">
+    <value>Open the projection pane (Win+P)</value>
+  </data>
+  <data name="SystemAction_Lock_Name" xml:space="preserve">
+    <value>Lock</value>
+  </data>
+  <data name="SystemAction_Lock_Desc" xml:space="preserve">
+    <value>Lock this PC immediately (Win+L)</value>
+  </data>
+  <data name="SystemAction_PickerTitle" xml:space="preserve">
+    <value>Assign a system action to {0}</value>
+  </data>
+  <data name="App_RemoveSystemActionMessage" xml:space="preserve">
+    <value>Remove the system action "{1}" on {0}?</value>
+  </data>
+  <data name="Grid_StatusSystemAction" xml:space="preserve">
+    <value>System action</value>
+  </data>
+  <data name="Picker_AddSystemAction" xml:space="preserve">
+    <value>Add system action</value>
+  </data>
+  <data name="SystemAction_ActionsHeader" xml:space="preserve">
+    <value>Action · click to change</value>
+  </data>
+  <data name="SystemAction_Delete" xml:space="preserve">
+    <value>Remove system action</value>
+  </data>
 </root>

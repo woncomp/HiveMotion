@@ -850,13 +850,23 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         texts.Children.Add(title);
         texts.Children.Add(subtitle);
 
-        // Status on the far right: running / not running
+        // Status on the far right: running / not running / system action
         var status = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center
         };
-        if (cell.IsRunning)
+        if (cell.SystemAction != null)
+        {
+            status.Children.Add(new TextBlock
+            {
+                Text = Loc.Get("Grid_StatusSystemAction"),
+                FontSize = 11,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D9FFD97A")),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+        }
+        else if (cell.IsRunning)
         {
             status.Children.Add(new Border
             {

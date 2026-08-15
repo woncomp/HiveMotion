@@ -37,6 +37,7 @@ public sealed class MotionHoverPreview
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(ApplicationMotion), "application")]
 [JsonDerivedType(typeof(FolderMotion), "folder")]
+[JsonDerivedType(typeof(SystemActionMotion), "systemaction")]
 public abstract class Motion
 {
     /// <summary>Letter (A-Z) this motion occupies on its layer (home, or inside a folder).</summary>

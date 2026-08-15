@@ -13,7 +13,6 @@ namespace HiveMotion;
 /// </summary>
 public sealed class GlobalKeyboardHook : IDisposable
 {
-    private const uint InjectedExtraInfo = 0x484D4F54; // 'HMOT': marks our own synthetic chord key
     private const int VkUnassigned = 0xE8;
 
     private readonly IReadOnlyList<HotkeyRule> _rules;
@@ -113,12 +112,12 @@ public sealed class GlobalKeyboardHook : IDisposable
             new NativeMethods.INPUT
             {
                 type = NativeMethods.INPUT_KEYBOARD,
-                u = new NativeMethods.KEYBDINPUT { wVk = VkUnassigned, dwExtraInfo = (IntPtr)InjectedExtraInfo }
+                u = new NativeMethods.KEYBDINPUT { wVk = VkUnassigned, dwExtraInfo = (IntPtr)NativeMethods.InjectedExtraInfo }
             },
             new NativeMethods.INPUT
             {
                 type = NativeMethods.INPUT_KEYBOARD,
-                u = new NativeMethods.KEYBDINPUT { wVk = VkUnassigned, dwFlags = NativeMethods.KEYEVENTF_KEYUP, dwExtraInfo = (IntPtr)InjectedExtraInfo }
+                u = new NativeMethods.KEYBDINPUT { wVk = VkUnassigned, dwFlags = NativeMethods.KEYEVENTF_KEYUP, dwExtraInfo = (IntPtr)NativeMethods.InjectedExtraInfo }
             }
         };
         return NativeMethods.SendInput(2, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
@@ -136,7 +135,7 @@ public sealed class GlobalKeyboardHook : IDisposable
             return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         var kbd = Marshal.PtrToStructure<NativeMethods.KBDLLHOOKSTRUCT>(lParam);
-        if (kbd.dwExtraInfo == (IntPtr)InjectedExtraInfo)
+        if (kbd.dwExtraInfo == (IntPtr)NativeMethods.InjectedExtraInfo)
             return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         int vk = (int)kbd.vkCode;

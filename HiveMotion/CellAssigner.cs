@@ -37,6 +37,9 @@ public sealed class CellAssigner
                 case FolderMotion folder:
                     cells[folder.Key] = FolderCell(folder);
                     break;
+                case SystemActionMotion systemAction:
+                    cells[systemAction.Key] = SystemActionCell(systemAction);
+                    break;
             }
         }
 
@@ -99,6 +102,9 @@ public sealed class CellAssigner
                 case ApplicationMotion app:
                     cells.Add(AssignApplication(app, windows, placed));
                     break;
+                case SystemActionMotion systemAction:
+                    cells.Add(SystemActionCell(systemAction));
+                    break;
                 // Nesting is rejected at store load and in the manage center; ignore defensively.
             }
         }
@@ -146,5 +152,15 @@ public sealed class CellAssigner
         AppName = folder.DisplayName,
         Title = folder.DisplayName,
         Icon = folder.IconPath.Length > 0 ? IconHelper.ForImageFile(folder.IconPath) : null
+    };
+
+    /// <summary>System actions never bind a window: name and glyph icon come from the catalog.</summary>
+    private static HiveCell SystemActionCell(SystemActionMotion motion) => new()
+    {
+        Letter = motion.Key,
+        Motion = motion,
+        AppName = SystemActions.DisplayNameOf(motion.ActionId),
+        Title = SystemActions.DisplayNameOf(motion.ActionId),
+        Icon = GlyphIcon.ForAction(motion.ActionId)
     };
 }

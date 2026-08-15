@@ -134,6 +134,11 @@ public sealed class MotionStore
                 continue;
             if (motion is ApplicationMotion app && string.IsNullOrEmpty(app.ExecutablePath))
                 continue;
+            if (motion is SystemActionMotion systemAction && SystemActions.Find(systemAction.ActionId) == null)
+            {
+                Logger.Warning($"Dropped system action with unknown id '{systemAction.ActionId}' on key {motion.Key}.");
+                continue;
+            }
             if (motion is FolderMotion folder)
                 SanitizeFolder(folder);
             kept.Add(motion);
@@ -156,6 +161,11 @@ public sealed class MotionStore
                 continue;
             if (item is ApplicationMotion app && string.IsNullOrEmpty(app.ExecutablePath))
                 continue;
+            if (item is SystemActionMotion systemAction && SystemActions.Find(systemAction.ActionId) == null)
+            {
+                Logger.Warning($"Dropped system action with unknown id '{systemAction.ActionId}' from folder '{folder.DisplayName}'.");
+                continue;
+            }
             kept.Add(item);
         }
         folder.Items = kept;

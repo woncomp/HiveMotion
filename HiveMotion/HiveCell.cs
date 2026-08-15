@@ -26,6 +26,7 @@ public sealed class HiveCell
     public bool IsPinned => Motion is ApplicationMotion;
     public ApplicationMotion? Application => Motion as ApplicationMotion;
     public FolderMotion? Folder => Motion as FolderMotion;
+    public SystemActionMotion? SystemAction => Motion as SystemActionMotion;
 
     public static HiveCell FromWindow(char letter, RunningWindow window) => new()
     {

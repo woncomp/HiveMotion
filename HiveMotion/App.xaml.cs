@@ -517,6 +517,11 @@ public partial class App : System.Windows.Application
             // Relaunch the pinned program with the exact arguments it was pinned with.
             WindowManager.Launch(app.ExecutablePath, app.Arguments, app.WorkingDirectory);
         }
+        else if (cell.SystemAction is { } systemAction)
+        {
+            // Real invocation paths only (shell object / URI / LockWorkStation) — no key simulation.
+            systemAction.Activate();
+        }
         CloseOverlay(restoreFocus: false);
     }
 

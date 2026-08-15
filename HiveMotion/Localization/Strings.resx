@@ -522,4 +522,58 @@
   <data name="Cheat_Back" xml:space="preserve">
     <value>返回上一级</value>
   </data>
+  <data name="SystemAction_TaskView_Name" xml:space="preserve">
+    <value>任务视图</value>
+  </data>
+  <data name="SystemAction_TaskView_Desc" xml:space="preserve">
+    <value>打开 Windows 任务视图（Win+Tab）</value>
+  </data>
+  <data name="SystemAction_GameBar_Name" xml:space="preserve">
+    <value>Xbox Game Bar</value>
+  </data>
+  <data name="SystemAction_GameBar_Desc" xml:space="preserve">
+    <value>打开 Xbox Game Bar 覆盖层</value>
+  </data>
+  <data name="SystemAction_Settings_Name" xml:space="preserve">
+    <value>设 置</value>
+  </data>
+  <data name="SystemAction_Settings_Desc" xml:space="preserve">
+    <value>打开 Windows 设置（Win+I）</value>
+  </data>
+  <data name="SystemAction_Explorer_Name" xml:space="preserve">
+    <value>文件资源管理器</value>
+  </data>
+  <data name="SystemAction_Explorer_Desc" xml:space="preserve">
+    <value>打开文件资源管理器（Win+E）</value>
+  </data>
+  <data name="SystemAction_Project_Name" xml:space="preserve">
+    <value>投 影</value>
+  </data>
+  <data name="SystemAction_Project_Desc" xml:space="preserve">
+    <value>打开投影面板（Win+P）</value>
+  </data>
+  <data name="SystemAction_Lock_Name" xml:space="preserve">
+    <value>锁 定</value>
+  </data>
+  <data name="SystemAction_Lock_Desc" xml:space="preserve">
+    <value>立即锁定此电脑（Win+L）</value>
+  </data>
+  <data name="SystemAction_PickerTitle" xml:space="preserve">
+    <value>为 {0} 指派系统动作</value>
+  </data>
+  <data name="App_RemoveSystemActionMessage" xml:space="preserve">
+    <value>移除 {0} 上的系统动作「{1}」？</value>
+  </data>
+  <data name="Grid_StatusSystemAction" xml:space="preserve">
+    <value>系统动作</value>
+  </data>
+  <data name="Picker_AddSystemAction" xml:space="preserve">
+    <value>添加系统动作</value>
+  </data>
+  <data name="SystemAction_ActionsHeader" xml:space="preserve">
+    <value>动作 · 点击切换</value>
+  </data>
+  <data name="SystemAction_Delete" xml:space="preserve">
+    <value>移除系统动作</value>
+  </data>
 </root>
