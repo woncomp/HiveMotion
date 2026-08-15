@@ -128,6 +128,12 @@
                       Data="M 2.8,6.5 V 4.5 A 2.7,2.7 0 0 1 8.2,4.5 V 6.5" />
                 <Border Margin="0,5.5,0,0" CornerRadius="1.8" Background="#E6FFD97A" />
             </Grid>
+
+            <!-- Folder badge: a small folder silhouette right above the hexagon's bottom tip -->
+            <Path x:Name="FolderBadge" Visibility="Collapsed" Width="14" Height="11"
+                  VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,11"
+                  Stretch="Uniform" Fill="#E6FFD97A"
+                  Data="M 0.5,2.5 H 5 L 6.5,4 H 13.5 V 11 H 0.5 Z" />
         </Grid>
 
         <!-- Hover glow (outside the cached layer: an opacity animation is a cheap blend that won't invalidate the bitmap cache) -->

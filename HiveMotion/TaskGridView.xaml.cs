@@ -65,6 +65,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
+    /// <summary>Backspace on the grid: pop one layer (folder → home).</summary>
+    public event EventHandler? BackRequested;
     /// <summary>Ctrl+P over a cell (grid hover or search highlight): pin or unpin it.</summary>
     public event EventHandler<HiveCell>? PinToggleRequested;
     /// <summary>Ctrl+R on the search-list highlight: open the app's file location.</summary>
@@ -130,13 +132,31 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         ArmMouse();
     }
 
+    private string? _activeFolderName;
+
     private void ApplyLocalizedStrings()
     {
-        EscHintText.Text = Loc.Get(_searching ? "Grid_HintExitSearch" : "Grid_HintClose");
+        UpdateEscHint();
         if (_searching)
             RebuildResults();
-        if (_previewMode == PreviewMode.LaunchInfo && _hoveredCell?.Pin != null)
-            ShowLaunchInfo(_hoveredCell.Pin);
+        if (_previewMode == PreviewMode.LaunchInfo && _hoveredCell != null)
+            ShowPreview(_hoveredCell);
+    }
+
+    /// <summary>Switches the grid chrome between the home layer and a folder layer.</summary>
+    public void SetActiveFolder(string? folderName)
+    {
+        _activeFolderName = folderName;
+        UpdateEscHint();
+    }
+
+    private void UpdateEscHint()
+    {
+        EscHintText.Text = _searching
+            ? Loc.Get("Grid_HintExitSearch")
+            : _activeFolderName != null
+                ? Loc.Format("Grid_HintBack", _activeFolderName)
+                : Loc.Get("Grid_HintClose");
     }
 
     public void SetBackdrop(System.Windows.Media.ImageSource? backdrop)
@@ -233,7 +253,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         BarSearch.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#A6F5B301");
         SpaceBarRidge.Opacity = 1;
-        EscHintText.Text = Loc.Get("Grid_HintExitSearch");
+        UpdateEscHint();
 
         SearchInput.Text = string.Empty;
         ResultPanel.Visibility = Visibility.Visible;
@@ -269,7 +289,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         BarIdle.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
         SpaceBarRidge.Opacity = 0.6;
-        EscHintText.Text = Loc.Get("Grid_HintClose");
+        UpdateEscHint();
 
         SplineAnimate(ResultPanel, UIElement.OpacityProperty, 0, 300);
         SplineAnimate(ResultPanelSlide, TranslateTransform.YProperty, 24, 300);
@@ -295,7 +315,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         BarIdle.Visibility = Visibility.Visible;
         SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
         SpaceBarRidge.Opacity = 0.6;
-        EscHintText.Text = Loc.Get("Grid_HintClose");
+        UpdateEscHint();
         ResultPanel.BeginAnimation(UIElement.OpacityProperty, null);
         ResultPanel.Opacity = 0;
         ResultPanelSlide.BeginAnimation(TranslateTransform.YProperty, null);
@@ -458,6 +478,12 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             e.Handled = true;
             return;
         }
+        if (key == Key.Back)
+        {
+            BackRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+            return;
+        }
         if (key == Key.Space)
         {
             EnterSearch();
@@ -573,13 +599,30 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             return;
         }
 
+        // Each motion kind declares its own hover content; plain running windows
+        // (no motion) fall back to the live thumbnail.
+        var hover = cell.Motion?.DescribeHover(cell)
+            ?? (cell.IsRunning ? MotionHoverPreview.Thumbnail : MotionHoverPreview.None);
+
+        switch (hover.Kind)
+        {
+            case MotionHoverKind.WindowThumbnail:
+                ShowThumbnailPreview(cell);
+                break;
+            case MotionHoverKind.Info:
+                ShowInfoPreview(cell, hover);
+                break;
+            default:
+                HidePreview();
+                break;
+        }
+    }
+
+    private void ShowThumbnailPreview(HiveCell cell)
+    {
         if (!cell.IsRunning)
         {
-            // Pinned-but-not-running: no window to thumbnail; show the launch identity instead.
-            if (cell.Pin != null)
-                ShowLaunchInfo(cell.Pin);
-            else
-                HidePreview();
+            HidePreview();
             return;
         }
 
@@ -620,15 +663,14 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             new Action(() => AttachThumbnail(handle)));
     }
 
-    private void ShowLaunchInfo(PinnedApp pin)
+    private void ShowInfoPreview(HiveCell cell, MotionHoverPreview info)
     {
         _dwmPreview.Hide();
         HoverPreviewViewport.Visibility = Visibility.Collapsed;
         LaunchInfoPanel.Visibility = Visibility.Visible;
-        LaunchInfoName.Text = pin.DisplayName;
-        LaunchInfoCommand.Text = string.IsNullOrEmpty(pin.WorkingDirectory)
-            ? pin.CommandLine
-            : Loc.Format("Grid_LaunchInfoWithDir", pin.CommandLine, pin.WorkingDirectory);
+        LaunchInfoName.Text = info.Title;
+        LaunchInfoCommand.Text = info.Detail;
+        LaunchInfoHint.Text = Loc.Get(cell.Folder != null ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
 
         bool wasVisible = _previewVisible;
         _previewVisible = true;

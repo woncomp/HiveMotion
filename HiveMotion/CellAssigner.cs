@@ -5,19 +5,20 @@ using System.Linq;
 namespace HiveMotion;
 
 /// <summary>
-/// Places running windows onto the keyboard hex grid.
-/// Decision chain: pinned apps reserve their letter first and only accept windows of the
-/// same program with the same arguments; then windows in user-priority order grab the
-/// cell matching their app's initial; losers take the nearest free cell around the one
-/// they wanted (second tier), after all exact matches are done.
+/// Places running windows and motions onto the keyboard hex grid.
+/// Home-layer decision chain: motions reserve their letter first (applications only
+/// accept windows of the same program with the same arguments; folders never match
+/// windows); then windows in user-priority order grab the cell matching their app's
+/// initial; losers take the nearest free cell around the one they wanted (second
+/// tier), after all exact matches are done.
 /// </summary>
 public sealed class CellAssigner
 {
-    private readonly IReadOnlyList<PinnedApp> _pins;
+    private readonly IReadOnlyList<Motion> _homeMotions;
 
-    public CellAssigner(IReadOnlyList<PinnedApp> pins)
+    public CellAssigner(IReadOnlyList<Motion> homeMotions)
     {
-        _pins = pins;
+        _homeMotions = homeMotions;
     }
 
     public IReadOnlyList<HiveCell> Assign(IReadOnlyList<RunningWindow> windows)
@@ -25,37 +26,18 @@ public sealed class CellAssigner
         var cells = new Dictionary<char, HiveCell>();
         var placed = new HashSet<RunningWindow>();
 
-        // 1. Pinned apps reserve their configured letter first.
-        foreach (var pin in _pins)
+        // 1. Motions reserve their configured letter first.
+        foreach (var motion in _homeMotions)
         {
-            var cell = new HiveCell
+            switch (motion)
             {
-                Letter = pin.Key,
-                Pin = pin,
-                AppName = pin.DisplayName,
-                Title = pin.DisplayName
-            };
-
-            // Scan order is z-order, so the first match is the topmost matching window.
-            var match = windows.FirstOrDefault(w => !placed.Contains(w) && pin.Matches(w));
-            if (match != null)
-            {
-                cell.WindowHandle = match.Handle;
-                cell.ProcessId = match.ProcessId;
-                cell.ProcessCreationFileTime = match.ProcessCreationFileTime;
-                cell.ProcessName = match.ProcessName;
-                cell.Title = match.Title;
-                cell.Icon = match.Icon;
-                cell.ExecutablePath = match.ExecutablePath;
-                cell.CommandLineArguments = match.CommandLineArguments;
-                placed.Add(match);
+                case ApplicationMotion app:
+                    cells[app.Key] = AssignApplication(app, windows, placed);
+                    break;
+                case FolderMotion folder:
+                    cells[folder.Key] = FolderCell(folder);
+                    break;
             }
-            else
-            {
-                cell.Icon = IconHelper.ForExecutable(pin.ExecutablePath);
-            }
-
-            cells[pin.Key] = cell;
         }
 
         // 2. Remaining windows, priority queue first (Edge, VS Code), z-order as tiebreak.
@@ -100,4 +82,69 @@ public sealed class CellAssigner
 
         return cells.Values.OrderBy(c => c.Letter).ToList();
     }
+
+    /// <summary>
+    /// Folder layer: only the folder's own items occupy cells. Unlike the home layer,
+    /// empty letters stay empty — scanned windows are never backfilled into a folder.
+    /// </summary>
+    public IReadOnlyList<HiveCell> AssignFolder(FolderMotion folder, IReadOnlyList<RunningWindow> windows)
+    {
+        var cells = new List<HiveCell>();
+        var placed = new HashSet<RunningWindow>();
+
+        foreach (var item in folder.Items)
+        {
+            switch (item)
+            {
+                case ApplicationMotion app:
+                    cells.Add(AssignApplication(app, windows, placed));
+                    break;
+                // Nesting is rejected at store load and in the manage center; ignore defensively.
+            }
+        }
+
+        return cells.OrderBy(c => c.Letter).ToList();
+    }
+
+    private static HiveCell AssignApplication(ApplicationMotion app, IReadOnlyList<RunningWindow> windows,
+        HashSet<RunningWindow> placed)
+    {
+        var cell = new HiveCell
+        {
+            Letter = app.Key,
+            Motion = app,
+            AppName = app.DisplayName,
+            Title = app.DisplayName
+        };
+
+        // Scan order is z-order, so the first match is the topmost matching window.
+        var match = windows.FirstOrDefault(w => !placed.Contains(w) && app.Matches(w));
+        if (match != null)
+        {
+            cell.WindowHandle = match.Handle;
+            cell.ProcessId = match.ProcessId;
+            cell.ProcessCreationFileTime = match.ProcessCreationFileTime;
+            cell.ProcessName = match.ProcessName;
+            cell.Title = match.Title;
+            cell.Icon = match.Icon;
+            cell.ExecutablePath = match.ExecutablePath;
+            cell.CommandLineArguments = match.CommandLineArguments;
+            placed.Add(match);
+        }
+        else
+        {
+            cell.Icon = IconHelper.ForExecutable(app.ExecutablePath);
+        }
+
+        return cell;
+    }
+
+    private static HiveCell FolderCell(FolderMotion folder) => new()
+    {
+        Letter = folder.Key,
+        Motion = folder,
+        AppName = folder.DisplayName,
+        Title = folder.DisplayName,
+        Icon = folder.IconPath.Length > 0 ? IconHelper.ForImageFile(folder.IconPath) : null
+    };
 }

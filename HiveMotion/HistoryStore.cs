@@ -17,7 +17,7 @@ public sealed class HistoryStore
     private const int MaxEntries = 200;
 
     private static readonly string StoreFile =
-        Path.Combine(PinStore.StoreDirectoryPath, "history.json");
+        Path.Combine(MotionStore.StoreDirectoryPath, "history.json");
 
     public List<HistoryEntry> Entries { get; } = new();
 
@@ -133,7 +133,7 @@ public sealed class HistoryStore
     {
         try
         {
-            Directory.CreateDirectory(PinStore.StoreDirectoryPath);
+            Directory.CreateDirectory(MotionStore.StoreDirectoryPath);
             File.WriteAllText(StoreFile,
                 JsonSerializer.Serialize(Entries, new JsonSerializerOptions { WriteIndented = true }));
         }

@@ -21,15 +21,16 @@ using Point = System.Windows.Point;
 namespace HiveMotion;
 
 /// <summary>
-/// Manage center: pin overview (drag a tile to move/swap its letter), pin editor,
-/// launch-history picker, and general settings. Edits write through to the stores
-/// immediately; the overlay picks them up on its next open.
+/// Manage center: motion overview (drag a tile to move/swap its letter), application
+/// and folder editors, launch-history picker, and general settings. Edits write
+/// through to the stores immediately; the overlay picks them up on its next open.
 /// </summary>
 public partial class ManageWindow : Window
 {
     private const string DragFormat = "HiveMotion.PinLetter";
+    private const string ChildDragFormat = "HiveMotion.FolderChildLetter";
 
-    private readonly PinStore _pinStore;
+    private readonly MotionStore _motionStore;
     private readonly HistoryStore _historyStore;
     private readonly SettingsStore _settingsStore;
     private readonly AutoStartManager _autoStartManager;
@@ -37,22 +38,31 @@ public partial class ManageWindow : Window
     private readonly Action _applyHotkeys;
     private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
     private readonly List<(Ellipse Dot, char Letter)> _tileDots = new();
+    private readonly List<(Ellipse Dot, ApplicationMotion App)> _childTileDots = new();
 
     private IReadOnlyList<RunningWindow> _windows = Array.Empty<RunningWindow>();
-    private PinnedApp? _selectedPin;
+    private ApplicationMotion? _selectedApp;
+    private FolderMotion? _selectedFolder;
+    /// <summary>Parent folder when the app editor edits a folder child; null for home-layer apps.</summary>
+    private FolderMotion? _selectedAppFolder;
     private char _pickerLetter;
+    /// <summary>Folder the picker is adding a child to; null when picking for the home layer.</summary>
+    private FolderMotion? _pickerFolder;
     private Action? _confirmAction;
     private bool _editorLoading;
     private bool _dragArmed;
     private char _dragLetter;
     private Point _dragStart;
+    private bool _childDragArmed;
+    private char _childDragLetter;
+    private Point _childDragStart;
     private bool _capturingHotkey;
 
-    public ManageWindow(PinStore pinStore, HistoryStore historyStore, SettingsStore settingsStore,
+    public ManageWindow(MotionStore motionStore, HistoryStore historyStore, SettingsStore settingsStore,
         AutoStartManager autoStartManager, WindowScanner windowScanner, Action applyHotkeys)
     {
         InitializeComponent();
-        _pinStore = pinStore;
+        _motionStore = motionStore;
         _historyStore = historyStore;
         _settingsStore = settingsStore;
         _autoStartManager = autoStartManager;
@@ -69,7 +79,7 @@ public partial class ManageWindow : Window
 
         AutoStartBox.IsChecked = _autoStartManager.IsAutoStartEnabled();
         VerboseLoggingBox.IsChecked = _settingsStore.Settings.VerboseLogging;
-        ConfigPathText.Text = PinStore.StoreDirectoryPath;
+        ConfigPathText.Text = MotionStore.StoreDirectoryPath;
         UpdateHistoryCount();
 
         _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -91,6 +101,11 @@ public partial class ManageWindow : Window
     {
         BuildLetterTiles();
         UpdateEditorStatus();
+        UpdateFolderStatus();
+        if (_selectedFolder != null)
+            BuildFolderChildTiles();
+        if (_selectedAppFolder != null)
+            EditorBackText.Text = Loc.Get("Folder_BackToFolder");
         UpdateHistoryCount();
         RefreshHotkeyUi();
         InitAboutPage();
@@ -113,9 +128,10 @@ public partial class ManageWindow : Window
         }
         UpdateTileStatus();
         UpdateEditorStatus();
+        UpdateChildTileStatus();
     }
 
-    private bool IsIdentityRunning(PinnedApp pin) => _windows.Any(pin.Matches);
+    private bool IsIdentityRunning(ApplicationMotion app) => _windows.Any(app.Matches);
 
     // ---------- navigation ----------
 
@@ -165,7 +181,7 @@ public partial class ManageWindow : Window
 
     private Border BuildTile(char letter)
     {
-        var pin = _pinStore.FindByKey(letter);
+        var motion = _motionStore.FindByKey(letter);
         var tile = new Border
         {
             Width = 60,
@@ -175,15 +191,15 @@ public partial class ManageWindow : Window
             BorderThickness = new Thickness(1),
             Tag = letter,
             AllowDrop = true,
-            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(pin != null ? "#1AFFFFFF" : "#0AFFFFFF")),
-            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(pin != null ? "#80F5B301" : "#26FFFFFF")),
-            ToolTip = pin != null ? $"{letter}: {pin.DisplayName}" : Loc.Format("Pins_PinToLetter", letter)
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(motion != null ? "#1AFFFFFF" : "#0AFFFFFF")),
+            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(motion != null ? "#80F5B301" : "#26FFFFFF")),
+            ToolTip = motion != null ? $"{letter}: {motion.DisplayName}" : Loc.Format("Pins_PinToLetter", letter)
         };
 
         var content = new Grid();
-        if (pin != null)
+        if (motion is ApplicationMotion app)
         {
-            var icon = IconHelper.ForExecutable(pin.ExecutablePath);
+            var icon = IconHelper.ForExecutable(app.ExecutablePath);
             var image = new Image
             {
                 Width = 28,
@@ -198,7 +214,7 @@ public partial class ManageWindow : Window
             {
                 content.Children.Add(new TextBlock
                 {
-                    Text = pin.DisplayName.Length > 0 ? pin.DisplayName.Substring(0, 1) : "?",
+                    Text = app.DisplayName.Length > 0 ? app.DisplayName.Substring(0, 1) : "?",
                     FontSize = 18,
                     FontWeight = FontWeights.Bold,
                     Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFFFFF")),
@@ -207,16 +223,7 @@ public partial class ManageWindow : Window
                 });
             }
 
-            content.Children.Add(new TextBlock
-            {
-                Text = letter.ToString(),
-                FontSize = 10,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCFFD97A")),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(6, 4, 0, 0)
-            });
+            content.Children.Add(BuildTileLetterBadge(letter));
 
             var dot = new Ellipse
             {
@@ -232,7 +239,42 @@ public partial class ManageWindow : Window
             tile.Cursor = Cursors.Hand;
             tile.PreviewMouseLeftButtonDown += OnTileDragStart;
             tile.PreviewMouseMove += OnTileDragMove;
-            tile.MouseLeftButtonUp += OnPinnedTileClick;
+            tile.MouseLeftButtonUp += OnOccupiedTileClick;
+        }
+        else if (motion is FolderMotion folder)
+        {
+            var icon = folder.IconPath.Length > 0 ? IconHelper.ForImageFile(folder.IconPath) : null;
+            if (icon != null)
+            {
+                var image = new Image
+                {
+                    Width = 28,
+                    Height = 28,
+                    Source = icon,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+                content.Children.Add(image);
+            }
+            else
+            {
+                content.Children.Add(BuildFolderGlyph(26));
+            }
+
+            content.Children.Add(BuildTileLetterBadge(letter));
+            // Folders have no running state; a small folder glyph takes the dot's place.
+            var badge = BuildFolderGlyph(10);
+            badge.HorizontalAlignment = HorizontalAlignment.Right;
+            badge.VerticalAlignment = VerticalAlignment.Bottom;
+            badge.Margin = new Thickness(0, 0, 5, 4);
+            badge.Opacity = 0.7;
+            content.Children.Add(badge);
+
+            tile.Cursor = Cursors.Hand;
+            tile.PreviewMouseLeftButtonDown += OnTileDragStart;
+            tile.PreviewMouseMove += OnTileDragMove;
+            tile.MouseLeftButtonUp += OnOccupiedTileClick;
         }
         else
         {
@@ -255,17 +297,42 @@ public partial class ManageWindow : Window
         return tile;
     }
 
+    private static TextBlock BuildTileLetterBadge(char letter) => new()
+    {
+        Text = letter.ToString(),
+        FontSize = 10,
+        FontWeight = FontWeights.Bold,
+        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCFFD97A")),
+        HorizontalAlignment = HorizontalAlignment.Left,
+        VerticalAlignment = VerticalAlignment.Top,
+        Margin = new Thickness(6, 4, 0, 0)
+    };
+
+    /// <summary>Shared folder silhouette (overlay badge, tiles, folder editor).</summary>
+    private static System.Windows.Shapes.Path BuildFolderGlyph(double width)
+    {
+        return new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 0.5,2.5 H 5 L 6.5,4 H 13.5 V 11 H 0.5 Z"),
+            Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E6FFD97A")),
+            Stretch = Stretch.Uniform,
+            Width = width,
+            Height = width * 11.0 / 14.0,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
     private void UpdateTileStatus()
     {
         foreach (var (dot, letter) in _tileDots)
         {
-            var pin = _pinStore.FindByKey(letter);
-            bool running = pin != null && IsIdentityRunning(pin);
+            bool running = _motionStore.FindByKey(letter) is ApplicationMotion app && IsIdentityRunning(app);
             dot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(running ? "#CC7CFC00" : "#59FFFFFF"));
         }
     }
 
-    // ---------- drag & drop ----------
+    // ---------- drag & drop (home layer) ----------
 
     private void OnTileDragStart(object sender, MouseButtonEventArgs e)
     {
@@ -301,7 +368,7 @@ public partial class ManageWindow : Window
         var tile = (Border)sender;
         char letter = (char)tile.Tag;
         tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-            _pinStore.FindByKey(letter) != null ? "#80F5B301" : "#26FFFFFF"));
+            _motionStore.FindByKey(letter) != null ? "#80F5B301" : "#26FFFFFF"));
     }
 
     private void OnTileDrop(object sender, DragEventArgs e)
@@ -315,76 +382,93 @@ public partial class ManageWindow : Window
         if (source == target)
             return;
 
-        var sourcePin = _pinStore.FindByKey(source);
-        if (sourcePin == null)
+        var sourceMotion = _motionStore.FindByKey(source);
+        if (sourceMotion == null)
             return;
-        var targetPin = _pinStore.FindByKey(target);
+        var targetMotion = _motionStore.FindByKey(target);
 
-        // Move to an empty letter, or swap with the occupying pin.
-        _pinStore.Remove(source);
-        _pinStore.Remove(target);
-        sourcePin.Key = target;
-        if (targetPin != null)
+        // Move to an empty letter, or swap with the occupying motion.
+        _motionStore.Remove(source);
+        _motionStore.Remove(target);
+        sourceMotion.Key = target;
+        if (targetMotion != null)
         {
-            targetPin.Key = source;
-            _pinStore.Set(targetPin);
+            targetMotion.Key = source;
+            _motionStore.Set(targetMotion);
         }
-        _pinStore.Set(sourcePin);
+        _motionStore.Set(sourceMotion);
 
         BuildLetterTiles();
-        ShowEditor(sourcePin);
+        ShowEditor(sourceMotion);
         e.Handled = true;
     }
 
-    private void OnPinnedTileClick(object sender, MouseButtonEventArgs e)
+    private void OnOccupiedTileClick(object sender, MouseButtonEventArgs e)
     {
         _dragArmed = false;
         char letter = (char)((Border)sender).Tag;
-        ShowEditor(_pinStore.FindByKey(letter));
+        ShowEditor(_motionStore.FindByKey(letter));
         e.Handled = true;
     }
 
     private void OnEmptyTileClick(object sender, MouseButtonEventArgs e)
     {
-        OpenPicker((char)((Border)sender).Tag);
+        OpenPicker((char)((Border)sender).Tag, null);
         e.Handled = true;
     }
 
     // ---------- editor ----------
 
-    private void ShowEditor(PinnedApp? pin)
+    private void ShowEditor(Motion? motion, FolderMotion? childParent = null)
     {
-        _selectedPin = pin;
+        _selectedApp = motion as ApplicationMotion;
+        _selectedFolder = motion as FolderMotion;
+        _selectedAppFolder = _selectedApp != null ? childParent : null;
         _editorLoading = true;
 
-        if (pin == null)
+        EditorEmpty.Visibility = motion == null ? Visibility.Visible : Visibility.Collapsed;
+        EditorPanel.Visibility = _selectedApp != null ? Visibility.Visible : Visibility.Collapsed;
+        FolderEditorPanel.Visibility = _selectedFolder != null ? Visibility.Visible : Visibility.Collapsed;
+
+        if (_selectedApp is { } app)
         {
-            EditorPanel.Visibility = Visibility.Collapsed;
-            EditorEmpty.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            EditorEmpty.Visibility = Visibility.Collapsed;
-            EditorPanel.Visibility = Visibility.Visible;
-            EditorLetterBadge.Text = pin.Key.ToString();
-            EditorIcon.Source = IconHelper.ForExecutable(pin.ExecutablePath);
-            EditorName.Text = pin.DisplayName;
-            EditorPath.Text = pin.ExecutablePath;
-            EditorArgs.Text = pin.Arguments;
-            EditorCwd.Text = pin.WorkingDirectory;
+            EditorLetterBadge.Text = app.Key.ToString();
+            EditorIcon.Source = IconHelper.ForExecutable(app.ExecutablePath);
+            EditorName.Text = app.DisplayName;
+            EditorPath.Text = app.ExecutablePath;
+            EditorArgs.Text = app.Arguments;
+            EditorCwd.Text = app.WorkingDirectory;
+            EditorBackButton.Visibility = _selectedAppFolder != null ? Visibility.Visible : Visibility.Collapsed;
+            EditorBackText.Text = Loc.Get("Folder_BackToFolder");
             UpdateEditorStatus();
             UpdatePreview();
             ValidatePath();
+        }
+        else if (_selectedFolder is { } folder)
+        {
+            FolderLetterBadge.Text = folder.Key.ToString();
+            FolderName.Text = folder.DisplayName;
+            FolderIconPath.Text = folder.IconPath;
+            UpdateFolderHeaderIcon();
+            UpdateFolderStatus();
+            BuildFolderChildTiles();
         }
 
         _editorLoading = false;
     }
 
+    private void OnEditorBackClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_selectedAppFolder != null)
+            ShowEditor(_selectedAppFolder);
+        e.Handled = true;
+    }
+
     private void UpdateEditorStatus()
     {
-        if (_selectedPin == null)
+        if (_selectedApp == null)
             return;
-        bool running = IsIdentityRunning(_selectedPin);
+        bool running = IsIdentityRunning(_selectedApp);
         EditorStatus.Text = Loc.Get(running ? "Pins_StatusRunning" : "Pins_StatusNotRunning");
         EditorStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
             running ? "#CC7CFC00" : "#66FFFFFF"));
@@ -409,18 +493,26 @@ public partial class ManageWindow : Window
     /// <summary>Edits write through immediately; every keystroke already updates the preview.</summary>
     private void CommitEditor()
     {
-        if (_editorLoading || _selectedPin == null)
+        if (_editorLoading || _selectedApp == null)
             return;
 
-        _selectedPin.DisplayName = EditorName.Text.Trim();
-        _selectedPin.ExecutablePath = EditorPath.Text.Trim();
-        _selectedPin.Arguments = EditorArgs.Text.Trim();
-        _selectedPin.WorkingDirectory = EditorCwd.Text.Trim();
+        _selectedApp.DisplayName = EditorName.Text.Trim();
+        _selectedApp.ExecutablePath = EditorPath.Text.Trim();
+        _selectedApp.Arguments = EditorArgs.Text.Trim();
+        _selectedApp.WorkingDirectory = EditorCwd.Text.Trim();
         // An empty display name falls back to the executable's file name.
-        if (_selectedPin.DisplayName.Length == 0 && _selectedPin.ExecutablePath.Length > 0)
-            _selectedPin.DisplayName = Path.GetFileNameWithoutExtension(_selectedPin.ExecutablePath);
-        _pinStore.Set(_selectedPin);
-        BuildLetterTiles();
+        if (_selectedApp.DisplayName.Length == 0 && _selectedApp.ExecutablePath.Length > 0)
+            _selectedApp.DisplayName = Path.GetFileNameWithoutExtension(_selectedApp.ExecutablePath);
+        if (_selectedAppFolder != null)
+        {
+            _motionStore.Save();
+            BuildFolderChildTiles();
+        }
+        else
+        {
+            _motionStore.Set(_selectedApp);
+            BuildLetterTiles();
+        }
         UpdateEditorStatus();
     }
 
@@ -474,21 +566,31 @@ public partial class ManageWindow : Window
     private void OnLaunchClick(object sender, MouseButtonEventArgs e)
     {
         CommitEditor();
-        if (_selectedPin != null && _selectedPin.ExecutablePath.Length > 0)
-            WindowManager.Launch(_selectedPin.ExecutablePath, _selectedPin.Arguments, _selectedPin.WorkingDirectory);
+        if (_selectedApp != null && _selectedApp.ExecutablePath.Length > 0)
+            WindowManager.Launch(_selectedApp.ExecutablePath, _selectedApp.Arguments, _selectedApp.WorkingDirectory);
         e.Handled = true;
     }
 
     private void OnDeletePinClick(object sender, MouseButtonEventArgs e)
     {
-        if (_selectedPin == null)
+        if (_selectedApp == null)
             return;
-        var pin = _selectedPin;
-        ShowConfirm(Loc.Format("Pins_DeleteConfirm", pin.Key, pin.DisplayName), () =>
+        var app = _selectedApp;
+        var parent = _selectedAppFolder;
+        ShowConfirm(Loc.Format("Pins_DeleteConfirm", app.Key, app.DisplayName), () =>
         {
-            _pinStore.Remove(pin.Key);
-            BuildLetterTiles();
-            ShowEditor(null);
+            if (parent != null)
+            {
+                parent.Items.RemoveAll(i => i.Key == app.Key);
+                _motionStore.Save();
+                ShowEditor(parent);
+            }
+            else
+            {
+                _motionStore.Remove(app.Key);
+                BuildLetterTiles();
+                ShowEditor(null);
+            }
         });
         e.Handled = true;
     }
@@ -497,20 +599,307 @@ public partial class ManageWindow : Window
     {
         ShowConfirm(Loc.Get("Pins_ClearAllConfirm"), () =>
         {
-            foreach (var pin in _pinStore.Pins.ToList())
-                _pinStore.Remove(pin.Key);
+            foreach (var motion in _motionStore.Home.ToList())
+                _motionStore.Remove(motion.Key);
             BuildLetterTiles();
             ShowEditor(null);
         });
         e.Handled = true;
     }
 
+    // ---------- folder editor ----------
+
+    private void CommitFolderEditor()
+    {
+        if (_editorLoading || _selectedFolder == null)
+            return;
+
+        _selectedFolder.DisplayName = FolderName.Text.Trim();
+        if (_selectedFolder.DisplayName.Length == 0)
+            _selectedFolder.DisplayName = Loc.Get("Folder_DefaultName");
+        _selectedFolder.IconPath = FolderIconPath.Text.Trim();
+        _motionStore.Save();
+        UpdateFolderHeaderIcon();
+        UpdateFolderStatus();
+        BuildLetterTiles();
+    }
+
+    private void OnFolderFieldLostFocus(object sender, RoutedEventArgs e) => CommitFolderEditor();
+
+    private void UpdateFolderHeaderIcon()
+    {
+        var icon = _selectedFolder != null && _selectedFolder.IconPath.Length > 0
+            ? IconHelper.ForImageFile(_selectedFolder.IconPath)
+            : null;
+        FolderEditorIcon.Source = icon;
+        FolderEditorIcon.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
+        FolderEditorGlyph.Visibility = icon != null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void UpdateFolderStatus()
+    {
+        if (_selectedFolder == null)
+            return;
+        FolderStatus.Text = Loc.Plural("Grid_FolderItemCount", _selectedFolder.Items.Count, _selectedFolder.Items.Count);
+    }
+
+    private void OnBrowseFolderIconClick(object sender, MouseButtonEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = Loc.Get("Dialog_ImageFilter"),
+            Title = Loc.Get("Dialog_SelectIcon")
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            FolderIconPath.Text = dialog.FileName;
+            CommitFolderEditor();
+        }
+        e.Handled = true;
+    }
+
+    private void OnClearFolderIconClick(object sender, MouseButtonEventArgs e)
+    {
+        FolderIconPath.Text = string.Empty;
+        CommitFolderEditor();
+        e.Handled = true;
+    }
+
+    private void OnDeleteFolderClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_selectedFolder == null)
+            return;
+        var folder = _selectedFolder;
+        ShowConfirm(Loc.Format("Folder_DeleteConfirm", folder.DisplayName), () =>
+        {
+            _motionStore.Remove(folder.Key);
+            BuildLetterTiles();
+            ShowEditor(null);
+        });
+        e.Handled = true;
+    }
+
+    // ---------- folder child tiles ----------
+
+    private void BuildFolderChildTiles()
+    {
+        FolderChildRows.Children.Clear();
+        _childTileDots.Clear();
+        if (_selectedFolder == null)
+            return;
+
+        foreach (var row in KeyGrid.Rows)
+        {
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+            foreach (char letter in row)
+                panel.Children.Add(BuildChildTile(letter));
+            FolderChildRows.Children.Add(panel);
+        }
+
+        UpdateChildTileStatus();
+    }
+
+    private Border BuildChildTile(char letter)
+    {
+        var item = _selectedFolder!.Items.FirstOrDefault(i => i.Key == letter);
+        var tile = new Border
+        {
+            Width = 46,
+            Height = 46,
+            Margin = new Thickness(3),
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            Tag = letter,
+            AllowDrop = true,
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item != null ? "#1AFFFFFF" : "#0AFFFFFF")),
+            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item != null ? "#80F5B301" : "#26FFFFFF")),
+            ToolTip = item != null ? $"{letter}: {item.DisplayName}" : Loc.Format("Pins_PinToLetter", letter)
+        };
+
+        var content = new Grid();
+        if (item is ApplicationMotion app)
+        {
+            var icon = IconHelper.ForExecutable(app.ExecutablePath);
+            var image = new Image
+            {
+                Width = 20,
+                Height = 20,
+                Source = icon,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+            content.Children.Add(image);
+            if (icon == null)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = app.DisplayName.Length > 0 ? app.DisplayName.Substring(0, 1) : "?",
+                    FontSize = 14,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFFFFF")),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+
+            content.Children.Add(new TextBlock
+            {
+                Text = letter.ToString(),
+                FontSize = 8,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCFFD97A")),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(4, 3, 0, 0)
+            });
+
+            var dot = new Ellipse
+            {
+                Width = 6,
+                Height = 6,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 4, 3)
+            };
+            content.Children.Add(dot);
+            _childTileDots.Add((dot, app));
+
+            tile.Cursor = Cursors.Hand;
+            tile.PreviewMouseLeftButtonDown += OnChildDragStart;
+            tile.PreviewMouseMove += OnChildDragMove;
+            tile.MouseLeftButtonUp += OnChildTileClick;
+        }
+        else
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = letter.ToString(),
+                FontSize = 13,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#59FFFFFF")),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            tile.Cursor = Cursors.Hand;
+            tile.MouseLeftButtonUp += OnChildEmptyTileClick;
+        }
+
+        tile.Child = content;
+        tile.Drop += OnChildTileDrop;
+        tile.DragEnter += OnChildDragEnter;
+        tile.DragLeave += OnChildDragLeave;
+        return tile;
+    }
+
+    private void UpdateChildTileStatus()
+    {
+        foreach (var (dot, app) in _childTileDots)
+        {
+            bool running = IsIdentityRunning(app);
+            dot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(running ? "#CC7CFC00" : "#59FFFFFF"));
+        }
+    }
+
+    private void OnChildTileClick(object sender, MouseButtonEventArgs e)
+    {
+        _childDragArmed = false;
+        if (_selectedFolder == null)
+            return;
+        char letter = (char)((Border)sender).Tag;
+        if (_selectedFolder.Items.FirstOrDefault(i => i.Key == letter) is { } item)
+            ShowEditor(item, _selectedFolder);
+        e.Handled = true;
+    }
+
+    private void OnChildEmptyTileClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_selectedFolder != null)
+            OpenPicker((char)((Border)sender).Tag, _selectedFolder);
+        e.Handled = true;
+    }
+
+    // ---------- drag & drop (folder children) ----------
+
+    private void OnChildDragStart(object sender, MouseButtonEventArgs e)
+    {
+        _childDragArmed = true;
+        _childDragStart = e.GetPosition(this);
+        _childDragLetter = (char)((Border)sender).Tag;
+    }
+
+    private void OnChildDragMove(object sender, MouseEventArgs e)
+    {
+        if (!_childDragArmed || e.LeftButton != MouseButtonState.Pressed)
+            return;
+        var pos = e.GetPosition(this);
+        if (Math.Abs(pos.X - _childDragStart.X) < 8 && Math.Abs(pos.Y - _childDragStart.Y) < 8)
+            return;
+        _childDragArmed = false;
+        DragDrop.DoDragDrop((Border)sender,
+            new DataObject(ChildDragFormat, _childDragLetter), DragDropEffects.Move);
+    }
+
+    private void OnChildDragEnter(object sender, DragEventArgs e)
+    {
+        var tile = (Border)sender;
+        if (!e.Data.GetDataPresent(ChildDragFormat))
+            return;
+        e.Effects = DragDropEffects.Move;
+        tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
+        e.Handled = true;
+    }
+
+    private void OnChildDragLeave(object sender, DragEventArgs e)
+    {
+        var tile = (Border)sender;
+        char letter = (char)tile.Tag;
+        bool occupied = _selectedFolder?.Items.Any(i => i.Key == letter) == true;
+        tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+            occupied ? "#80F5B301" : "#26FFFFFF"));
+    }
+
+    private void OnChildTileDrop(object sender, DragEventArgs e)
+    {
+        OnChildDragLeave(sender, e);
+        if (!e.Data.GetDataPresent(ChildDragFormat) || _selectedFolder == null)
+            return;
+
+        char target = (char)((Border)sender).Tag;
+        char source = (char)e.Data.GetData(ChildDragFormat);
+        if (source == target)
+            return;
+
+        var folder = _selectedFolder;
+        var sourceItem = folder.Items.FirstOrDefault(i => i.Key == source);
+        if (sourceItem == null)
+            return;
+        var targetItem = folder.Items.FirstOrDefault(i => i.Key == target);
+
+        // Move to an empty letter, or swap with the occupying child.
+        sourceItem.Key = target;
+        if (targetItem != null)
+            targetItem.Key = source;
+        _motionStore.Save();
+
+        BuildFolderChildTiles();
+        ShowEditor(sourceItem, folder);
+        e.Handled = true;
+    }
+
     // ---------- history picker ----------
 
-    private void OpenPicker(char letter)
+    private void OpenPicker(char letter, FolderMotion? folder)
     {
         _pickerLetter = letter;
+        _pickerFolder = folder;
         PickerTitle.Text = Loc.Format("Pins_PickerTitle", letter);
+        // Folders cannot nest, so the new-folder action only exists for the home layer.
+        PickerNewFolderButton.Visibility = folder == null ? Visibility.Visible : Visibility.Collapsed;
         PickerSearch.Text = string.Empty;
         RebuildPickerList();
         PickerOverlay.Visibility = Visibility.Visible;
@@ -636,7 +1025,7 @@ public partial class ManageWindow : Window
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
         row.MouseLeftButtonUp += (_, e) =>
         {
-            PickEntry(new PinnedApp
+            PickEntry(new ApplicationMotion
             {
                 Key = _pickerLetter,
                 ProcessName = entry.ProcessName,
@@ -650,12 +1039,39 @@ public partial class ManageWindow : Window
         return row;
     }
 
-    private void PickEntry(PinnedApp pin)
+    private void PickEntry(ApplicationMotion app)
     {
-        _pinStore.Set(pin);
+        if (_pickerFolder is { } folder)
+        {
+            folder.Items.RemoveAll(i => i.Key == app.Key);
+            folder.Items.Add(app);
+            _motionStore.Save();
+            ClosePicker();
+            // Rebuild the child grid, then open the new child in the app editor.
+            ShowEditor(folder);
+            ShowEditor(app, folder);
+        }
+        else
+        {
+            _motionStore.Set(app);
+            ClosePicker();
+            BuildLetterTiles();
+            ShowEditor(app);
+        }
+    }
+
+    private void OnPickerNewFolderClick(object sender, MouseButtonEventArgs e)
+    {
+        var folder = new FolderMotion
+        {
+            Key = _pickerLetter,
+            DisplayName = Loc.Get("Folder_DefaultName")
+        };
+        _motionStore.Set(folder);
         ClosePicker();
         BuildLetterTiles();
-        ShowEditor(pin);
+        ShowEditor(folder);
+        e.Handled = true;
     }
 
     private void OnPickerSearchChanged(object sender, TextChangedEventArgs e) => RebuildPickerList();
@@ -669,7 +1085,7 @@ public partial class ManageWindow : Window
         };
         if (dialog.ShowDialog(this) == true)
         {
-            PickEntry(new PinnedApp
+            PickEntry(new ApplicationMotion
             {
                 Key = _pickerLetter,
                 ExecutablePath = dialog.FileName,
@@ -986,11 +1402,11 @@ public partial class ManageWindow : Window
 
     private void OnOpenConfigDirClick(object sender, MouseButtonEventArgs e)
     {
-        Directory.CreateDirectory(PinStore.StoreDirectoryPath);
+        Directory.CreateDirectory(MotionStore.StoreDirectoryPath);
         Process.Start(new ProcessStartInfo
         {
             FileName = "explorer.exe",
-            Arguments = $"\"{PinStore.StoreDirectoryPath}\"",
+            Arguments = $"\"{MotionStore.StoreDirectoryPath}\"",
             UseShellExecute = true
         });
         e.Handled = true;
@@ -998,11 +1414,11 @@ public partial class ManageWindow : Window
 
     private void OnOpenPinsFileClick(object sender, MouseButtonEventArgs e)
     {
-        if (File.Exists(PinStore.PinsFilePath))
+        if (File.Exists(MotionStore.MotionsFilePath))
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = PinStore.PinsFilePath,
+                FileName = MotionStore.MotionsFilePath,
                 UseShellExecute = true
             });
         }
@@ -1023,8 +1439,10 @@ public partial class ManageWindow : Window
 
     private sealed class ConfigBundle
     {
-        public int Version { get; set; } = 1;
-        public List<PinnedApp>? Pins { get; set; }
+        public int Version { get; set; } = 2;
+        public List<Motion>? Motions { get; set; }
+        /// <summary>Legacy v1 backup payload: flat pins without a type discriminator.</summary>
+        public List<LegacyPin>? Pins { get; set; }
         public AppSettings? Settings { get; set; }
         public List<HistoryEntry>? History { get; set; }
     }
@@ -1044,7 +1462,7 @@ public partial class ManageWindow : Window
         {
             var bundle = new ConfigBundle
             {
-                Pins = _pinStore.Pins.ToList(),
+                Motions = _motionStore.Home.ToList(),
                 Settings = _settingsStore.Settings,
                 History = _historyStore.Entries.ToList()
             };
@@ -1080,7 +1498,7 @@ public partial class ManageWindow : Window
             ShowConfirm(Loc.Format("Backup_ImportParseFailed", ex.Message), () => { });
             return;
         }
-        if (bundle?.Pins == null && bundle?.Settings == null && bundle?.History == null)
+        if (bundle?.Motions == null && bundle?.Pins == null && bundle?.Settings == null && bundle?.History == null)
         {
             ShowConfirm(Loc.Get("Backup_ImportEmpty"), () => { });
             return;
@@ -1092,10 +1510,13 @@ public partial class ManageWindow : Window
 
     private void ApplyImport(ConfigBundle bundle)
     {
-        if (bundle.Pins != null)
+        if (bundle.Motions != null)
         {
-            _pinStore.ReplaceAll(bundle.Pins.Where(p =>
-                p.Key is >= 'A' and <= 'Z' && !string.IsNullOrEmpty(p.ExecutablePath)));
+            _motionStore.ReplaceAll(bundle.Motions);
+        }
+        else if (bundle.Pins != null)
+        {
+            _motionStore.ReplaceAll(bundle.Pins.Select(p => p.ToApplicationMotion()));
         }
         if (bundle.History != null)
         {
@@ -1128,7 +1549,7 @@ public partial class ManageWindow : Window
     private void InitAboutPage()
     {
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        VersionText.Text = Loc.Format("About_Version", version?.ToString() ?? "?", PinStore.StoreDirectoryPath);
+        VersionText.Text = Loc.Format("About_Version", version?.ToString() ?? "?", MotionStore.StoreDirectoryPath);
         UpdateCheatsheet();
     }
 
@@ -1141,6 +1562,7 @@ public partial class ManageWindow : Window
         AddCheatsheet("Ctrl + P", Loc.Get("Cheat_Pin"));
         AddCheatsheet("Ctrl + R", Loc.Get("Cheat_Reveal"));
         AddCheatsheet("Ctrl + S", Loc.Get("Cheat_CopyCmd"));
+        AddCheatsheet("Backspace", Loc.Get("Cheat_Back"));
         AddCheatsheet("Esc", Loc.Get("Cheat_Close"));
     }
 

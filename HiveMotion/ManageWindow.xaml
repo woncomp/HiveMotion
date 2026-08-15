@@ -147,6 +147,13 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
+                                        <Border x:Name="EditorBackButton" Padding="8,3" CornerRadius="6"
+                                                Background="#14FFFFFF" BorderBrush="#33FFFFFF" BorderThickness="1"
+                                                Cursor="Hand" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                Visibility="Collapsed" MouseLeftButtonUp="OnEditorBackClick">
+                                            <TextBlock x:Name="EditorBackText" Text="{l:Loc Folder_BackToFolder}"
+                                                       FontSize="11" Foreground="#BFFFFFFF" />
+                                        </Border>
                                         <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
                                                 BorderBrush="#80F5B301" BorderThickness="1"
                                                 VerticalAlignment="Center" Margin="0,0,8,0">
@@ -222,6 +229,79 @@
                                     <TextBlock Text="{l:Loc Pins_Delete}" FontSize="12" Foreground="#FFE5484D" />
                                 </Border>
                             </StackPanel>
+                        </Grid>
+
+                        <!-- Folder editor -->
+                        <Grid x:Name="FolderEditorPanel" Visibility="Collapsed">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <!-- Header: icon + name + item count -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
+                                                BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top">
+                                            <Grid>
+                                                <Image x:Name="FolderEditorIcon" Width="32" Height="32"
+                                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                                                <Path x:Name="FolderEditorGlyph" Width="26" Height="20" Stretch="Uniform"
+                                                      Fill="#E6FFD97A" Data="M 0.5,2.5 H 5 L 6.5,4 H 13.5 V 11 H 0.5 Z"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
+                                                        BorderBrush="#80F5B301" BorderThickness="1"
+                                                        VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <TextBlock x:Name="FolderLetterBadge" Text="N" FontSize="12"
+                                                               FontWeight="Bold" Foreground="#FFFFD97A" />
+                                                </Border>
+                                                <TextBox x:Name="FolderName" Style="{StaticResource FieldStyle}"
+                                                         FontSize="15" FontWeight="SemiBold" MinWidth="240"
+                                                         LostFocus="OnFolderFieldLostFocus" />
+                                            </StackPanel>
+                                            <TextBlock x:Name="FolderStatus" Text="" FontSize="11"
+                                                       Foreground="#66FFFFFF" Margin="2,6,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="64" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{l:Loc Folder_IconLabel}" Style="{StaticResource LabelStyle}" />
+                                        <TextBox x:Name="FolderIconPath" Grid.Column="1" Style="{StaticResource FieldStyle}"
+                                                 LostFocus="OnFolderFieldLostFocus" />
+                                        <Border Grid.Column="2" Style="{StaticResource ButtonStyle}"
+                                                Padding="10,5" Margin="8,0,0,0"
+                                                MouseLeftButtonUp="OnBrowseFolderIconClick">
+                                            <TextBlock Text="{l:Loc Common_Browse}" FontSize="12" Foreground="#BFFFFFFF" />
+                                        </Border>
+                                        <Border Grid.Column="3" Style="{StaticResource ButtonStyle}"
+                                                Padding="10,5" Margin="8,0,0,0"
+                                                MouseLeftButtonUp="OnClearFolderIconClick">
+                                            <TextBlock Text="{l:Loc Folder_ClearIcon}" FontSize="12" Foreground="#BFFFFFFF" />
+                                        </Border>
+                                    </Grid>
+
+                                    <TextBlock Text="{l:Loc Folder_ItemsHeader}" FontSize="11"
+                                               Foreground="#59FFFFFF" Margin="2,14,0,6" />
+                                    <StackPanel x:Name="FolderChildRows" HorizontalAlignment="Center" />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                        <Border Style="{StaticResource ButtonStyle}" BorderBrush="#80E5484D"
+                                                MouseLeftButtonUp="OnDeleteFolderClick">
+                                            <TextBlock Text="{l:Loc Folder_Delete}" FontSize="12" Foreground="#FFE5484D" />
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Grid>
                     </Grid>
                 </Border>
@@ -442,6 +522,10 @@
                         <TextBlock Text="{l:Loc Picker_Desc}" FontSize="10"
                                    Foreground="#59FFFFFF" VerticalAlignment="Center" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Border x:Name="PickerNewFolderButton" Style="{StaticResource ButtonStyle}" Padding="12,5"
+                                    Margin="0,0,10,0" MouseLeftButtonUp="OnPickerNewFolderClick">
+                                <TextBlock Text="{l:Loc Picker_NewFolder}" FontSize="12" Foreground="#BFFFFFFF" />
+                            </Border>
                             <Border Style="{StaticResource ButtonStyle}" Padding="12,5"
                                     MouseLeftButtonUp="OnPickerManualClick">
                                 <TextBlock Text="{l:Loc Picker_Manual}" FontSize="12" Foreground="#BFFFFFFF" />

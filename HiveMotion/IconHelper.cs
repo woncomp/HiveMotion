@@ -110,6 +110,71 @@ public static class IconHelper
         return result;
     }
 
+    private static readonly Dictionary<string, (DateTime Stamp, ImageSource? Image)> ImageFileCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Decodes a custom motion icon (png/ico/jpg/bmp; exe/dll falls back to the
+    /// associated icon) at a bounded size. Results are frozen and cached by path plus
+    /// last-write time, so the keyboard transition path never decodes.
+    /// </summary>
+    public static ImageSource? ForImageFile(string path)
+    {
+        DateTime stamp;
+        try
+        {
+            if (!File.Exists(path))
+                return null;
+            stamp = File.GetLastWriteTime(path);
+        }
+        catch
+        {
+            return null;
+        }
+
+        lock (CacheGate)
+        {
+            if (ImageFileCache.TryGetValue(path, out var cached) && cached.Stamp == stamp)
+                return cached.Image;
+        }
+
+        ImageSource? result;
+        if (path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            result = ForExecutable(path);
+        }
+        else
+        {
+            result = DecodeImageFile(path);
+        }
+
+        lock (CacheGate)
+            ImageFileCache[path] = (stamp, result);
+        return result;
+    }
+
+    private static ImageSource? DecodeImageFile(string path)
+    {
+        try
+        {
+            // 96px keeps the 48px cell icon crisp on 200% DPI displays.
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(path, UriKind.Absolute);
+            bitmap.DecodePixelWidth = 96;
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string? TryGetModulePath(Process process)
     {
         try

@@ -8,7 +8,7 @@ namespace HiveMotion;
 public sealed class SettingsStore
 {
     private static readonly string StoreFile =
-        Path.Combine(PinStore.StoreDirectoryPath, "settings.json");
+        Path.Combine(MotionStore.StoreDirectoryPath, "settings.json");
 
     public AppSettings Settings { get; private set; } = new();
 
@@ -21,7 +21,7 @@ public sealed class SettingsStore
     {
         try
         {
-            Directory.CreateDirectory(PinStore.StoreDirectoryPath);
+            Directory.CreateDirectory(MotionStore.StoreDirectoryPath);
             File.WriteAllText(StoreFile,
                 JsonSerializer.Serialize(Settings, new JsonSerializerOptions { WriteIndented = true }));
         }

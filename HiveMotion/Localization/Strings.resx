@@ -274,7 +274,7 @@
     <value>打开配置目录</value>
   </data>
   <data name="General_OpenPins" xml:space="preserve">
-    <value>打开 pins.json</value>
+    <value>打开 motions.json</value>
   </data>
   <data name="General_ClearHistory" xml:space="preserve">
     <value>清空启动历史</value>
@@ -479,5 +479,47 @@
   </data>
   <data name="General_VerboseLoggingDesc" xml:space="preserve">
     <value>将详细诊断信息写入日志文件并在实时日志查看器中显示。日常使用时建议关闭。</value>
+  </data>
+  <data name="Grid_HintBack" xml:space="preserve">
+    <value>返回「{0}」</value>
+  </data>
+  <data name="Cell_ClickToOpen" xml:space="preserve">
+    <value>点 击 进 入</value>
+  </data>
+  <data name="Grid_FolderItemCount" xml:space="preserve">
+    <value>{0} 个项目</value>
+  </data>
+  <data name="Folder_DefaultName" xml:space="preserve">
+    <value>新建文件夹</value>
+  </data>
+  <data name="Picker_NewFolder" xml:space="preserve">
+    <value>新建文件夹</value>
+  </data>
+  <data name="Folder_IconLabel" xml:space="preserve">
+    <value>图 标</value>
+  </data>
+  <data name="Folder_ClearIcon" xml:space="preserve">
+    <value>清 除</value>
+  </data>
+  <data name="Folder_ItemsHeader" xml:space="preserve">
+    <value>内容 · 拖拽调整字母，点击编辑</value>
+  </data>
+  <data name="Folder_Delete" xml:space="preserve">
+    <value>删除文件夹</value>
+  </data>
+  <data name="Folder_DeleteConfirm" xml:space="preserve">
+    <value>删除文件夹「{0}」?其中的项目将一并删除。</value>
+  </data>
+  <data name="Folder_BackToFolder" xml:space="preserve">
+    <value>← 返回文件夹</value>
+  </data>
+  <data name="Dialog_ImageFilter" xml:space="preserve">
+    <value>图片或程序 (*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe)|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe|所有文件 (*.*)|*.*</value>
+  </data>
+  <data name="Dialog_SelectIcon" xml:space="preserve">
+    <value>选择文件夹图标</value>
+  </data>
+  <data name="Cheat_Back" xml:space="preserve">
+    <value>返回上一级</value>
   </data>
 </root>

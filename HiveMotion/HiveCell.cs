@@ -3,7 +3,7 @@ using System.Windows.Media;
 
 namespace HiveMotion;
 
-/// <summary>A letter cell of the hive grid: a running window, or a pinned app reserved for relaunch.</summary>
+/// <summary>A letter cell of the hive grid: a running window, or a motion reserving the cell.</summary>
 public sealed class HiveCell
 {
     public char Letter { get; set; }
@@ -18,10 +18,14 @@ public sealed class HiveCell
     public string? ExecutablePath { get; set; }
     /// <summary>Command line argument tail with original quoting; null when unreadable or not running.</summary>
     public string? CommandLineArguments { get; set; }
-    public PinnedApp? Pin { get; set; }
+    /// <summary>The motion occupying this cell; null for plain scanned windows.</summary>
+    public Motion? Motion { get; set; }
 
     public bool IsRunning => WindowHandle != IntPtr.Zero;
-    public bool IsPinned => Pin != null;
+    /// <summary>Cell reserved by an application motion (the old "pinned" semantics).</summary>
+    public bool IsPinned => Motion is ApplicationMotion;
+    public ApplicationMotion? Application => Motion as ApplicationMotion;
+    public FolderMotion? Folder => Motion as FolderMotion;
 
     public static HiveCell FromWindow(char letter, RunningWindow window) => new()
     {

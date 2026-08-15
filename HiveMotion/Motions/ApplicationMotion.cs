@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace HiveMotion;
 
@@ -6,18 +7,17 @@ namespace HiveMotion;
 /// A cell reserved for one launch identity: an executable plus its argument set.
 /// The cell only ever matches windows of the same program launched with the same
 /// arguments, and can relaunch that command when the program is not running.
+/// (This is the semantic successor of the old pinned app.)
 /// </summary>
-public sealed class PinnedApp
+public sealed class ApplicationMotion : Motion
 {
-    public char Key { get; set; }
     public string ProcessName { get; set; } = string.Empty;
     public string ExecutablePath { get; set; } = string.Empty;
     /// <summary>Argument tail with original quoting; empty means "match any arguments".</summary>
     public string Arguments { get; set; } = string.Empty;
     public string WorkingDirectory { get; set; } = string.Empty;
-    public string DisplayName { get; set; } = string.Empty;
 
-    [System.Text.Json.Serialization.JsonIgnore]
+    [JsonIgnore]
     public string CommandLine =>
         string.IsNullOrEmpty(Arguments) ? ExecutablePath : $"{ExecutablePath} {Arguments}";
 
@@ -44,4 +44,16 @@ public sealed class PinnedApp
         string.IsNullOrWhiteSpace(arguments)
             ? string.Empty
             : string.Join(' ', arguments.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>Running: the window's live DWM thumbnail; not running: the launch identity.</summary>
+    public override MotionHoverPreview DescribeHover(HiveCell cell)
+    {
+        if (cell.IsRunning)
+            return MotionHoverPreview.Thumbnail;
+
+        string detail = string.IsNullOrEmpty(WorkingDirectory)
+            ? CommandLine
+            : Loc.Format("Grid_LaunchInfoWithDir", CommandLine, WorkingDirectory);
+        return MotionHoverPreview.Info(DisplayName, detail);
+    }
 }

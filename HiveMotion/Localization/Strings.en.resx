@@ -274,7 +274,7 @@ Working directory: {1}</value>
     <value>Open config folder</value>
   </data>
   <data name="General_OpenPins" xml:space="preserve">
-    <value>Open pins.json</value>
+    <value>Open motions.json</value>
   </data>
   <data name="General_ClearHistory" xml:space="preserve">
     <value>Clear launch history</value>
@@ -488,5 +488,50 @@ Working directory: {1}</value>
   </data>
   <data name="General_VerboseLoggingDesc" xml:space="preserve">
     <value>Write detailed diagnostics to the log file and the live log viewer. Keep off for normal use.</value>
+  </data>
+  <data name="Grid_HintBack" xml:space="preserve">
+    <value>Back to {0}</value>
+  </data>
+  <data name="Cell_ClickToOpen" xml:space="preserve">
+    <value>Click to open</value>
+  </data>
+  <data name="Grid_FolderItemCount" xml:space="preserve">
+    <value>{0} items</value>
+  </data>
+  <data name="Grid_FolderItemCount_One" xml:space="preserve">
+    <value>{0} item</value>
+  </data>
+  <data name="Folder_DefaultName" xml:space="preserve">
+    <value>New Folder</value>
+  </data>
+  <data name="Picker_NewFolder" xml:space="preserve">
+    <value>New folder</value>
+  </data>
+  <data name="Folder_IconLabel" xml:space="preserve">
+    <value>Icon</value>
+  </data>
+  <data name="Folder_ClearIcon" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Folder_ItemsHeader" xml:space="preserve">
+    <value>Items · drag to reassign, click to edit</value>
+  </data>
+  <data name="Folder_Delete" xml:space="preserve">
+    <value>Delete folder</value>
+  </data>
+  <data name="Folder_DeleteConfirm" xml:space="preserve">
+    <value>Delete folder "{0}"? Its items will be deleted with it.</value>
+  </data>
+  <data name="Folder_BackToFolder" xml:space="preserve">
+    <value>← Back to folder</value>
+  </data>
+  <data name="Dialog_ImageFilter" xml:space="preserve">
+    <value>Images or programs (*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe)|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe|All files (*.*)|*.*</value>
+  </data>
+  <data name="Dialog_SelectIcon" xml:space="preserve">
+    <value>Select folder icon</value>
+  </data>
+  <data name="Cheat_Back" xml:space="preserve">
+    <value>Back one level</value>
   </data>
 </root>

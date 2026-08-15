@@ -27,5 +27,5 @@ public sealed class HistoryEntry
     /// <summary>Case/whitespace-insensitive identity, shared by history and pin matching.</summary>
     public static string Key(string executablePath, string? arguments) =>
         executablePath.ToLowerInvariant() + "\u0001" +
-        PinnedApp.NormalizeArguments(arguments).ToLowerInvariant();
+        ApplicationMotion.NormalizeArguments(arguments).ToLowerInvariant();
 }

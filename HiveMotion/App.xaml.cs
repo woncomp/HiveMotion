@@ -26,7 +26,7 @@ public partial class App : System.Windows.Application
     private WindowScanner? _windowScanner;
     private WindowSnapshotService? _windowSnapshots;
     private CellAssigner? _cellAssigner;
-    private PinStore? _pinStore;
+    private MotionStore? _motionStore;
     private HistoryStore? _historyStore;
     private SettingsStore? _settingsStore;
     private ManageWindow? _manageWindow;
@@ -35,6 +35,8 @@ public partial class App : System.Windows.Application
 
     private OverlayState _state = OverlayState.Hidden;
     private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
+    /// <summary>The folder layer currently shown in the overlay; null means the home layer.</summary>
+    private FolderMotion? _activeFolder;
     private IntPtr _previousForeground;
     private int _overlayGeneration;
 
@@ -49,7 +51,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _pinStore = new PinStore();
+        _motionStore = new MotionStore();
         _historyStore = new HistoryStore();
         _settingsStore = new SettingsStore();
         Logger.IsVerboseEnabled = _settingsStore.Settings.VerboseLogging;
@@ -59,10 +61,22 @@ public partial class App : System.Windows.Application
         _windowSnapshots = new WindowSnapshotService(_windowScanner);
         _windowSnapshots.SnapshotPublished += OnSnapshotPublished;
         _windowSnapshots.Start();
-        _cellAssigner = new CellAssigner(_pinStore.Pins);
+        _cellAssigner = new CellAssigner(_motionStore.Home);
         _overlayWindow = new OverlayWindow();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
-        _overlayWindow.CloseRequested += (_, _) => CloseOverlay(restoreFocus: true);
+        _overlayWindow.CloseRequested += (_, _) =>
+        {
+            // Esc pops one layer at a time: folder → home, home → close.
+            if (_activeFolder != null)
+                ExitFolder();
+            else
+                CloseOverlay(restoreFocus: true);
+        };
+        _overlayWindow.BackRequested += (_, _) =>
+        {
+            if (_activeFolder != null)
+                ExitFolder();
+        };
         _overlayWindow.PinToggleRequested += (_, cell) => TogglePin(cell);
         _overlayWindow.RevealRequested += (_, cell) => RevealCell(cell);
         _overlayWindow.CopyCommandRequested += (_, cell) => CopyCellCommandLine(cell);
@@ -93,6 +107,17 @@ public partial class App : System.Windows.Application
         _keyboardHook = BuildKeyboardHook();
         _keyboardHook.Start();
         Logger.Info("Application startup initialized tray icon and global keyboard hook.");
+
+        // Decode folder icons off the keyboard path; entering a folder must not pay it.
+        var homeMotions = _motionStore.Home;
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            foreach (var folder in homeMotions.OfType<FolderMotion>())
+            {
+                if (folder.IconPath.Length > 0)
+                    IconHelper.ForImageFile(folder.IconPath);
+            }
+        });
     }
 
     private GlobalKeyboardHook BuildKeyboardHook()
@@ -176,6 +201,7 @@ public partial class App : System.Windows.Application
         Logger.Info($"Captured previous foreground handle={FormatHandle(_previousForeground)}.", correlationId, channel);
 
         ++_overlayGeneration;
+        _activeFolder = null;
         var snapshot = _windowSnapshots!.Latest;
         Logger.Info($"Snapshot state: {(snapshot == null ? "empty" : $"ready with {snapshot.Windows.Count} windows")}.", correlationId, channel);
         timing.Checkpoint(snapshot == null ? "snapshot-empty-shell" : "snapshot-ready");
@@ -186,13 +212,14 @@ public partial class App : System.Windows.Application
         _state = OverlayState.TaskGrid;
         _keyboardHook!.IsOverlayOpen = true;
         Logger.Info("Updated overlay and keyboard-hook state to open.", correlationId, channel);
+        _overlayWindow!.SetActiveFolder(null);
         _overlayWindow!.ShowTaskGrid(cells, timing, correlationId, channel);
         if (snapshot != null)
             RecordHistoryWhenIdle(snapshot.Windows);
         _windowSnapshots.RequestRefresh();
     }
 
-    /// <summary>Re-scans and rebuilds the grid in place after a pin/unpin, keeping the overlay open.</summary>
+    /// <summary>Re-scans and rebuilds the current layer in place, keeping the overlay open.</summary>
     private void RefreshTaskGrid()
     {
         try
@@ -203,7 +230,7 @@ public partial class App : System.Windows.Application
                 _windowSnapshots.RequestRefresh();
                 return;
             }
-            var cells = _cellAssigner!.Assign(snapshot.Windows);
+            var cells = AssignCurrentLayer(snapshot.Windows);
             _currentCells = cells;
             _overlayWindow!.UpdateCells(cells);
         }
@@ -213,6 +240,12 @@ public partial class App : System.Windows.Application
         }
     }
 
+    /// <summary>Folder layers hold only the folder's items; the home layer takes the full assignment.</summary>
+    private IReadOnlyList<HiveCell> AssignCurrentLayer(IReadOnlyList<RunningWindow> windows) =>
+        _activeFolder is { } folder
+            ? _cellAssigner!.AssignFolder(folder, windows)
+            : _cellAssigner!.Assign(windows);
+
     private void OnSnapshotPublished(object? sender, WindowSnapshot snapshot)
     {
         // The worker never touches WPF or history state. A newer snapshot may replace an empty/older grid.
@@ -221,7 +254,7 @@ public partial class App : System.Windows.Application
             if (_state != OverlayState.TaskGrid)
                 return;
             int generation = _overlayGeneration;
-            var cells = _cellAssigner!.Assign(snapshot.Windows);
+            var cells = AssignCurrentLayer(snapshot.Windows);
             if (_state == OverlayState.TaskGrid && generation == _overlayGeneration)
             {
                 _currentCells = cells;
@@ -252,7 +285,7 @@ public partial class App : System.Windows.Application
         if (_manageWindow == null)
         {
             // Manage's occasional UI-thread scans use their own cache; the snapshot scanner is single-worker.
-            _manageWindow = new ManageWindow(_pinStore!, _historyStore!, _settingsStore!,
+            _manageWindow = new ManageWindow(_motionStore!, _historyStore!, _settingsStore!,
                 _autoStartManager!, new WindowScanner(_settingsStore!.Settings.PriorityProcessNames), ApplyHotkeySettings);
             _manageWindow.Closed += (_, _) => _manageWindow = null;
             _manageWindow.Show();
@@ -287,20 +320,21 @@ public partial class App : System.Windows.Application
     /// <summary>
     /// Ctrl+P on a cell. Pinned cells (running or not) ask for removal; running unpinned
     /// cells capture their process identity (same program, same arguments) as a new pin.
+    /// Only meaningful on the home layer; folders are edited in the manage center.
     /// </summary>
     private void TogglePin(HiveCell cell)
     {
-        if (_state != OverlayState.TaskGrid)
+        if (_state != OverlayState.TaskGrid || _activeFolder != null)
             return;
 
-        if (cell.Pin is { } pin)
+        if (cell.Application is { } app)
         {
             _overlayWindow!.ShowConfirm(
-                Loc.Format("App_UnpinMessage", pin.Key, pin.DisplayName, pin.CommandLine),
+                Loc.Format("App_UnpinMessage", app.Key, app.DisplayName, app.CommandLine),
                 Loc.Get("App_UnpinConfirm"),
                 () =>
                 {
-                    _pinStore!.Remove(pin.Key);
+                    _motionStore!.Remove(app.Key);
                     RefreshTaskGrid();
                 });
             return;
@@ -339,7 +373,7 @@ public partial class App : System.Windows.Application
             workingDirectory = currentDirectory ?? string.Empty;
         }
 
-        var existing = _pinStore!.FindByIdentity(executablePath, arguments);
+        var existing = _motionStore!.FindAppByIdentity(executablePath, arguments);
         if (existing != null && existing.Key != cell.Letter)
         {
             _overlayWindow!.ShowConfirm(
@@ -347,15 +381,15 @@ public partial class App : System.Windows.Application
                 Loc.Get("App_MovePinConfirm"),
                 () =>
                 {
-                    _pinStore.Remove(existing.Key);
+                    _motionStore.Remove(existing.Key);
                     existing.Key = cell.Letter;
-                    _pinStore.Set(existing);
+                    _motionStore.Set(existing);
                     RefreshTaskGrid();
                 });
             return;
         }
 
-        _pinStore.Set(new PinnedApp
+        _motionStore.Set(new ApplicationMotion
         {
             Key = cell.Letter,
             ProcessName = cell.ProcessName,
@@ -374,7 +408,7 @@ public partial class App : System.Windows.Application
     /// <summary>Ctrl+R in the search list: reveal the app's executable in Explorer.</summary>
     private void RevealCell(HiveCell cell)
     {
-        if (_state != OverlayState.TaskGrid)
+        if (_state != OverlayState.TaskGrid || _activeFolder != null)
             return;
 
         if (IsUwpCell(cell))
@@ -383,7 +417,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        string? path = cell.ExecutablePath ?? cell.Pin?.ExecutablePath;
+        string? path = cell.ExecutablePath ?? cell.Application?.ExecutablePath;
         if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
         {
             _overlayWindow!.ShowConfirm(Loc.Get("App_NoLaunchPath"), Loc.Get("Common_Ok"), null);
@@ -402,7 +436,7 @@ public partial class App : System.Windows.Application
     /// <summary>Ctrl+S in the search list: copy exe path + original arguments to the clipboard.</summary>
     private void CopyCellCommandLine(HiveCell cell)
     {
-        if (_state != OverlayState.TaskGrid)
+        if (_state != OverlayState.TaskGrid || _activeFolder != null)
             return;
 
         if (IsUwpCell(cell))
@@ -411,14 +445,14 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        string? path = cell.ExecutablePath ?? cell.Pin?.ExecutablePath;
+        string? path = cell.ExecutablePath ?? cell.Application?.ExecutablePath;
         if (string.IsNullOrEmpty(path))
         {
             _overlayWindow!.ShowConfirm(Loc.Get("App_NoLaunchPath"), Loc.Get("Common_Ok"), null);
             return;
         }
 
-        string arguments = cell.CommandLineArguments ?? cell.Pin?.Arguments ?? string.Empty;
+        string arguments = cell.CommandLineArguments ?? cell.Application?.Arguments ?? string.Empty;
         string text = path.Contains(' ') ? $"\"{path}\"" : path;
         if (arguments.Length > 0)
             text += " " + arguments;
@@ -449,6 +483,13 @@ public partial class App : System.Windows.Application
 
     private void ActivateCell(HiveCell cell)
     {
+        // Folder activation swaps the grid contents in place; the overlay stays open.
+        if (cell.Folder is { } folder)
+        {
+            EnterFolder(folder);
+            return;
+        }
+
         // A deliberate switch, not a cancel: focus goes to the chosen window, not back.
         _previousForeground = IntPtr.Zero;
         // Mark hidden up front so the Deactivated handler stays a no-op during the switch.
@@ -471,12 +512,29 @@ public partial class App : System.Windows.Application
                 return;
             }
         }
-        else if (cell.Pin != null)
+        else if (cell.Application is { } app)
         {
             // Relaunch the pinned program with the exact arguments it was pinned with.
-            WindowManager.Launch(cell.Pin.ExecutablePath, cell.Pin.Arguments, cell.Pin.WorkingDirectory);
+            WindowManager.Launch(app.ExecutablePath, app.Arguments, app.WorkingDirectory);
         }
         CloseOverlay(restoreFocus: false);
+    }
+
+    /// <summary>Folder activation swaps the grid contents in place; the overlay stays open.</summary>
+    private void EnterFolder(FolderMotion folder)
+    {
+        _activeFolder = folder;
+        _overlayWindow!.SetActiveFolder(folder.DisplayName);
+        RefreshTaskGrid();
+        _windowSnapshots!.RequestRefresh();
+    }
+
+    /// <summary>Esc/Backspace inside a folder pops back to the home layer without closing.</summary>
+    private void ExitFolder()
+    {
+        _activeFolder = null;
+        _overlayWindow!.SetActiveFolder(null);
+        RefreshTaskGrid();
     }
 
     private void CloseOverlay(bool restoreFocus, string? correlationId = null, LogChannel channel = LogChannel.Default)
@@ -484,6 +542,7 @@ public partial class App : System.Windows.Application
         Logger.Info($"Closing overlay; restoreFocus={restoreFocus}; state={_state}.", correlationId, channel);
         ++_overlayGeneration;
         _state = OverlayState.Hidden;
+        _activeFolder = null;
         if (_keyboardHook != null)
             _keyboardHook.IsOverlayOpen = false;
         _overlayWindow!.HideOverlay();

@@ -55,12 +55,16 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
             : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCF5C542"));
         CaptionText.FontSize = cell.IsRunning ? 11 : 10;
 
-        // Pinned but not running: an extra "click to launch" line under the name
+        // Pinned but not running: an extra "click to launch" line under the name;
+        // folders get the "click to open" variant.
         bool awaitingLaunch = cell.IsPinned && !cell.IsRunning;
-        HintText.Visibility = awaitingLaunch ? Visibility.Visible : Visibility.Collapsed;
+        bool isFolder = cell.Folder != null;
+        HintText.Text = Loc.Get(isFolder ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
+        HintText.Visibility = awaitingLaunch || isFolder ? Visibility.Visible : Visibility.Collapsed;
 
-        // A padlock at the hexagon's bottom tip marks pinned cells
+        // A padlock marks application cells, a folder silhouette marks folder cells
         PinBadge.Visibility = cell.IsPinned ? Visibility.Visible : Visibility.Collapsed;
+        FolderBadge.Visibility = isFolder ? Visibility.Visible : Visibility.Collapsed;
 
         if (cell.Icon != null)
         {

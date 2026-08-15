@@ -39,6 +39,7 @@ public partial class OverlayWindow : Window
 
         TaskGrid.CellChosen += (_, cell) => CellChosen?.Invoke(this, cell);
         TaskGrid.CloseRequested += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
+        TaskGrid.BackRequested += (_, _) => BackRequested?.Invoke(this, EventArgs.Empty);
         TaskGrid.PinToggleRequested += (_, cell) => PinToggleRequested?.Invoke(this, cell);
         TaskGrid.RevealRequested += (_, cell) => RevealRequested?.Invoke(this, cell);
         TaskGrid.CopyCommandRequested += (_, cell) => CopyCommandRequested?.Invoke(this, cell);
@@ -47,6 +48,8 @@ public partial class OverlayWindow : Window
 
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
+    /// <summary>Backspace on the grid: pop one layer (folder → home).</summary>
+    public event EventHandler? BackRequested;
     public event EventHandler<HiveCell>? PinToggleRequested;
     public event EventHandler<HiveCell>? RevealRequested;
     public event EventHandler<HiveCell>? CopyCommandRequested;
@@ -55,6 +58,10 @@ public partial class OverlayWindow : Window
     /// <summary>Rebuilds the cells in place after a pin change, without re-showing the overlay.</summary>
     public void UpdateCells(IReadOnlyList<HiveCell> cells) =>
         Dispatcher.BeginInvoke(() => TaskGrid.SetCells(cells));
+
+    /// <summary>Switches the grid chrome (Esc hint) between the home layer and a folder layer.</summary>
+    public void SetActiveFolder(string? folderName) =>
+        Dispatcher.BeginInvoke(() => TaskGrid.SetActiveFolder(folderName));
 
     /// <summary>Modal in-overlay question; null action shows a dismiss-only notice.</summary>
     public void ShowConfirm(string message, string confirmText, Action? onConfirm) =>
