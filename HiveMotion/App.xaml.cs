@@ -78,7 +78,7 @@ public partial class App : System.Windows.Application
         _overlayWindow.Hide();
 
         _autoStartManager = new AutoStartManager();
-        _trayIconManager = new TrayIconManager(_autoStartManager);
+        _trayIconManager = new TrayIconManager();
         _trayIconManager.ExitRequested += (_, _) => Shutdown();
         _trayIconManager.ManageRequested += (_, _) => Dispatcher.BeginInvoke(ShowManageWindow);
         _trayIconManager.LogRequested += (_, _) => Dispatcher.BeginInvoke(ShowLogWindow);

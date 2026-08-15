@@ -70,9 +70,6 @@
   <data name="Tray_Manage" xml:space="preserve">
     <value>Manage center…</value>
   </data>
-  <data name="Tray_AutoStart" xml:space="preserve">
-    <value>Run at startup</value>
-  </data>
   <data name="Tray_Exit" xml:space="preserve">
     <value>Exit</value>
   </data>
