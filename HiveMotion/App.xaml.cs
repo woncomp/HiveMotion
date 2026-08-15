@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Threading;
 using HiveMotion.Localization;
+using HiveMotion.ManageCenter;
 
 namespace HiveMotion;
 

@@ -18,7 +18,7 @@ using Orientation = System.Windows.Controls.Orientation;
 using Path = System.IO.Path;
 using Point = System.Windows.Point;
 
-namespace HiveMotion;
+namespace HiveMotion.ManageCenter;
 
 /// <summary>
 /// Manage center: motion overview (drag a tile to move/swap its letter), application
