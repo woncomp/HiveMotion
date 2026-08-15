@@ -37,6 +37,11 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private NativeMethods.POINT _mouseAnchor;
     private readonly DwmThumbnailPreview _dwmPreview = new();
 
+    private IReadOnlyList<HiveCell>? _pendingCells;
+    private System.Windows.Threading.DispatcherTimer? _transitionTimer;
+    private int _transitionGeneration;
+    private SearchTransitionState _transitionState;
+
     /// <summary>Physical pixels the cursor must travel from its show-time anchor before it re-arms.</summary>
     private const int MouseWakeThreshold = 6;
 
@@ -45,6 +50,14 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         None,
         Thumbnail,
         LaunchInfo
+    }
+
+    private enum SearchTransitionState
+    {
+        Overview,
+        Entering,
+        Search,
+        Exiting
     }
 
     /// <summary>HWND of the owning overlay window; the DWM thumbnail draws into it.</summary>
@@ -133,6 +146,20 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     public void SetCells(IReadOnlyList<HiveCell> cells)
     {
+        if (_transitionState is SearchTransitionState.Entering or SearchTransitionState.Exiting)
+        {
+            // The scanner refreshes shortly after the overlay opens. Applying it while
+            // cached surfaces are moving invalidates every cache and visibly interrupts
+            // the transition, so retain only the newest update until it is stable.
+            _pendingCells = cells;
+            return;
+        }
+
+        ApplyCells(cells, resetSearch: !_searching);
+    }
+
+    private void ApplyCells(IReadOnlyList<HiveCell> cells, bool resetSearch)
+    {
         _cells = cells;
         _hoveredCell = null;
         HideConfirm();
@@ -151,15 +178,21 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             }
         }
 
-        _previewVisible = false;
-        _previewMode = PreviewMode.None;
-        _dwmPreview.Hide();
-        HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
-        HoverPreview.Opacity = 0;
-        CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
-        CopyToast.Opacity = 0;
+        if (resetSearch)
+        {
+            _previewVisible = false;
+            _previewMode = PreviewMode.None;
+            _dwmPreview.Hide();
+            HoverPreview.BeginAnimation(UIElement.OpacityProperty, null);
+            HoverPreview.Opacity = 0;
+            CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
+            CopyToast.Opacity = 0;
+            ExitSearchImmediate();
+        }
 
-        ExitSearchImmediate();
+        // Build the result tree before Space is pressed. Reopening the panel can now
+        // reuse this layout and cache instead of allocating controls on the hot path.
+        RebuildResults();
     }
 
     /// <summary>Creates the fixed A-Z visual pool once; reopening only swaps model content.</summary>
@@ -193,6 +226,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (_searching)
             return;
         _searching = true;
+        _transitionState = SearchTransitionState.Entering;
         HidePreview();
 
         BarIdle.Visibility = Visibility.Collapsed;
@@ -202,8 +236,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         EscHintText.Text = Loc.Get("Grid_HintExitSearch");
 
         SearchInput.Text = string.Empty;
-        RebuildResults();
         ResultPanel.Visibility = Visibility.Visible;
+        ResultPanel.IsHitTestVisible = false;
         SplineAnimate(ResultPanel, UIElement.OpacityProperty, 1, 400);
         SplineAnimate(ResultPanelSlide, TranslateTransform.YProperty, 0, 400);
 
@@ -213,7 +247,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             view.SetSearching(true);
         }
 
-        SearchInput.Focus();
+        FocusSearchAfterFirstRender();
+        ScheduleTransitionCompletion(620, SearchTransitionState.Search);
     }
 
     public void ExitSearch()
@@ -221,6 +256,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (!_searching)
             return;
         _searching = false;
+        _transitionState = SearchTransitionState.Exiting;
 
         // Return keyboard focus to the window itself: with null focus (ClearFocus)
         // no routed key events fire at all and the grid hotkeys go dead.
@@ -237,23 +273,22 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
         SplineAnimate(ResultPanel, UIElement.OpacityProperty, 0, 300);
         SplineAnimate(ResultPanelSlide, TranslateTransform.YProperty, 24, 300);
-        var panel = ResultPanel;
-        Dispatcher.BeginInvoke(new Action(() =>
-        {
-            if (!_searching)
-                panel.Visibility = Visibility.Collapsed;
-        }), System.Windows.Threading.DispatcherPriority.Background);
+        ResultPanel.IsHitTestVisible = false;
 
         foreach (var view in _cellViews)
         {
             view.IsHitTestVisible = true;
             view.SetSearching(false);
         }
+        ScheduleTransitionCompletion(620, SearchTransitionState.Overview);
     }
 
     private void ExitSearchImmediate()
     {
         _searching = false;
+        _transitionGeneration++;
+        _transitionTimer?.Stop();
+        _transitionState = SearchTransitionState.Overview;
         _query = string.Empty;
         SearchInput.Text = string.Empty;
         BarSearch.Visibility = Visibility.Collapsed;
@@ -263,12 +298,66 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         EscHintText.Text = Loc.Get("Grid_HintClose");
         ResultPanel.BeginAnimation(UIElement.OpacityProperty, null);
         ResultPanel.Opacity = 0;
-        ResultPanel.Visibility = Visibility.Collapsed;
+        ResultPanelSlide.BeginAnimation(TranslateTransform.YProperty, null);
+        ResultPanelSlide.Y = 24;
+        ResultPanel.Visibility = Visibility.Visible;
+        ResultPanel.IsHitTestVisible = false;
         foreach (var view in _cellViews)
         {
             view.IsHitTestVisible = true;
             view.ResetSearchTransforms();
         }
+    }
+
+    private void ScheduleTransitionCompletion(int durationMilliseconds, SearchTransitionState completedState)
+    {
+        _transitionTimer?.Stop();
+        int generation = ++_transitionGeneration;
+        var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(durationMilliseconds)
+        };
+        _transitionTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (generation != _transitionGeneration)
+                return;
+
+            _transitionState = completedState;
+            bool searchIsReady = completedState == SearchTransitionState.Search;
+            ResultPanel.IsHitTestVisible = searchIsReady;
+            ApplyPendingCells(resetSearch: !searchIsReady);
+        };
+        timer.Start();
+    }
+
+    private void ApplyPendingCells(bool resetSearch)
+    {
+        if (_pendingCells == null)
+            return;
+
+        var cells = _pendingCells;
+        _pendingCells = null;
+        ApplyCells(cells, resetSearch);
+    }
+
+    private void FocusSearchAfterFirstRender()
+    {
+        EventHandler? rendered = null;
+        rendered = (_, _) =>
+        {
+            CompositionTarget.Rendering -= rendered;
+            if (!_searching || _transitionState != SearchTransitionState.Entering)
+                return;
+
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, new Action(() =>
+            {
+                if (_searching && _transitionState == SearchTransitionState.Entering)
+                    SearchInput.Focus();
+            }));
+        };
+        CompositionTarget.Rendering += rendered;
     }
 
     private void OnSearchTextChanged(object sender, TextChangedEventArgs e)

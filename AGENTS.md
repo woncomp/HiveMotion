@@ -56,6 +56,52 @@ When creating Git worktrees, create them under the `<repo>/worktrees/` directory
 This is a folder to keep critical design changes or difficult issues that are easy to break again. They are there to remind developers and agents to be careful of some unobvious details.
 When the user asks, the agent may summarize the key details while implementing the last request, and create a document in the `IssueHistory` folder, the file name pattern is `{YYMMDD}-{brief-title}.md`.
 
+## High-Performance UI and Animation
+
+HiveMotion is a latency-sensitive desktop UI. Treat every keyboard-triggered transition as a real-time rendering path, even when it contains only a few controls. WPF cost is often dominated by layout, cache invalidation, text/effect rasterization, dispatcher contention, and allocations rather than the number of visible objects.
+
+### Performance targets
+
+- Design for 144 Hz on a normal hardware-rendered desktop. A 144 Hz frame has a 6.94 ms total budget; leave headroom for DWM composition and other applications.
+- The input handler that starts a transition must do only bounded state changes and animation starts. Window enumeration, icon extraction, backdrop capture, filtering, visual-tree construction, logging, and other variable-duration work must happen before or after the transition.
+- Optimize frame-time consistency, not only average FPS. One 30-50 ms frame is visible even when the remaining frames are fast.
+- Do not assume a small visual tree is cheap. Measure invalidation and render cost before deciding that a path is lightweight.
+
+### WPF rendering rules
+
+- Animate `RenderTransform` and `Opacity`. Do not animate width, height, margin, padding, canvas position, visibility, or other properties that trigger measure or arrange.
+- Cache the complete expensive subtree with `BitmapCache` when it moves as one unit. Put the animated transform on the cached element or its parent so text, gradients, geometry, icons, blurs, and shadows are not rasterized every frame.
+- Size `BitmapCache.RenderAtScale` for the largest temporary scale used by the animation. Avoid excessive values that waste GPU memory.
+- Do not change content inside a moving cached subtree. Queue and coalesce model or snapshot updates until the transition reaches a stable state.
+- Avoid animated `DropShadowEffect`, blur, opacity masks, clipping geometry, and nested effects. If an effect is required, rasterize it before motion and animate the resulting cached surface.
+- Reuse and freeze WPF `Freezable` objects such as brushes, geometries, key splines, and reusable animation templates when possible. Avoid per-frame allocation and minimize per-transition allocation.
+- Keep hardware rendering enabled. If `RenderCapability.Tier` shows a non-hardware tier, prefer a deliberate reduced-effects mode rather than allowing expensive software-rendered effects to stutter.
+
+### Transition architecture
+
+- Pre-create fixed visual pools for the 26 hive cells and bounded search-result rows. Update model content on existing controls; never clear and recreate the tree in a keyboard transition.
+- Keep frequently opened panels measured and arranged while hidden with `Opacity="0"` and disabled hit testing when memory cost is acceptable. Avoid changing from `Collapsed` to `Visible` on the first transition frame.
+- Model multi-stage animations with explicit states such as `Overview`, `Entering`, `Search`, and `Exiting`.
+- While entering or exiting, retain only the newest background refresh and apply it after the animation completes. Bind callbacks, timers, and deferred work to a transition generation so stale work cannot modify a newer state.
+- Do not post a dispatcher callback that collapses or rebuilds a visual before its animation actually finishes.
+- When focus changes are required, allow the first visual frame to render before focusing an input control. Preserve keyboard routing during the delay.
+- Prewarm caches and visual pools before the user can trigger the transition. Prewarming must not activate, foreground, or visibly flash the overlay window.
+
+### Data and background work
+
+- Publish immutable window snapshots and consume an already prepared snapshot on the UI thread.
+- Run window scanning, process identity resolution, icon loading, history I/O, and filtering away from the animation path. Marshal only the final bounded update to the UI dispatcher.
+- Coalesce bursty scanner notifications. The UI must not rebuild cells multiple times for intermediate snapshots that the user will never see.
+- Cache decoded icons at the required display size. Do not decode or resize image sources during motion.
+
+### Measurement and verification
+
+- Instrument from input receipt through dispatcher entry, animation start, first `CompositionTarget.Rendering`, transition completion, and queued-update application.
+- Record maximum frame time and dropped/late frames in addition to average FPS. Correlate with WPF/ETW or Windows Performance Analyzer traces when a regression is not obvious from code.
+- Validate Release builds at 60 Hz and high refresh rates, on multi-DPI and 4K displays, and with enough windows to fill all cells and search rows.
+- Confirm that pressing Space during a scanner refresh does not cancel, restart, or visibly alter the transition.
+- A performance change is incomplete until the project builds cleanly and the affected transition is manually exercised. Use Computer Use for that manual verification only when the user explicitly requests it.
+
 ## Computer Use
 
 You may have access to a Computer Use facility in your development environment.

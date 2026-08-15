@@ -6,15 +6,11 @@
              Background="Transparent"
              Cursor="Hand"
              FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei">
-    <Grid>
-        <Grid x:Name="CellRoot">
-        <!-- Bitmap cache: shadows/gradients rasterize once; slide/zoom/fade don't trigger per-frame redraws (fixes smearing and stutter) -->
+    <Grid x:Name="MotionRoot">
+        <!-- The transform sits above the cache, so the full cell moves as one texture. -->
         <Grid.CacheMode>
-            <BitmapCache EnableClearType="False" RenderAtScale="1" SnapsToDevicePixels="False" />
+            <BitmapCache EnableClearType="False" RenderAtScale="1.125" SnapsToDevicePixels="False" />
         </Grid.CacheMode>
-        <Grid.Effect>
-            <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="22" ShadowDepth="10" Direction="90" RenderingBias="Quality" />
-        </Grid.Effect>
         <Grid.RenderTransform>
             <TransformGroup>
                 <TranslateTransform x:Name="ShiftTransform" X="0" />
@@ -22,6 +18,10 @@
                 <ScaleTransform x:Name="HoverScaleTransform" CenterX="66" CenterY="76" ScaleX="1" ScaleY="1" />
             </TransformGroup>
         </Grid.RenderTransform>
+        <Grid x:Name="CellRoot">
+        <Grid.Effect>
+            <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="22" ShadowDepth="10" Direction="90" RenderingBias="Quality" />
+        </Grid.Effect>
 
         <!-- Honey-gold gradient border layer -->
         <Path Data="M 66,0 L 132,38 132,114 66,152 0,114 0,38 Z">
@@ -81,23 +81,8 @@
         </Grid>
         </Grid>
 
-        <!-- Text layer: kept outside the bitmap cache so hover/search scaling
-             re-rasterizes glyphs as vectors every frame instead of stretching a
-             cached bitmap, keeping text sharp at any scale. Transforms are bound
-             1:1 to CellRoot's transforms so the layers stay in sync. -->
+        <!-- Caption, keycap, and badge inherit MotionRoot's cached transform. -->
         <Grid IsHitTestVisible="False">
-            <Grid.RenderTransform>
-                <TransformGroup>
-                    <TranslateTransform X="{Binding X, ElementName=ShiftTransform}" />
-                    <ScaleTransform CenterX="66" CenterY="76"
-                                    ScaleX="{Binding ScaleX, ElementName=SearchScaleTransform}"
-                                    ScaleY="{Binding ScaleY, ElementName=SearchScaleTransform}" />
-                    <ScaleTransform CenterX="66" CenterY="76"
-                                    ScaleX="{Binding ScaleX, ElementName=HoverScaleTransform}"
-                                    ScaleY="{Binding ScaleY, ElementName=HoverScaleTransform}" />
-                </TransformGroup>
-            </Grid.RenderTransform>
-
             <!-- Caption area, still clipped to the hexagon so text cannot spill -->
             <Grid>
                 <Grid.Clip>

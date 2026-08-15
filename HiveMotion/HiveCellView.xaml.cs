@@ -79,10 +79,9 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
 
     private void SetHover(bool hover)
     {
-        // Only the scale transforms and the external glow overlay animate; nothing
-        // inside the bitmap-cached grid changes, so the cache survives the animation.
-        // The text layer lives outside the cache and follows the same transforms via
-        // bindings, re-rasterizing glyphs as vectors so text stays sharp while scaling.
+        // The parent bitmap cache contains the entire cell. Its transform moves the
+        // cached surface without redrawing text, keycap shadows, or vector fills.
+        // Hover glow changes only on pointer movement, never in the Space transition.
         double scale = hover ? 1.06 : 1.0;
         SplineAnimate(HoverScaleTransform, ScaleTransform.ScaleXProperty, scale, 300);
         SplineAnimate(HoverScaleTransform, ScaleTransform.ScaleYProperty, scale, 300);
@@ -94,6 +93,9 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
     {
         if (_cell == null)
             return;
+
+        if (searching)
+            ResetHoverVisuals();
 
         var center = KeyGrid.CenterOf(_cell.Letter);
         bool isLeftSide = center.X < KeyGrid.CutX;
@@ -119,6 +121,16 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         SearchScaleTransform.ScaleX = 1;
         SearchScaleTransform.ScaleY = 1;
         Opacity = 1;
+    }
+
+    private void ResetHoverVisuals()
+    {
+        HoverScaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        HoverScaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        HoverGlow.BeginAnimation(OpacityProperty, null);
+        HoverScaleTransform.ScaleX = 1;
+        HoverScaleTransform.ScaleY = 1;
+        HoverGlow.Opacity = 0;
     }
 
     private static void SplineAnimate(IAnimatable target, DependencyProperty property, double to, double durationMs, double delayMs = 0)
