@@ -75,6 +75,9 @@ internal static class NativeMethods
     public static extern int DwmRegisterThumbnail(IntPtr hwndDestination, IntPtr hwndSource, out IntPtr phThumbnailId);
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
+    public static extern int DwmQueryThumbnailSourceSize(IntPtr hThumbnail, out SIZE pSize);
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
     public static extern int DwmUpdateThumbnailProperties(IntPtr hThumbnailId, ref DWM_THUMBNAIL_PROPERTIES ptnProperties);
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -87,6 +90,13 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT lpwndpl);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SIZE
+    {
+        public int cx;
+        public int cy;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

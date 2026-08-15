@@ -498,6 +498,15 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         HoverPreviewViewport.Visibility = Visibility.Visible;
 
         var (contentW, contentH) = GetWindowContentSize(cell.WindowHandle);
+        if (!_dwmPreview.TryRegister(OverlayHwnd, cell.WindowHandle, out var sourceSize))
+        {
+            HidePreview();
+            return;
+        }
+
+        if (sourceSize.cx > 40 && sourceSize.cy > 40)
+            (contentW, contentH) = (sourceSize.cx, sourceSize.cy);
+
         if (contentW <= 0)
         {
             HidePreview();
@@ -541,7 +550,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void AttachThumbnail(IntPtr sourceHwnd)
     {
-        if (!_previewVisible || _previewMode != PreviewMode.Thumbnail || OverlayHwnd == IntPtr.Zero)
+        if (!_previewVisible || _previewMode != PreviewMode.Thumbnail || OverlayHwnd == IntPtr.Zero ||
+            _dwmPreview.CurrentSource != sourceHwnd)
             return;
 
         var dpi = VisualTreeHelper.GetDpi(this);
@@ -558,7 +568,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             Right = (int)Math.Round(topLeft.X - windowRect.Left + HoverPreviewViewport.ActualWidth * dpi.DpiScaleX),
             Bottom = (int)Math.Round(topLeft.Y - windowRect.Top + HoverPreviewViewport.ActualHeight * dpi.DpiScaleY)
         };
-        _dwmPreview.Show(OverlayHwnd, sourceHwnd, rect);
+        _dwmPreview.Show(rect);
     }
 
     private void HidePreview()
