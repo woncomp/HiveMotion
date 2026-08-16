@@ -134,7 +134,7 @@ Create Git worktrees under the `<repo>/worktrees/` directory. This folder is ign
 
 ## IssueHistory
 
-Critical design changes or issues that are easy to regress should be recorded in the `IssueHistory/` folder. When the user asks, summarize the key details while implementing the request and create a document named `{YYMMDD}-{brief-title}.md`.
+Critical design changes or issues that are easy to regress should be recorded in the `docs/IssueHistory/` folder. When the user asks, summarize the key details while implementing the request and create a document named `{YYMMDD}-{brief-title}.md`.
 
 ## Code Style Guidelines
 
