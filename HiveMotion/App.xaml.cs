@@ -84,8 +84,10 @@ public partial class App : System.Windows.Application
         _overlayWindow.Deactivated += (_, _) =>
         {
             // Clicking elsewhere dismisses the launcher (standard launcher behavior);
-            // without this the topmost grid would linger visible but unfocused.
-            if (_state == OverlayState.TaskGrid)
+            // without this the topmost grid would linger visible but unfocused. A WPF
+            // deactivation can arrive during the native activation handoff, before this
+            // presentation has ever owned foreground; that transition is not dismissal.
+            if (_state == OverlayState.TaskGrid && _overlayWindow.HasConfirmedForegroundActivation)
                 CloseOverlay(restoreFocus: false);
         };
         // Materialize the HWND while hidden so first activation does not pay window creation.

@@ -9,15 +9,24 @@ public static class WindowManager
     private const LogChannel ActivationChannel = LogChannel.Activation;
 
     /// <summary>Performs one foreground attempt without retrying or sleeping.</summary>
-    public static void ActivateWindowOnce(IntPtr hWnd, string? correlationId = null)
+    /// <returns><see langword="true"/> only when the target is foreground after the attempt.</returns>
+    public static bool ActivateWindowOnce(IntPtr hWnd, string? correlationId = null)
     {
         if (hWnd == IntPtr.Zero)
         {
             Logger.Warning("Window activation skipped because the handle was zero.", correlationId, ActivationChannel);
-            return;
+            return false;
         }
 
-        Logger.Info($"Starting window activation; handle={FormatHandle(hWnd)}.", correlationId, ActivationChannel);
+        IntPtr foregroundBefore = NativeMethods.GetForegroundWindow();
+        if (foregroundBefore == hWnd)
+        {
+            Logger.Info($"Window activation skipped; target is already foreground. handle={FormatHandle(hWnd)}.", correlationId, ActivationChannel);
+            return true;
+        }
+
+        Logger.Info($"Starting window activation; handle={FormatHandle(hWnd)}; foregroundBefore={FormatHandle(foregroundBefore)}.",
+            correlationId, ActivationChannel);
 
         if (NativeMethods.IsIconic(hWnd))
         {
@@ -25,9 +34,8 @@ public static class WindowManager
             Logger.Info("Restored minimized target window before activation.", correlationId, ActivationChannel);
         }
 
-        IntPtr foreground = NativeMethods.GetForegroundWindow();
-        uint foregroundThread = foreground != IntPtr.Zero
-            ? NativeMethods.GetWindowThreadProcessId(foreground, out _)
+        uint foregroundThread = foregroundBefore != IntPtr.Zero
+            ? NativeMethods.GetWindowThreadProcessId(foregroundBefore, out _)
             : 0;
         uint targetThread = NativeMethods.GetWindowThreadProcessId(hWnd, out _);
         uint currentThread = NativeMethods.GetCurrentThreadId();
@@ -43,11 +51,12 @@ public static class WindowManager
         if (attachedForeground || attachedTarget)
             Logger.Info($"Attached input threads; foreground={attachedForeground}; target={attachedTarget}.", correlationId, ActivationChannel);
 
+        bool broughtToTop = false;
+        bool setForeground = false;
         try
         {
-            NativeMethods.BringWindowToTop(hWnd);
-            bool setForeground = NativeMethods.SetForegroundWindow(hWnd);
-            Logger.Info($"SetForegroundWindow completed; success={setForeground}.", correlationId, ActivationChannel);
+            broughtToTop = NativeMethods.BringWindowToTop(hWnd);
+            setForeground = NativeMethods.SetForegroundWindow(hWnd);
         }
         finally
         {
@@ -58,6 +67,14 @@ public static class WindowManager
             if (attachedForeground || attachedTarget)
                 Logger.Info("Detached input threads.", correlationId, ActivationChannel);
         }
+
+        IntPtr foregroundAfter = NativeMethods.GetForegroundWindow();
+        bool confirmed = foregroundAfter == hWnd;
+        Logger.Info(
+            $"Window activation completed; bringToTop={broughtToTop}; setForeground={setForeground}; " +
+            $"foregroundAfter={FormatHandle(foregroundAfter)}; confirmed={confirmed}.",
+            correlationId, ActivationChannel);
+        return confirmed;
     }
 
     public static void Launch(string executablePath, string? arguments = null, string? workingDirectory = null)
@@ -111,9 +128,7 @@ public static class WindowManager
                 return;
             }
 
-            ActivateWindowOnce(hWnd, correlationId);
-
-            if (NativeMethods.GetForegroundWindow() == hWnd)
+            if (ActivateWindowOnce(hWnd, correlationId))
             {
                 Logger.Info($"Target window became foreground after {attempt + 1} attempt(s).", correlationId, ActivationChannel);
                 return;

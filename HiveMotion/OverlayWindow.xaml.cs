@@ -18,6 +18,10 @@ public partial class OverlayWindow : Window
     private int _activationGeneration;
     private int _activationRetryCount;
     private bool _firstWpfRenderForActivation;
+    private bool _hasConfirmedForegroundActivation;
+    private bool _isHiding;
+    private string? _activationCorrelationId;
+    private LogChannel _activationChannel;
     private ActivationTiming? _activationTiming;
     private EventHandler? _firstRenderHandler;
 
@@ -54,6 +58,9 @@ public partial class OverlayWindow : Window
     public event EventHandler<HiveCell>? RevealRequested;
     public event EventHandler<HiveCell>? CopyCommandRequested;
     public event EventHandler? FirstWpfRender;
+
+    /// <summary>True after this presentation has owned the Win32 foreground at least once.</summary>
+    internal bool HasConfirmedForegroundActivation => _hasConfirmedForegroundActivation;
 
     /// <summary>Rebuilds the cells in place after a pin change, without re-showing the overlay.</summary>
     public void UpdateCells(IReadOnlyList<HiveCell> cells) =>
@@ -101,9 +108,13 @@ public partial class OverlayWindow : Window
         }
         Logger.Info($"Queued overlay visual presentation for {cells.Count} cells.", correlationId, channel);
         _activationTiming = timing;
+        _activationCorrelationId = correlationId;
+        _activationChannel = channel;
         _activationTiming?.Checkpoint("overlay-ui-start");
         int generation = ++_activationGeneration;
         _firstWpfRenderForActivation = false;
+        _hasConfirmedForegroundActivation = false;
+        _isHiding = false;
         DisarmFirstRenderNotification();
         CancelActivationRetries();
         MoveToCursorScreen(correlationId, channel);
@@ -130,24 +141,27 @@ public partial class OverlayWindow : Window
         Show();
         _activationTiming?.Checkpoint("overlay-shown");
         Logger.Info("Overlay window Show completed.", correlationId, channel);
-        bool focused = Focus();
-        Logger.Info($"Overlay focus requested; result={focused}.", correlationId, channel);
         // Re-assert the top of the topmost band: when activation is denied, another
         // always-on-top window would otherwise cover the grid.
         NativeMethods.SetWindowPos(TaskGrid.OverlayHwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
-        // One non-sleeping foreground attempt is allowed on the activation path.
-        WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd, correlationId);
+        if (!ConfirmForegroundActivation(generation, correlationId, channel))
+        {
+            // One non-sleeping foreground attempt is allowed on the activation path.
+            if (WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd, correlationId))
+                ConfirmForegroundActivation(generation, correlationId, channel);
+        }
         // Windows may apply its own DPI-suggested rect on the cross-DPI hop; re-assert ours.
         Dispatcher.BeginInvoke(() =>
         {
             ApplyScreenBounds();
             Logger.Info($"Re-applied screen bounds; {DescribeGeometry()}.", correlationId, channel);
         });
-        ScheduleActivationRetries(generation);
+        if (!_hasConfirmedForegroundActivation)
+            ScheduleActivationRetries(generation, correlationId, channel);
     }
 
-    private void ScheduleActivationRetries(int generation)
+    private void ScheduleActivationRetries(int generation, string? correlationId, LogChannel channel)
     {
         _activationRetryCount = 0;
         _activationRetryTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -166,20 +180,40 @@ public partial class OverlayWindow : Window
                 return;
             if (++_activationRetryCount > 2)
             {
+                Logger.Warning("Overlay foreground activation retries were exhausted; leaving the visible overlay available for mouse or hotkey interaction.",
+                    correlationId, channel);
                 CancelActivationRetries();
                 return;
             }
-            if (NativeMethods.GetForegroundWindow() == TaskGrid.OverlayHwnd)
+            if (ConfirmForegroundActivation(generation, correlationId, channel))
             {
-                CancelActivationRetries();
                 return;
             }
             // Exactly one non-sleeping foreground attempt per dispatcher tick.
-            WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd);
+            if (WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd, correlationId))
+                ConfirmForegroundActivation(generation, correlationId, channel);
             NativeMethods.SetWindowPos(TaskGrid.OverlayHwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
                 NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
         };
         _activationRetryTimer.Start();
+    }
+
+    /// <summary>Arms click-away dismissal only after the native foreground window is the overlay.</summary>
+    private bool ConfirmForegroundActivation(int generation, string? correlationId, LogChannel channel)
+    {
+        if (generation != _activationGeneration || !IsVisible ||
+            NativeMethods.GetForegroundWindow() != TaskGrid.OverlayHwnd)
+            return false;
+
+        if (_hasConfirmedForegroundActivation)
+            return true;
+
+        _hasConfirmedForegroundActivation = true;
+        CancelActivationRetries();
+        Logger.Info($"Overlay foreground ownership confirmed; handle={FormatHandle(TaskGrid.OverlayHwnd)}.", correlationId, channel);
+        bool focused = Focus();
+        Logger.Info($"Overlay focus requested after foreground confirmation; result={focused}.", correlationId, channel);
+        return true;
     }
 
     private void CancelActivationRetries()
@@ -214,7 +248,15 @@ public partial class OverlayWindow : Window
 
     protected override void OnDeactivated(EventArgs e)
     {
-        CancelActivationRetries();
+        if (_hasConfirmedForegroundActivation)
+        {
+            CancelActivationRetries();
+        }
+        else if (!_isHiding)
+        {
+            Logger.Info("Ignored overlay deactivation before Win32 foreground ownership was confirmed.",
+                _activationCorrelationId, _activationChannel);
+        }
         base.OnDeactivated(e);
     }
 
@@ -226,6 +268,8 @@ public partial class OverlayWindow : Window
     }
 
     private System.Windows.Forms.Screen _screen = System.Windows.Forms.Screen.PrimaryScreen!;
+
+    private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
 
     public string DescribeGeometry() =>
         $"screen={_screen.DeviceName} bounds={_screen.Bounds} window=({Left},{Top},{Width},{Height})";
@@ -414,6 +458,8 @@ public partial class OverlayWindow : Window
 
     public void HideOverlay()
     {
+        _hasConfirmedForegroundActivation = false;
+        _isHiding = true;
         Dispatcher.BeginInvoke(() =>
         {
             ++_activationGeneration;
