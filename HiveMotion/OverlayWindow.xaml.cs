@@ -62,6 +62,9 @@ public partial class OverlayWindow : Window
     /// <summary>True after this presentation has owned the Win32 foreground at least once.</summary>
     internal bool HasConfirmedForegroundActivation => _hasConfirmedForegroundActivation;
 
+    /// <summary>Native HWND used to validate foreground ownership.</summary>
+    internal IntPtr WindowHandle => TaskGrid.OverlayHwnd;
+
     /// <summary>Rebuilds the cells in place after a pin change, without re-showing the overlay.</summary>
     public void UpdateCells(IReadOnlyList<HiveCell> cells) =>
         Dispatcher.BeginInvoke(() => TaskGrid.SetCells(cells));

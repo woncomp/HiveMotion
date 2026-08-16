@@ -61,6 +61,7 @@ public partial class App : System.Windows.Application
         _windowScanner = new WindowScanner(_settingsStore.Settings.PriorityProcessNames);
         _windowSnapshots = new WindowSnapshotService(_windowScanner);
         _windowSnapshots.SnapshotPublished += OnSnapshotPublished;
+        _windowSnapshots.ForegroundWindowChanged += OnForegroundWindowChanged;
         _windowSnapshots.Start();
         _cellAssigner = new CellAssigner(_motionStore.Home);
         _overlayWindow = new OverlayWindow();
@@ -179,7 +180,12 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _windowSnapshots?.Dispose();
+        if (_windowSnapshots != null)
+        {
+            _windowSnapshots.SnapshotPublished -= OnSnapshotPublished;
+            _windowSnapshots.ForegroundWindowChanged -= OnForegroundWindowChanged;
+            _windowSnapshots.Dispose();
+        }
         _keyboardHook?.Dispose();
         _trayIconManager?.Dispose();
         _manageWindow?.Close();
@@ -264,6 +270,38 @@ public partial class App : System.Windows.Application
                 _overlayWindow!.UpdateCells(cells);
             }
         });
+    }
+
+    private void OnForegroundWindowChanged(object? sender, ForegroundWindowChangedEventArgs change)
+    {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+
+        int generation = System.Threading.Volatile.Read(ref _overlayGeneration);
+        try
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+            {
+                if (generation != _overlayGeneration || _state != OverlayState.TaskGrid ||
+                    _overlayWindow == null || !_overlayWindow.HasConfirmedForegroundActivation)
+                    return;
+
+                IntPtr overlayHandle = _overlayWindow.WindowHandle;
+                IntPtr currentForeground = NativeMethods.GetForegroundWindow();
+                if (currentForeground == IntPtr.Zero || currentForeground == overlayHandle)
+                    return;
+
+                Logger.ActivationInfo(
+                    $"Foreground change dismissing overlay; observed={FormatHandle(change.WindowHandle)}, " +
+                    $"eventTime={change.EventTime}, current={FormatHandle(currentForeground)}, " +
+                    $"overlay={FormatHandle(overlayHandle)}, generation={generation}.");
+                CloseOverlay(restoreFocus: false, channel: LogChannel.Activation);
+            }));
+        }
+        catch (InvalidOperationException) when (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        {
+            // The dispatcher may begin shutdown after the guard above on the WinEvent callback thread.
+        }
     }
 
     /// <summary>History owns UI-thread state; defer synchronous persistence beyond interaction work.</summary>

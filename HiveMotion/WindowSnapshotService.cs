@@ -31,6 +31,11 @@ public sealed class WindowSnapshotService : IDisposable
     }
 
     public event EventHandler<WindowSnapshot>? SnapshotPublished;
+    /// <summary>
+    /// Raised synchronously from the out-of-context WinEvent callback when an external
+    /// window becomes foreground. Subscribers must return promptly and marshal UI work.
+    /// </summary>
+    internal event EventHandler<ForegroundWindowChangedEventArgs>? ForegroundWindowChanged;
     public WindowSnapshot? Latest => Volatile.Read(ref _latest);
 
     public void Start()
@@ -63,7 +68,24 @@ public sealed class WindowSnapshotService : IDisposable
         if (eventType != NativeMethods.EVENT_SYSTEM_FOREGROUND &&
             (idObject != NativeMethods.OBJID_WINDOW || idChild != 0))
             return;
-        RequestRefresh(eventType == NativeMethods.EVENT_SYSTEM_FOREGROUND);
+        bool foreground = eventType == NativeMethods.EVENT_SYSTEM_FOREGROUND;
+        if (foreground)
+            PublishForegroundWindowChanged(hwnd, eventTime);
+
+        RequestRefresh(foreground);
+    }
+
+    private void PublishForegroundWindowChanged(IntPtr hwnd, uint eventTime)
+    {
+        try
+        {
+            ForegroundWindowChanged?.Invoke(this, new ForegroundWindowChangedEventArgs(hwnd, eventTime));
+        }
+        catch (Exception ex)
+        {
+            // A subscriber must never let an exception escape into a native WinEvent callback.
+            Logger.Error(ex, "Publishing foreground-window change");
+        }
     }
 
     public void RequestRefresh() => RequestRefresh(false);
@@ -150,4 +172,11 @@ public sealed class WindowSnapshotService : IDisposable
         // Do not dispose _refreshRequested: callbacks already queued by Windows may still enter.
         // The cancellation source is retained too, so a bounded shutdown cannot create ODE paths.
     }
+}
+
+/// <summary>Foreground window identity reported by the system WinEvent hook.</summary>
+internal sealed class ForegroundWindowChangedEventArgs(IntPtr windowHandle, uint eventTime) : EventArgs
+{
+    public IntPtr WindowHandle { get; } = windowHandle;
+    public uint EventTime { get; } = eventTime;
 }
