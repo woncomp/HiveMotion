@@ -36,6 +36,23 @@ public static class IconHelper
     private const int SIIGBF_ICONONLY = 0x04;
     private const int IconSize = 256;
 
+    /// <summary>
+    /// Resolves the icon for a configured motion. A valid custom image always wins;
+    /// otherwise each motion kind falls back to its normal runtime or catalog icon.
+    /// </summary>
+    public static ImageSource? ForMotion(Motion motion, ImageSource? applicationRuntimeIcon = null)
+    {
+        if (!string.IsNullOrWhiteSpace(motion.IconPath) && ForImageFile(motion.IconPath) is { } customIcon)
+            return customIcon;
+
+        return motion switch
+        {
+            ApplicationMotion app => applicationRuntimeIcon ?? ForExecutable(app.ExecutablePath),
+            SystemActionMotion systemAction => GlyphIcon.ForAction(systemAction.ActionId),
+            _ => null
+        };
+    }
+
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(string pszPath, IntPtr pbc, ref Guid riid, out IShellItemImageFactory ppv);
 
@@ -114,12 +131,22 @@ public static class IconHelper
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Decodes a custom motion icon (png/ico/jpg/bmp; exe/dll falls back to the
+    /// Decodes a custom motion icon (png/ico/jpg/jpeg/bmp; exe/dll falls back to the
     /// associated icon) at a bounded size. Results are frozen and cached by path plus
     /// last-write time, so the keyboard transition path never decodes.
     /// </summary>
     public static ImageSource? ForImageFile(string path)
     {
+        string extension = Path.GetExtension(path);
+        if (!extension.Equals(".png", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".ico", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".dll", StringComparison.OrdinalIgnoreCase))
+            return null;
+
         DateTime stamp;
         try
         {

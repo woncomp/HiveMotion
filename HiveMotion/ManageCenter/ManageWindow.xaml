@@ -129,6 +129,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
@@ -174,6 +175,28 @@
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{l:Loc Motion_IconLabel}" Style="{StaticResource LabelStyle}" />
+                                <TextBox x:Name="EditorIconPath" Grid.Column="1" Style="{StaticResource FieldStyle}"
+                                         LostFocus="OnEditorFieldLostFocus" />
+                                <Border Grid.Column="2" Style="{StaticResource ButtonStyle}"
+                                        Padding="10,5" Margin="8,0,0,0"
+                                        MouseLeftButtonUp="OnBrowseApplicationIconClick">
+                                    <TextBlock Text="{l:Loc Common_Browse}" FontSize="12" Foreground="#BFFFFFFF" />
+                                </Border>
+                                <Border Grid.Column="3" Style="{StaticResource ButtonStyle}"
+                                        Padding="10,5" Margin="8,0,0,0"
+                                        MouseLeftButtonUp="OnClearApplicationIconClick">
+                                    <TextBlock Text="{l:Loc Motion_ClearIcon}" FontSize="12" Foreground="#BFFFFFFF" />
+                                </Border>
+                            </Grid>
+
+                            <Grid Grid.Row="2" Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{l:Loc Pins_ProgramPath}" Style="{StaticResource LabelStyle}" />
                                 <TextBox x:Name="EditorPath" Grid.Column="1" Style="{StaticResource FieldStyle}"
@@ -183,10 +206,10 @@
                                     <TextBlock Text="{l:Loc Common_Browse}" FontSize="12" Foreground="#BFFFFFFF" />
                                 </Border>
                             </Grid>
-                            <TextBlock x:Name="PathWarning" Grid.Row="2" Text="{l:Loc Pins_PathWarning}"
+                            <TextBlock x:Name="PathWarning" Grid.Row="3" Text="{l:Loc Pins_PathWarning}"
                                        FontSize="10" Foreground="#E5484D" Visibility="Collapsed" Margin="64,4,0,0" />
 
-                            <Grid Grid.Row="3" Margin="0,10,0,0">
+                            <Grid Grid.Row="4" Margin="0,10,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="*" />
@@ -196,7 +219,7 @@
                                          TextChanged="OnEditorArgsChanged" LostFocus="OnEditorFieldLostFocus" />
                             </Grid>
 
-                            <Grid Grid.Row="4" Margin="0,10,0,0">
+                            <Grid Grid.Row="5" Margin="0,10,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="*" />
@@ -211,13 +234,13 @@
                                 </Border>
                             </Grid>
 
-                            <StackPanel Grid.Row="5" Margin="0,12,0,0">
+                            <StackPanel Grid.Row="6" Margin="0,12,0,0">
                                 <TextBlock Text="{l:Loc Pins_CommandLine}" Style="{StaticResource LabelStyle}" />
                                 <TextBlock x:Name="EditorPreview" FontSize="12" Foreground="#99FFFFFF"
                                            TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
 
-                            <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,12,0,0">
+                            <StackPanel Grid.Row="7" Orientation="Horizontal" Margin="0,12,0,0">
                                 <Border x:Name="LaunchButton" Style="{StaticResource ButtonStyle}"
                                         Background="#26F5B301" BorderBrush="#80F5B301"
                                         MouseLeftButtonUp="OnLaunchClick">
@@ -275,7 +298,7 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{l:Loc Folder_IconLabel}" Style="{StaticResource LabelStyle}" />
+                                        <TextBlock Text="{l:Loc Motion_IconLabel}" Style="{StaticResource LabelStyle}" />
                                         <TextBox x:Name="FolderIconPath" Grid.Column="1" Style="{StaticResource FieldStyle}"
                                                  LostFocus="OnFolderFieldLostFocus" />
                                         <Border Grid.Column="2" Style="{StaticResource ButtonStyle}"
@@ -286,7 +309,7 @@
                                         <Border Grid.Column="3" Style="{StaticResource ButtonStyle}"
                                                 Padding="10,5" Margin="8,0,0,0"
                                                 MouseLeftButtonUp="OnClearFolderIconClick">
-                                            <TextBlock Text="{l:Loc Folder_ClearIcon}" FontSize="12" Foreground="#BFFFFFFF" />
+                                            <TextBlock Text="{l:Loc Motion_ClearIcon}" FontSize="12" Foreground="#BFFFFFFF" />
                                         </Border>
                                     </Grid>
 
@@ -337,6 +360,28 @@
                                         <TextBlock x:Name="SystemActionStatus" FontSize="11"
                                                    Foreground="#66FFFFFF" Margin="2,6,0,0" />
                                     </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="64" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{l:Loc Motion_IconLabel}" Style="{StaticResource LabelStyle}" />
+                                    <TextBox x:Name="SystemActionIconPath" Grid.Column="1" Style="{StaticResource FieldStyle}"
+                                             LostFocus="OnSystemActionIconLostFocus" />
+                                    <Border Grid.Column="2" Style="{StaticResource ButtonStyle}"
+                                            Padding="10,5" Margin="8,0,0,0"
+                                            MouseLeftButtonUp="OnBrowseSystemActionIconClick">
+                                        <TextBlock Text="{l:Loc Common_Browse}" FontSize="12" Foreground="#BFFFFFFF" />
+                                    </Border>
+                                    <Border Grid.Column="3" Style="{StaticResource ButtonStyle}"
+                                            Padding="10,5" Margin="8,0,0,0"
+                                            MouseLeftButtonUp="OnClearSystemActionIconClick">
+                                        <TextBlock Text="{l:Loc Motion_ClearIcon}" FontSize="12" Foreground="#BFFFFFFF" />
+                                    </Border>
                                 </Grid>
 
                                 <TextBlock Text="{l:Loc SystemAction_ActionsHeader}" FontSize="11"

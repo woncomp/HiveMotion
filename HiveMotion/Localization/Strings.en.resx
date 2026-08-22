@@ -513,6 +513,12 @@ Working directory: {1}</value>
   <data name="Folder_ClearIcon" xml:space="preserve">
     <value>Clear</value>
   </data>
+  <data name="Motion_IconLabel" xml:space="preserve">
+    <value>Icon</value>
+  </data>
+  <data name="Motion_ClearIcon" xml:space="preserve">
+    <value>Clear</value>
+  </data>
   <data name="Folder_ItemsHeader" xml:space="preserve">
     <value>Items · drag to reassign, click to edit</value>
   </data>
@@ -530,6 +536,12 @@ Working directory: {1}</value>
   </data>
   <data name="Dialog_SelectIcon" xml:space="preserve">
     <value>Select folder icon</value>
+  </data>
+  <data name="Dialog_IconFilter" xml:space="preserve">
+    <value>Images or programs (*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll)|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll|All files (*.*)|*.*</value>
+  </data>
+  <data name="Dialog_SelectCellIcon" xml:space="preserve">
+    <value>Select cell icon</value>
   </data>
   <data name="Cheat_Back" xml:space="preserve">
     <value>Back one level</value>

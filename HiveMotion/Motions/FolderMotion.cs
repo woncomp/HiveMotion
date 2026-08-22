@@ -11,8 +11,6 @@ namespace HiveMotion;
 /// </summary>
 public sealed class FolderMotion : Motion
 {
-    /// <summary>Optional custom icon image (png/ico/jpg/exe); empty falls back to the name initial.</summary>
-    public string IconPath { get; set; } = string.Empty;
     public List<Motion> Items { get; set; } = new();
 
     public override MotionHoverPreview DescribeHover(HiveCell cell) =>

@@ -14,17 +14,26 @@ anything that can occupy a cell:
     arguments — other windows can never occupy it;
   - if no matching window is running, the cell stays visible as a launcher: clicking
     it relaunches the program with the exact pinned arguments and working directory.
-- **FolderMotion** — a named group with a custom icon. Activating a folder cell swaps
+- **FolderMotion** — a named group. Activating a folder cell swaps
   the whole grid to the folder's own items. Folder layers are **never backfilled**
   with scanned windows: only the configured items occupy cells, empty letters stay
   empty. Folders cannot nest (enforced by store validation and the manage center,
   not by the item type, so future motion kinds stay placeable inside folders).
+- **SystemActionMotion** — a configured Windows action selected from the built-in
+  action catalog. Catalog and picker rows retain their standard action glyphs.
 
 New motion kinds extend the abstract `Motion` type and become placeable on the home
 layer and inside folders without model changes.
 
+Every configured motion can reference a custom icon in place. PNG, ICO, JPG/JPEG,
+BMP, EXE, and DLL sources are supported. A valid custom icon overrides application
+window/executable icons and built-in folder or system-action icons everywhere the
+configured cell appears. Missing, moved, invalid, or unsupported files fall back to
+the normal icon without invalidating the motion. Export and backup files store only
+the source path; they do not copy or embed the icon file.
+
 Motions persist across restarts in `%AppData%/HiveMotion/motions.json` as a
-polymorphic JSON array (`"$type": "application" | "folder"`).
+polymorphic JSON array (`"$type": "application" | "folder" | "systemaction"`).
 
 There are two ways to manage motions, and they share one store and one set of rules:
 
@@ -213,10 +222,11 @@ window in z-order wins the cell.
 
 ## 10. Data model & persistence
 
-- `Motion` (abstract) — `Key`, `DisplayName`, `DescribeHover(cell)`
+- `Motion` (abstract) — `Key`, `DisplayName`, `IconPath`, `DescribeHover(cell)`
 - `ApplicationMotion` — `ProcessName`, `ExecutablePath`, `Arguments`,
   `WorkingDirectory`, matching helpers
-- `FolderMotion` — `IconPath`, `Items` (`List<Motion>`; nesting rejected at load/edit)
+- `FolderMotion` — `Items` (`List<Motion>`; nesting rejected at load/edit)
+- `SystemActionMotion` — `ActionId` referencing the built-in action catalog
 - `motions.json` — one polymorphic array (`$type` discriminator), written on every
   mutation (`MotionStore.Set`/`Remove`/`ReplaceAll`/`Save`). Load sanitizes: A-Z
   letters only, unique per layer, applications require an executable path, nested

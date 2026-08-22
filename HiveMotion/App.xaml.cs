@@ -112,16 +112,27 @@ public partial class App : System.Windows.Application
         _keyboardHook.Start();
         Logger.Info("Application startup initialized tray icon and global keyboard hook.");
 
-        // Decode folder icons off the keyboard path; entering a folder must not pay it.
+        // Decode every custom motion icon off the keyboard path. Folder children are
+        // included because entering a folder must not pay an image-decoding cost.
         var homeMotions = _motionStore.Home;
         _ = System.Threading.Tasks.Task.Run(() =>
         {
-            foreach (var folder in homeMotions.OfType<FolderMotion>())
+            foreach (var motion in homeMotions)
             {
-                if (folder.IconPath.Length > 0)
-                    IconHelper.ForImageFile(folder.IconPath);
+                PrewarmMotionIcon(motion);
+                if (motion is FolderMotion folder)
+                {
+                    foreach (var item in folder.Items)
+                        PrewarmMotionIcon(item);
+                }
             }
         });
+    }
+
+    private static void PrewarmMotionIcon(Motion motion)
+    {
+        if (!string.IsNullOrWhiteSpace(motion.IconPath))
+            IconHelper.ForImageFile(motion.IconPath);
     }
 
     private GlobalKeyboardHook BuildKeyboardHook()

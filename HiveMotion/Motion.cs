@@ -43,6 +43,8 @@ public abstract class Motion
     /// <summary>Letter (A-Z) this motion occupies on its layer (home, or inside a folder).</summary>
     public char Key { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    /// <summary>Optional custom icon path; empty uses the motion kind's default icon.</summary>
+    public string IconPath { get; set; } = string.Empty;
 
     /// <summary>Declares what the hover preview area shows for the cell holding this motion.</summary>
     public abstract MotionHoverPreview DescribeHover(HiveCell cell);

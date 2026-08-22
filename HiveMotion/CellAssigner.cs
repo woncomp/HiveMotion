@@ -132,14 +132,14 @@ public sealed class CellAssigner
             cell.ProcessCreationFileTime = match.ProcessCreationFileTime;
             cell.ProcessName = match.ProcessName;
             cell.Title = match.Title;
-            cell.Icon = match.Icon;
+            cell.Icon = IconHelper.ForMotion(app, match.Icon);
             cell.ExecutablePath = match.ExecutablePath;
             cell.CommandLineArguments = match.CommandLineArguments;
             placed.Add(match);
         }
         else
         {
-            cell.Icon = IconHelper.ForExecutable(app.ExecutablePath);
+            cell.Icon = IconHelper.ForMotion(app);
         }
 
         return cell;
@@ -151,7 +151,7 @@ public sealed class CellAssigner
         Motion = folder,
         AppName = folder.DisplayName,
         Title = folder.DisplayName,
-        Icon = folder.IconPath.Length > 0 ? IconHelper.ForImageFile(folder.IconPath) : null
+        Icon = IconHelper.ForMotion(folder)
     };
 
     /// <summary>System actions never bind a window: name and glyph icon come from the catalog.</summary>
@@ -161,6 +161,6 @@ public sealed class CellAssigner
         Motion = motion,
         AppName = SystemActions.DisplayNameOf(motion.ActionId),
         Title = SystemActions.DisplayNameOf(motion.ActionId),
-        Icon = GlyphIcon.ForAction(motion.ActionId)
+        Icon = IconHelper.ForMotion(motion)
     };
 }
