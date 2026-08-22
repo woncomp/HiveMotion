@@ -32,6 +32,10 @@ configured cell appears. Missing, moved, invalid, or unsupported files fall back
 the normal icon without invalidating the motion. Export and backup files store only
 the source path; they do not copy or embed the icon file.
 
+In the manage center, click a configured motion's header icon to select or replace
+its custom icon. When a custom path is stored, the small red × at the icon's
+bottom-right corner clears it and restores the normal fallback icon.
+
 Motions persist across restarts in `%AppData%/HiveMotion/motions.json` as a
 polymorphic JSON array (`"$type": "application" | "folder" | "systemaction"`).
 

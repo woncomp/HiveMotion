@@ -474,7 +474,6 @@ public partial class ManageWindow : Window
         if (_selectedApp is { } app)
         {
             EditorLetterBadge.Text = app.Key.ToString();
-            EditorIconPath.Text = app.IconPath;
             UpdateApplicationEditorIcon();
             EditorName.Text = app.DisplayName;
             EditorPath.Text = app.ExecutablePath;
@@ -490,7 +489,6 @@ public partial class ManageWindow : Window
         {
             FolderLetterBadge.Text = folder.Key.ToString();
             FolderName.Text = folder.DisplayName;
-            FolderIconPath.Text = folder.IconPath;
             UpdateFolderHeaderIcon();
             UpdateFolderStatus();
             BuildFolderChildTiles();
@@ -498,7 +496,6 @@ public partial class ManageWindow : Window
         else if (_selectedSystemAction is { } systemAction)
         {
             SystemActionLetterBadge.Text = systemAction.Key.ToString();
-            SystemActionIconPath.Text = systemAction.IconPath;
             SystemActionBackButton.Visibility = _selectedSystemActionFolder != null ? Visibility.Visible : Visibility.Collapsed;
             SystemActionBackText.Text = Loc.Get("Folder_BackToFolder");
             UpdateSystemActionEditor();
@@ -552,7 +549,6 @@ public partial class ManageWindow : Window
         _selectedApp.ExecutablePath = EditorPath.Text.Trim();
         _selectedApp.Arguments = EditorArgs.Text.Trim();
         _selectedApp.WorkingDirectory = EditorCwd.Text.Trim();
-        _selectedApp.IconPath = EditorIconPath.Text.Trim();
         // An empty display name falls back to the executable's file name.
         if (_selectedApp.DisplayName.Length == 0 && _selectedApp.ExecutablePath.Length > 0)
             _selectedApp.DisplayName = Path.GetFileNameWithoutExtension(_selectedApp.ExecutablePath);
@@ -574,8 +570,13 @@ public partial class ManageWindow : Window
 
     private void UpdateApplicationEditorIcon()
     {
-        if (_selectedApp != null)
-            EditorIcon.Source = IconHelper.ForMotion(_selectedApp);
+        if (_selectedApp == null)
+            return;
+
+        EditorIcon.Source = IconHelper.ForMotion(_selectedApp);
+        EditorIconClearButton.Visibility = HasCustomIcon(_selectedApp)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void OnEditorPathChanged(object sender, TextChangedEventArgs e)
@@ -610,19 +611,40 @@ public partial class ManageWindow : Window
 
     private void OnBrowseApplicationIconClick(object sender, MouseButtonEventArgs e)
     {
-        if (SelectIconFile() is { } path)
+        if (_selectedApp != null && SelectIconFile() is { } path)
         {
-            EditorIconPath.Text = path;
-            CommitEditor();
+            _selectedApp.IconPath = path;
+            SaveApplicationIconChange();
         }
         e.Handled = true;
     }
 
     private void OnClearApplicationIconClick(object sender, MouseButtonEventArgs e)
     {
-        EditorIconPath.Text = string.Empty;
-        CommitEditor();
+        if (_selectedApp != null)
+        {
+            _selectedApp.IconPath = string.Empty;
+            SaveApplicationIconChange();
+        }
         e.Handled = true;
+    }
+
+    private void SaveApplicationIconChange()
+    {
+        if (_selectedApp == null)
+            return;
+
+        if (_selectedAppFolder != null)
+        {
+            _motionStore.Save();
+            BuildFolderChildTiles();
+        }
+        else
+        {
+            _motionStore.Set(_selectedApp);
+            BuildLetterTiles();
+        }
+        UpdateApplicationEditorIcon();
     }
 
     private void OnBrowseCwdClick(object sender, MouseButtonEventArgs e)
@@ -693,7 +715,6 @@ public partial class ManageWindow : Window
         _selectedFolder.DisplayName = FolderName.Text.Trim();
         if (_selectedFolder.DisplayName.Length == 0)
             _selectedFolder.DisplayName = Loc.Get("Folder_DefaultName");
-        _selectedFolder.IconPath = FolderIconPath.Text.Trim();
         _motionStore.Save();
         UpdateFolderHeaderIcon();
         UpdateFolderStatus();
@@ -708,6 +729,9 @@ public partial class ManageWindow : Window
         FolderEditorIcon.Source = icon;
         FolderEditorIcon.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
         FolderEditorGlyph.Visibility = icon != null ? Visibility.Collapsed : Visibility.Visible;
+        FolderIconClearButton.Visibility = HasCustomIcon(_selectedFolder)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void UpdateFolderStatus()
@@ -719,10 +743,10 @@ public partial class ManageWindow : Window
 
     private void OnBrowseFolderIconClick(object sender, MouseButtonEventArgs e)
     {
-        if (SelectIconFile() is { } path)
+        if (_selectedFolder != null && SelectIconFile() is { } path)
         {
-            FolderIconPath.Text = path;
-            CommitFolderEditor();
+            _selectedFolder.IconPath = path;
+            SaveFolderIconChange();
         }
         e.Handled = true;
     }
@@ -739,9 +763,19 @@ public partial class ManageWindow : Window
 
     private void OnClearFolderIconClick(object sender, MouseButtonEventArgs e)
     {
-        FolderIconPath.Text = string.Empty;
-        CommitFolderEditor();
+        if (_selectedFolder != null)
+        {
+            _selectedFolder.IconPath = string.Empty;
+            SaveFolderIconChange();
+        }
         e.Handled = true;
+    }
+
+    private void SaveFolderIconChange()
+    {
+        _motionStore.Save();
+        UpdateFolderHeaderIcon();
+        BuildLetterTiles();
     }
 
     private void OnDeleteFolderClick(object sender, MouseButtonEventArgs e)
@@ -766,17 +800,19 @@ public partial class ManageWindow : Window
         if (_selectedSystemAction == null)
             return;
         SystemActionEditorIcon.Source = IconHelper.ForMotion(_selectedSystemAction);
+        SystemActionIconClearButton.Visibility = HasCustomIcon(_selectedSystemAction)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         SystemActionName.Text = SystemActions.DisplayNameOf(_selectedSystemAction.ActionId);
         SystemActionStatus.Text = SystemActions.DescriptionOf(_selectedSystemAction.ActionId);
         BuildSystemActionList();
     }
 
-    private void CommitSystemActionIcon()
+    private void SaveSystemActionIconChange()
     {
-        if (_editorLoading || _selectedSystemAction == null)
+        if (_selectedSystemAction == null)
             return;
 
-        _selectedSystemAction.IconPath = SystemActionIconPath.Text.Trim();
         _motionStore.Save();
         if (_selectedSystemActionFolder != null)
             BuildFolderChildTiles();
@@ -785,24 +821,28 @@ public partial class ManageWindow : Window
         UpdateSystemActionEditor();
     }
 
-    private void OnSystemActionIconLostFocus(object sender, RoutedEventArgs e) => CommitSystemActionIcon();
-
     private void OnBrowseSystemActionIconClick(object sender, MouseButtonEventArgs e)
     {
-        if (SelectIconFile() is { } path)
+        if (_selectedSystemAction != null && SelectIconFile() is { } path)
         {
-            SystemActionIconPath.Text = path;
-            CommitSystemActionIcon();
+            _selectedSystemAction.IconPath = path;
+            SaveSystemActionIconChange();
         }
         e.Handled = true;
     }
 
     private void OnClearSystemActionIconClick(object sender, MouseButtonEventArgs e)
     {
-        SystemActionIconPath.Text = string.Empty;
-        CommitSystemActionIcon();
+        if (_selectedSystemAction != null)
+        {
+            _selectedSystemAction.IconPath = string.Empty;
+            SaveSystemActionIconChange();
+        }
         e.Handled = true;
     }
+
+    private static bool HasCustomIcon(Motion? motion) =>
+        !string.IsNullOrWhiteSpace(motion?.IconPath);
 
     private void BuildSystemActionList()
     {

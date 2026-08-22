@@ -507,15 +507,6 @@ Working directory: {1}</value>
   <data name="Picker_NewFolder" xml:space="preserve">
     <value>New folder</value>
   </data>
-  <data name="Folder_IconLabel" xml:space="preserve">
-    <value>Icon</value>
-  </data>
-  <data name="Folder_ClearIcon" xml:space="preserve">
-    <value>Clear</value>
-  </data>
-  <data name="Motion_IconLabel" xml:space="preserve">
-    <value>Icon</value>
-  </data>
   <data name="Motion_ClearIcon" xml:space="preserve">
     <value>Clear</value>
   </data>
@@ -530,12 +521,6 @@ Working directory: {1}</value>
   </data>
   <data name="Folder_BackToFolder" xml:space="preserve">
     <value>← Back to folder</value>
-  </data>
-  <data name="Dialog_ImageFilter" xml:space="preserve">
-    <value>Images or programs (*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe)|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe|All files (*.*)|*.*</value>
-  </data>
-  <data name="Dialog_SelectIcon" xml:space="preserve">
-    <value>Select folder icon</value>
   </data>
   <data name="Dialog_IconFilter" xml:space="preserve">
     <value>Images or programs (*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll)|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll|All files (*.*)|*.*</value>
