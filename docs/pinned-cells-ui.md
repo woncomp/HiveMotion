@@ -38,13 +38,16 @@ bottom-right corner clears it and restores the normal fallback icon.
 
 Motions persist across restarts in `%AppData%/HiveMotion/motions.json` as a
 polymorphic JSON array (`"$type": "application" | "folder" | "systemaction"`).
+Application and System Action motions may persist as unconfigured drafts (empty
+executable path or action ID). Drafts reserve their cells, use generic frozen glyphs,
+and remain editable across restart/export/import.
 
 There are two ways to manage motions, and they share one store and one set of rules:
 
 | Path | Interaction |
 |---|---|
 | Hive overlay | `Ctrl+P` while hovering (or search-highlighting) an application cell: pin, remove, or move |
-| Manage center | Tray icon → 管理中心… → 固定 page: full editing, drag & drop letter assignment, folder editing, launch-history picker |
+| Manage center | Tray icon → 管理中心… → 固定 page: Stream Deck-style type assignment, full editing, and folder editing |
 
 Changes made in either place write through to `motions.json` immediately; the
 overlay re-reads the store every time it opens, so no synchronization mechanism is
@@ -66,28 +69,21 @@ reopening the menu item brings the existing window forward.
 ## 3. Page layout
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│ 字 母 分 配        拖拽格子调整字母 · 点击格子编辑   [清空全部固定] │
-│  ┌────┐┌────┐┌────┐ … QWERTYUIOP                            │
-│  │icon││ W  ││ 📁│   ASDFGHJKL                              │
-│  └────┘└────┘└────┘   ZXCVBNM                               │
-├────────────────────────────────────────────────────────────┤
-│ Application editor  ← shown for application cells           │
-│  [icon] [N] 显示名称                            状态          │
-│        程序路径 [_____________________] [浏览…]              │
-│        启动参数 [_____________________]                      │
-│        工作目录 [_____________________] [浏览…]              │
-│        完整命令行 (preview)                                  │
-│        [立即启动] [删除固定]                                  │
-├────────────────────────────────────────────────────────────┤
-│ Folder editor  ← shown for folder cells                     │
-│  [icon] [N] 文件夹名称                          N 个项目      │
-│        图标     [_____________________] [浏览…] [清除]       │
-│        内容 · 拖拽调整字母，点击编辑                          │
-│        ┌──┐┌──┐┌──┐ … (26 letter child grid)                │
-│        [删除文件夹]                                          │
-└────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┬──────────────┐
+│ 字母分配                          [清空全部固定] │ 动 作         │
+│  ┌────┐┌────┐┌────┐ … QWERTYUIOP                │ [应用程序] ⇢ │
+│  │icon││ W  ││ 📁│   ASDFGHJKL                  │ [文件夹]   ⇢ │
+│  └────┘└────┘└────┘   ZXCVBNM                   │ [系统操作] ⇢ │
+├──────────────────────────────────────────────────┤              │
+│ Selected-cell editor                    [删除]   │              │
+│  [icon] [N] name/status                           │              │
+│  configured fields, application history, or      │              │
+│  the system-action catalog                        │              │
+└──────────────────────────────────────────────────┴──────────────┘
 ```
+
+The default window is wider to accommodate the fixed Motion list. Narrow windows
+retain the full keyboard and sidebar through horizontal scrolling.
 
 ## 4. Letter overview (top card)
 
@@ -99,10 +95,11 @@ mirrors the hive overlay.
   gray = not running. Status refreshes every 5 seconds via a background scan.
 - **Folder tile**: custom icon or folder glyph, letter badge, small folder badge in
   place of the status dot (folders have no running state).
-- **Empty tile**: dim letter; click opens the picker (§6) for that letter.
+- **Empty tile**: dim letter; clicking selects it and shows the drag-from-right hint.
 - **Click an occupied tile**: opens it in the matching editor (§5 / §7).
+- **Selected tile**: bright honey border, including selected empty home/folder cells.
 
-### 4.1 Drag & drop — the only way to change a letter
+### 4.1 Drag & drop
 
 The letter is deliberately **not** editable in the editors (no dropdown);
 reassignment happens by dragging tiles:
@@ -112,6 +109,13 @@ reassignment happens by dragging tiles:
 | Drop on an empty letter | Move the motion to that letter |
 | Drop on an occupied letter | The two motions **swap** letters — no confirmation (cheap to undo by dragging back) |
 | Drop outside the grid | Cancels; the motion stays put |
+
+The right Motion list is a type catalog, not a list of configured cells. Dragging
+Application, Folder, or System Action creates a new motion on the target cell with
+copy semantics. Dropping on an occupied cell asks for confirmation and replaces it
+only after confirmation. Application and System Action begin with empty configuration;
+Folder is immediately usable. Application/System Action may also be dropped into
+folder child grids, while Folder drops are rejected because folders cannot nest.
 
 While dragging, the hovered target tile gets a bright honey border as the landing
 preview. The store saves immediately on drop, and the editor follows the dragged
@@ -135,16 +139,19 @@ confirmation via the in-window modal.
 | 完整命令行 | Read-only live preview: `path + arguments`, updated on every keystroke |
 | 状态 | `● 运行中(有窗口匹配该命令行)` / `○ 未运行`, using the same matching rule as the overlay assigner |
 | 立即启动 | Launches `path` with `arguments` in `工作目录` (commits pending edits first) |
-| 删除固定 | Confirms, removes the application cell, closes the editor |
+| 删除 | Shared top-right button; confirms and removes the selected home/folder-child motion |
 
-The header also shows the resolved 48px icon via `IconHelper.ForExecutable`.
+The header shows the centrally resolved icon. Clicking it selects a custom icon;
+the small red × clears a stored custom path.
 When the editor edits a **folder child**, a `← 返回文件夹` button appears in the
 header and deletion removes the child from its folder instead of the home layer.
 
-## 6. History picker
+### 5.1 New application setup
 
-Clicking an **empty** tile — on the home layer or inside the folder editor's child
-grid — opens the picker modal for that letter.
+A newly dropped Application is persisted immediately with an empty executable path.
+Its editor replaces the normal fields with an inline searchable launch-history list
+and a Browse action. Selecting either source fills that same motion and switches to
+the normal application fields.
 
 - **Data source**: `history.json`. Every hive scan feeds the store; an identity absent
   from the previous scan counts as a fresh launch, so **LaunchCount** approximates
@@ -156,13 +163,16 @@ grid — opens the picker modal for that letter.
 - **Missing files**: entries whose exe no longer exists are dimmed to 50%, tagged
   `(文件缺失)`, and sink to the bottom — kept, not deleted (may be a detached drive).
 - **Search**: filters display name / path / arguments.
-- **手动填写…**: file-open dialog for programs that never appeared in a scan; creates
-  the application cell with the exe's file name as display name.
-- **新建文件夹** (home layer only): creates an empty folder on that letter and opens
-  the folder editor. Hidden when picking a folder child, because folders cannot nest.
-- Selecting a row places that identity on the letter immediately and opens the editor.
+- **Browse**: selects a program that never appeared in a scan and uses its file name
+  as the display name.
+- Selecting a row updates the persisted draft in place; there is no creation modal.
 
-`Esc` or clicking the dimmed backdrop closes the picker.
+## 6. System-action editor
+
+A newly dropped System Action is likewise persisted with an empty action ID. Its
+existing in-editor catalog has no initial selection; clicking an action configures
+the draft. Catalog rows always use their built-in glyphs, while the configured cell
+and editor header may use a custom icon.
 
 ## 7. Folder editor (bottom card)
 
@@ -172,12 +182,11 @@ Appears when a folder tile is selected.
 |---|---|
 | 文件夹名称 | Free text; if cleared, falls back to the localized default ("新建文件夹") |
 | 图标 | Optional custom icon image (png/ico/jpg/bmp/exe). Decoded at a bounded size, frozen, and cached by path + last-write time (`IconHelper.ForImageFile`). Cleared → folder glyph fallback |
-| 内容 (child grid) | 26 letters mirroring the home overview. Empty letter → picker adds a child application; child tile → application editor (§5) with a back-to-folder button; drag & drop moves/swaps child letters |
-| 删除文件夹 | Confirms; the folder and its items are removed together (items are independent copies, home-layer cells are unaffected) |
+| 内容 (child grid) | 26 letters mirroring the home overview. Empty click selects; Motion-list drops add Application/System Action; child drag/drop moves or swaps letters |
+| 删除 | Shared top-right button; confirms and removes the folder and all its items |
 
-Folder children are application motions with the same fields and matching rules as
-home-layer application cells. The running-status dots inside the child grid reuse
-the same 5-second scan.
+Folder children support Application and System Action motions. Application running
+status dots reuse the same 5-second scan.
 
 ## 8. Overlay behavior
 
@@ -195,6 +204,7 @@ the same 5-second scan.
 | `Ctrl+P` inside a folder layer | No-op; folder contents are edited in the manage center |
 | Pinned-not-running cell | Amber name + `点击启动` hint; hover shows the full command line in the preview area instead of a DWM thumbnail; click relaunches |
 | Folder cell | Folder badge + `点击进入` hint; hover shows the folder name and item count; snapshot refreshes never backfill folder layers |
+| Unconfigured Application/System Action | Generic glyph and not-configured preview; activation is ignored and the overlay remains open |
 | Search list extras | `Ctrl+R` reveals the exe in Explorer, `Ctrl+S` copies the command line (home layer only) |
 
 Rejection notices in the overlay: UWP windows (`ApplicationFrameHost`, identity
@@ -226,7 +236,7 @@ window in z-order wins the cell.
 
 ## 10. Data model & persistence
 
-- `Motion` (abstract) — `Key`, `DisplayName`, `IconPath`, `DescribeHover(cell)`
+- `Motion` (abstract) — `Key`, `DisplayName`, `IconPath`, non-persisted `IsConfigured`, `DescribeHover(cell)`
 - `ApplicationMotion` — `ProcessName`, `ExecutablePath`, `Arguments`,
   `WorkingDirectory`, matching helpers
 - `FolderMotion` — `Items` (`List<Motion>`; nesting rejected at load/edit)

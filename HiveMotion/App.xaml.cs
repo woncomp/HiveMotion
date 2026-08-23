@@ -108,24 +108,33 @@ public partial class App : System.Windows.Application
                 CloseOverlay(restoreFocus: true);
         });
 
+        // Draft glyphs are built synchronously on the UI thread before the hook can
+        // expose them. They are frozen and cached, so overlay activation only reads.
+        var motionsToPrewarm = new List<Motion>();
+        foreach (var motion in _motionStore.Home)
+        {
+            motionsToPrewarm.Add(motion);
+            IconHelper.PrewarmUnconfiguredFallback(motion);
+            if (motion is FolderMotion folder)
+            {
+                foreach (var item in folder.Items)
+                {
+                    motionsToPrewarm.Add(item);
+                    IconHelper.PrewarmUnconfiguredFallback(item);
+                }
+            }
+        }
+
         _keyboardHook = BuildKeyboardHook();
         _keyboardHook.Start();
         Logger.Info("Application startup initialized tray icon and global keyboard hook.");
 
         // Decode every custom motion icon off the keyboard path. Folder children are
         // included because entering a folder must not pay an image-decoding cost.
-        var homeMotions = _motionStore.Home;
         _ = System.Threading.Tasks.Task.Run(() =>
         {
-            foreach (var motion in homeMotions)
-            {
+            foreach (var motion in motionsToPrewarm)
                 PrewarmMotionIcon(motion);
-                if (motion is FolderMotion folder)
-                {
-                    foreach (var item in folder.Items)
-                        PrewarmMotionIcon(item);
-                }
-            }
         });
     }
 
@@ -535,6 +544,12 @@ public partial class App : System.Windows.Application
 
     private void ActivateCell(HiveCell cell)
     {
+        if (cell.Motion is { IsConfigured: false } motion)
+        {
+            Logger.Info($"Ignored activation of unconfigured {motion.GetType().Name} on cell {motion.Key}.");
+            return;
+        }
+
         // Folder activation swaps the grid contents in place; the overlay stays open.
         if (cell.Folder is { } folder)
         {

@@ -115,12 +115,15 @@ public sealed class CellAssigner
     private static HiveCell AssignApplication(ApplicationMotion app, IReadOnlyList<RunningWindow> windows,
         HashSet<RunningWindow> placed)
     {
+        string displayName = app.DisplayName.Length > 0
+            ? app.DisplayName
+            : Loc.Get("Motion_ApplicationName");
         var cell = new HiveCell
         {
             Letter = app.Key,
             Motion = app,
-            AppName = app.DisplayName,
-            Title = app.DisplayName
+            AppName = displayName,
+            Title = displayName
         };
 
         // Scan order is z-order, so the first match is the topmost matching window.
@@ -155,12 +158,18 @@ public sealed class CellAssigner
     };
 
     /// <summary>System actions never bind a window: name and glyph icon come from the catalog.</summary>
-    private static HiveCell SystemActionCell(SystemActionMotion motion) => new()
+    private static HiveCell SystemActionCell(SystemActionMotion motion)
     {
-        Letter = motion.Key,
-        Motion = motion,
-        AppName = SystemActions.DisplayNameOf(motion.ActionId),
-        Title = SystemActions.DisplayNameOf(motion.ActionId),
-        Icon = IconHelper.ForMotion(motion)
-    };
+        string displayName = motion.IsConfigured
+            ? SystemActions.DisplayNameOf(motion.ActionId)
+            : Loc.Get("Motion_SystemActionName");
+        return new HiveCell
+        {
+            Letter = motion.Key,
+            Motion = motion,
+            AppName = displayName,
+            Title = displayName,
+            Icon = IconHelper.ForMotion(motion)
+        };
+    }
 }

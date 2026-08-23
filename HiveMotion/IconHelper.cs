@@ -12,6 +12,8 @@ namespace HiveMotion;
 
 public static class IconHelper
 {
+    private const string ApplicationFallbackGlyph = "\uE71D";
+    private const string SystemActionFallbackGlyph = "\uE713";
     private static readonly Dictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object CacheGate = new();
 
@@ -47,10 +49,23 @@ public static class IconHelper
 
         return motion switch
         {
-            ApplicationMotion app => applicationRuntimeIcon ?? ForExecutable(app.ExecutablePath),
-            SystemActionMotion systemAction => GlyphIcon.ForAction(systemAction.ActionId),
+            ApplicationMotion app => !app.IsConfigured
+                ? GlyphIcon.ForGlyph(ApplicationFallbackGlyph)
+                : applicationRuntimeIcon ?? ForExecutable(app.ExecutablePath),
+            SystemActionMotion systemAction => systemAction.IsConfigured
+                ? GlyphIcon.ForAction(systemAction.ActionId)
+                : GlyphIcon.ForGlyph(SystemActionFallbackGlyph),
             _ => null
         };
+    }
+
+    /// <summary>Builds and freezes the generic draft glyph without resolving custom files.</summary>
+    public static void PrewarmUnconfiguredFallback(Motion motion)
+    {
+        if (motion is ApplicationMotion { IsConfigured: false })
+            GlyphIcon.ForGlyph(ApplicationFallbackGlyph);
+        else if (motion is SystemActionMotion { IsConfigured: false })
+            GlyphIcon.ForGlyph(SystemActionFallbackGlyph);
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]

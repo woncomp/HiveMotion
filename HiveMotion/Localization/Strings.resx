@@ -95,6 +95,9 @@
   <data name="Cell_ClickToLaunch" xml:space="preserve">
     <value>点 击 启 动</value>
   </data>
+  <data name="Cell_NotConfigured" xml:space="preserve">
+    <value>尚未配置</value>
+  </data>
   <data name="Grid_AllWindowsCount" xml:space="preserve">
     <value>全 部 窗 口 · {0}</value>
   </data>
@@ -171,6 +174,51 @@
   <data name="Pins_EditorEmpty" xml:space="preserve">
     <value>点 击 上 方 格 子 查 看 或 编 辑 固 定</value>
   </data>
+  <data name="Motion_ListHeader" xml:space="preserve">
+    <value>动 作</value>
+  </data>
+  <data name="Motion_ListHint" xml:space="preserve">
+    <value>将动作类型拖到任意格子</value>
+  </data>
+  <data name="Motion_ApplicationName" xml:space="preserve">
+    <value>应用程序</value>
+  </data>
+  <data name="Motion_ApplicationDesc" xml:space="preserve">
+    <value>启动或切换到应用程序</value>
+  </data>
+  <data name="Motion_FolderName" xml:space="preserve">
+    <value>文件夹</value>
+  </data>
+  <data name="Motion_FolderDesc" xml:space="preserve">
+    <value>在子网格中整理动作</value>
+  </data>
+  <data name="Motion_FolderHomeOnly" xml:space="preserve">
+    <value>文件夹只能放在主网格中</value>
+  </data>
+  <data name="Motion_SystemActionName" xml:space="preserve">
+    <value>系统操作</value>
+  </data>
+  <data name="Motion_SystemActionDesc" xml:space="preserve">
+    <value>执行 Windows 内置操作</value>
+  </data>
+  <data name="Motion_EmptyCellHint" xml:space="preserve">
+    <value>格子 {0} 为空 · 从右侧拖入动作</value>
+  </data>
+  <data name="Motion_ReplaceConfirm" xml:space="preserve">
+    <value>将 {0} 键的「{1}」替换为「{2}」?</value>
+  </data>
+  <data name="Motion_NotConfigured" xml:space="preserve">
+    <value>尚未配置 · 激活时不会执行操作</value>
+  </data>
+  <data name="Motion_SelectApplication" xml:space="preserve">
+    <value>从启动历史中选择应用程序</value>
+  </data>
+  <data name="Motion_BrowseApplication" xml:space="preserve">
+    <value>浏览应用程序…</value>
+  </data>
+  <data name="Motion_Delete" xml:space="preserve">
+    <value>删 除</value>
+  </data>
   <data name="Pins_ProgramPath" xml:space="preserve">
     <value>程序路径</value>
   </data>
@@ -189,9 +237,6 @@
   <data name="Pins_Launch" xml:space="preserve">
     <value>立 即 启 动</value>
   </data>
-  <data name="Pins_Delete" xml:space="preserve">
-    <value>删 除 固 定</value>
-  </data>
   <data name="Pins_StatusRunning" xml:space="preserve">
     <value>● 运行中(有窗口匹配该命令行)</value>
   </data>
@@ -206,9 +251,6 @@
   </data>
   <data name="Pins_ClearAllConfirm" xml:space="preserve">
     <value>清空全部固定?此操作不可撤销。</value>
-  </data>
-  <data name="Pins_PickerTitle" xml:space="preserve">
-    <value>固定到 {0} 键</value>
   </data>
   <data name="Priority_Header" xml:space="preserve">
     <value>优 先 级</value>
@@ -320,12 +362,6 @@
   </data>
   <data name="Cheat_Close" xml:space="preserve">
     <value>关闭蜂巢</value>
-  </data>
-  <data name="Picker_Desc" xml:space="preserve">
-    <value>列表来自蜂巢历次扫描,按启动次数排序</value>
-  </data>
-  <data name="Picker_Manual" xml:space="preserve">
-    <value>手动填写…</value>
   </data>
   <data name="Picker_Empty" xml:space="preserve">
     <value>没 有 匹 配 的 历 史 记 录</value>
@@ -492,17 +528,11 @@
   <data name="Folder_DefaultName" xml:space="preserve">
     <value>新建文件夹</value>
   </data>
-  <data name="Picker_NewFolder" xml:space="preserve">
-    <value>新建文件夹</value>
-  </data>
   <data name="Motion_ClearIcon" xml:space="preserve">
     <value>清 除</value>
   </data>
   <data name="Folder_ItemsHeader" xml:space="preserve">
     <value>内容 · 拖拽调整字母，点击编辑</value>
-  </data>
-  <data name="Folder_Delete" xml:space="preserve">
-    <value>删除文件夹</value>
   </data>
   <data name="Folder_DeleteConfirm" xml:space="preserve">
     <value>删除文件夹「{0}」?其中的项目将一并删除。</value>
@@ -555,22 +585,13 @@
   <data name="SystemAction_Lock_Desc" xml:space="preserve">
     <value>立即锁定此电脑（Win+L）</value>
   </data>
-  <data name="SystemAction_PickerTitle" xml:space="preserve">
-    <value>为 {0} 指派系统动作</value>
-  </data>
   <data name="App_RemoveSystemActionMessage" xml:space="preserve">
     <value>移除 {0} 上的系统动作「{1}」？</value>
   </data>
   <data name="Grid_StatusSystemAction" xml:space="preserve">
     <value>系统动作</value>
   </data>
-  <data name="Picker_AddSystemAction" xml:space="preserve">
-    <value>添加系统动作</value>
-  </data>
   <data name="SystemAction_ActionsHeader" xml:space="preserve">
     <value>动作 · 点击切换</value>
-  </data>
-  <data name="SystemAction_Delete" xml:space="preserve">
-    <value>移除系统动作</value>
   </data>
 </root>

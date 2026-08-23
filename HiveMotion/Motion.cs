@@ -46,6 +46,10 @@ public abstract class Motion
     /// <summary>Optional custom icon path; empty uses the motion kind's default icon.</summary>
     public string IconPath { get; set; } = string.Empty;
 
+    /// <summary>Whether activation has enough configuration to perform the motion.</summary>
+    [JsonIgnore]
+    public virtual bool IsConfigured => true;
+
     /// <summary>Declares what the hover preview area shows for the cell holding this motion.</summary>
     public abstract MotionHoverPreview DescribeHover(HiveCell cell);
 }

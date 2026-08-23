@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace HiveMotion;
 
@@ -128,8 +129,12 @@ public sealed class SystemActionMotion : Motion
     /// <summary>Id into the <see cref="SystemActions"/> catalog, e.g. "taskview".</summary>
     public string ActionId { get; set; } = string.Empty;
 
-    public override MotionHoverPreview DescribeHover(HiveCell cell) =>
-        MotionHoverPreview.Info(SystemActions.DisplayNameOf(ActionId), SystemActions.DescriptionOf(ActionId));
+    [JsonIgnore]
+    public override bool IsConfigured => SystemActions.Find(ActionId) != null;
+
+    public override MotionHoverPreview DescribeHover(HiveCell cell) => IsConfigured
+        ? MotionHoverPreview.Info(SystemActions.DisplayNameOf(ActionId), SystemActions.DescriptionOf(ActionId))
+        : MotionHoverPreview.Info(Loc.Get("Motion_SystemActionName"), Loc.Get("Motion_NotConfigured"));
 
     /// <summary>
     /// Fires the configured action through its real invocation path — a shell object

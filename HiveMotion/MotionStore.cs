@@ -27,7 +27,7 @@ public sealed class MotionStore
     public static string StoreDirectoryPath => StoreDirectory;
     public static string MotionsFilePath => StoreFile;
 
-    /// <summary>Home-layer motions (application and folder cells).</summary>
+    /// <summary>Home-layer application, folder, and system-action motions.</summary>
     public List<Motion> Home { get; } = new();
 
     public MotionStore()
@@ -121,8 +121,8 @@ public sealed class MotionStore
     }
 
     /// <summary>
-    /// Keeps only placeable motions: A-Z letters, unique per layer, applications with an
-    /// executable path, and no folders nested inside folders.
+    /// Keeps only placeable motions: A-Z letters, unique per layer, known configured
+    /// system actions or empty drafts, and no folders nested inside folders.
     /// </summary>
     private static List<Motion> Sanitize(IEnumerable<Motion> motions)
     {
@@ -132,9 +132,8 @@ public sealed class MotionStore
         {
             if (motion.Key is < 'A' or > 'Z' || !taken.Add(motion.Key))
                 continue;
-            if (motion is ApplicationMotion app && string.IsNullOrEmpty(app.ExecutablePath))
-                continue;
-            if (motion is SystemActionMotion systemAction && SystemActions.Find(systemAction.ActionId) == null)
+            if (motion is SystemActionMotion systemAction &&
+                !string.IsNullOrEmpty(systemAction.ActionId) && SystemActions.Find(systemAction.ActionId) == null)
             {
                 Logger.Warning($"Dropped system action with unknown id '{systemAction.ActionId}' on key {motion.Key}.");
                 continue;
@@ -159,9 +158,8 @@ public sealed class MotionStore
             }
             if (item.Key is < 'A' or > 'Z' || !taken.Add(item.Key))
                 continue;
-            if (item is ApplicationMotion app && string.IsNullOrEmpty(app.ExecutablePath))
-                continue;
-            if (item is SystemActionMotion systemAction && SystemActions.Find(systemAction.ActionId) == null)
+            if (item is SystemActionMotion systemAction &&
+                !string.IsNullOrEmpty(systemAction.ActionId) && SystemActions.Find(systemAction.ActionId) == null)
             {
                 Logger.Warning($"Dropped system action with unknown id '{systemAction.ActionId}' from folder '{folder.DisplayName}'.");
                 continue;

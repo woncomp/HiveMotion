@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:HiveMotion.Localization"
-        Title="{l:Loc Manage_Title}" Width="920" Height="620" MinWidth="780" MinHeight="540"
+        Title="{l:Loc Manage_Title}" Width="1180" Height="620" MinWidth="780" MinHeight="540"
         Background="#F214161D" Foreground="#E6FFFFFF"
         FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei"
         WindowStartupLocation="CenterScreen"
@@ -91,10 +91,17 @@
 
             <!-- Pins page -->
             <Grid x:Name="PagePins">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="220" />
+                </Grid.ColumnDefinitions>
+                <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled">
+                    <Grid MinWidth="700">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
                 <!-- Letter overview: drag to reassign letters, click to edit -->
                 <Border Style="{StaticResource CardStyle}">
@@ -237,12 +244,32 @@
                                         MouseLeftButtonUp="OnLaunchClick">
                                     <TextBlock Text="{l:Loc Pins_Launch}" FontSize="12" Foreground="#FFFFD97A" />
                                 </Border>
-                                <Border x:Name="DeletePinButton" Style="{StaticResource ButtonStyle}"
-                                        Margin="10,0,0,0" BorderBrush="#80E5484D"
-                                        MouseLeftButtonUp="OnDeletePinClick">
-                                    <TextBlock Text="{l:Loc Pins_Delete}" FontSize="12" Foreground="#FFE5484D" />
-                                </Border>
                             </StackPanel>
+
+                            <Grid x:Name="ApplicationSetupPanel" Grid.Row="1" Grid.RowSpan="6"
+                                  Background="#FF171920" Visibility="Collapsed" Panel.ZIndex="5"
+                                  Margin="0,10,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{l:Loc Motion_SelectApplication}" FontSize="12"
+                                           Foreground="#99F5C542" Margin="2,0,0,6" />
+                                <TextBox x:Name="ApplicationHistorySearch" Grid.Row="1"
+                                         Style="{StaticResource FieldStyle}" Margin="0,0,0,8"
+                                         TextChanged="OnApplicationHistorySearchChanged" />
+                                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="ApplicationHistoryList" />
+                                </ScrollViewer>
+                                <Border Grid.Row="3" Style="{StaticResource ButtonStyle}"
+                                        HorizontalAlignment="Left" Margin="0,10,0,0"
+                                        MouseLeftButtonUp="OnBrowseNewApplicationClick">
+                                    <TextBlock Text="{l:Loc Motion_BrowseApplication}" FontSize="12"
+                                               Foreground="#BFFFFFFF" />
+                                </Border>
+                            </Grid>
                         </Grid>
 
                         <!-- Folder editor -->
@@ -297,13 +324,9 @@
                                     <TextBlock Text="{l:Loc Folder_ItemsHeader}" FontSize="11"
                                                Foreground="#59FFFFFF" Margin="2,14,0,6" />
                                     <StackPanel x:Name="FolderChildRows" HorizontalAlignment="Center" />
-
-                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                                        <Border Style="{StaticResource ButtonStyle}" BorderBrush="#80E5484D"
-                                                MouseLeftButtonUp="OnDeleteFolderClick">
-                                            <TextBlock Text="{l:Loc Folder_Delete}" FontSize="12" Foreground="#FFE5484D" />
-                                        </Border>
-                                    </StackPanel>
+                                    <TextBlock x:Name="FolderAssignmentHint" FontSize="10"
+                                               Foreground="#80FFD97A" HorizontalAlignment="Center"
+                                               Margin="0,8,0,0" Visibility="Collapsed" />
                                 </StackPanel>
                             </ScrollViewer>
                         </Grid>
@@ -360,16 +383,87 @@
                                 <TextBlock Text="{l:Loc SystemAction_ActionsHeader}" FontSize="11"
                                            Foreground="#59FFFFFF" Margin="2,14,0,6" />
                                 <StackPanel x:Name="SystemActionList" />
-
-                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                                    <Border Style="{StaticResource ButtonStyle}" BorderBrush="#80E5484D"
-                                            MouseLeftButtonUp="OnDeleteSystemActionClick">
-                                        <TextBlock Text="{l:Loc SystemAction_Delete}" FontSize="12" Foreground="#FFE5484D" />
-                                    </Border>
-                                </StackPanel>
                             </StackPanel>
                         </Grid>
+                        <Border x:Name="DeleteMotionButton" Style="{StaticResource ButtonStyle}"
+                                Padding="10,5" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                BorderBrush="#80E5484D" Visibility="Collapsed" Panel.ZIndex="20"
+                                MouseLeftButtonUp="OnDeleteSelectedMotionClick">
+                            <TextBlock Text="{l:Loc Motion_Delete}" FontSize="11" Foreground="#FFE5484D" />
+                        </Border>
                     </Grid>
+                </Border>
+                    </Grid>
+                </ScrollViewer>
+
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="12,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="{l:Loc Motion_ListHeader}" FontSize="12"
+                                       Foreground="#99F5C542" Margin="2,0,0,4" />
+                            <TextBlock Text="{l:Loc Motion_ListHint}" FontSize="10"
+                                       Foreground="#59FFFFFF" TextWrapping="Wrap" Margin="2,0,0,10" />
+
+                            <Border Tag="Application" Style="{StaticResource ButtonStyle}" Padding="10" Margin="0,3"
+                                    PreviewMouseLeftButtonDown="OnMotionTemplateDragStart"
+                                    PreviewMouseMove="OnMotionTemplateDragMove">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE71D;" FontFamily="Segoe MDL2 Assets" FontSize="22"
+                                               Foreground="#FFFFD97A" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="{l:Loc Motion_ApplicationName}" FontSize="12"
+                                                   Foreground="#E6FFFFFF" />
+                                        <TextBlock Text="{l:Loc Motion_ApplicationDesc}" FontSize="9"
+                                                   Foreground="#59FFFFFF" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Tag="Folder" Style="{StaticResource ButtonStyle}" Padding="10" Margin="0,3"
+                                    ToolTip="{l:Loc Motion_FolderHomeOnly}"
+                                    PreviewMouseLeftButtonDown="OnMotionTemplateDragStart"
+                                    PreviewMouseMove="OnMotionTemplateDragMove">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Path Width="24" Height="19" Stretch="Uniform" Fill="#FFFFD97A"
+                                          Data="M 0.5,2.5 H 5 L 6.5,4 H 13.5 V 11 H 0.5 Z"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="{l:Loc Motion_FolderName}" FontSize="12"
+                                                   Foreground="#E6FFFFFF" />
+                                        <TextBlock Text="{l:Loc Motion_FolderDesc}" FontSize="9"
+                                                   Foreground="#59FFFFFF" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Tag="SystemAction" Style="{StaticResource ButtonStyle}" Padding="10" Margin="0,3"
+                                    PreviewMouseLeftButtonDown="OnMotionTemplateDragStart"
+                                    PreviewMouseMove="OnMotionTemplateDragMove">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="22"
+                                               Foreground="#FFFFD97A" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="{l:Loc Motion_SystemActionName}" FontSize="12"
+                                                   Foreground="#E6FFFFFF" />
+                                        <TextBlock Text="{l:Loc Motion_SystemActionDesc}" FontSize="9"
+                                                   Foreground="#59FFFFFF" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
                 </Border>
             </Grid>
 
@@ -558,58 +652,6 @@
             </Grid>
         </Grid>
 
-        <!-- History picker (modal) -->
-        <Grid x:Name="PickerOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
-              MouseLeftButtonDown="OnPickerBackdropClick">
-            <Border Width="600" Height="440" CornerRadius="14" Background="#F214161D"
-                    BorderBrush="#59F5B301" BorderThickness="1" Padding="18"
-                    MouseLeftButtonDown="OnPickerDialogClick">
-                <Border.Effect>
-                    <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="32" ShadowDepth="12" />
-                </Border.Effect>
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <TextBlock x:Name="PickerTitle" Text="Pin to F" FontSize="15" FontWeight="SemiBold"
-                               Foreground="#F2FFFFFF" />
-                    <TextBox x:Name="PickerSearch" Grid.Row="1" Style="{StaticResource FieldStyle}"
-                             Margin="0,10,0,10" TextChanged="OnPickerSearchChanged" />
-
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                        <StackPanel x:Name="PickerList" />
-                    </ScrollViewer>
-
-                    <Grid Grid.Row="3" Margin="0,10,0,0">
-                        <TextBlock Text="{l:Loc Picker_Desc}" FontSize="10"
-                                   Foreground="#59FFFFFF" VerticalAlignment="Center" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Border x:Name="PickerNewFolderButton" Style="{StaticResource ButtonStyle}" Padding="12,5"
-                                    Margin="0,0,10,0" MouseLeftButtonUp="OnPickerNewFolderClick">
-                                <TextBlock Text="{l:Loc Picker_NewFolder}" FontSize="12" Foreground="#BFFFFFFF" />
-                            </Border>
-                            <Border x:Name="PickerSystemActionButton" Style="{StaticResource ButtonStyle}" Padding="12,5"
-                                    Margin="0,0,10,0" MouseLeftButtonUp="OnPickerSystemActionClick">
-                                <TextBlock Text="{l:Loc Picker_AddSystemAction}" FontSize="12" Foreground="#BFFFFFFF" />
-                            </Border>
-                            <Border Style="{StaticResource ButtonStyle}" Padding="12,5"
-                                    MouseLeftButtonUp="OnPickerManualClick">
-                                <TextBlock Text="{l:Loc Picker_Manual}" FontSize="12" Foreground="#BFFFFFFF" />
-                            </Border>
-                            <Border Style="{StaticResource ButtonStyle}" Padding="12,5" Margin="10,0,0,0"
-                                    MouseLeftButtonUp="OnPickerCancelClick">
-                                <TextBlock Text="{l:Loc Common_Cancel}" FontSize="12" Foreground="#BFFFFFFF" />
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-                </Grid>
-            </Border>
-        </Grid>
-
         <!-- Confirm dialog (modal) -->
         <Grid x:Name="ConfirmOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
               MouseLeftButtonDown="OnConfirmBackdropClick">
@@ -635,28 +677,5 @@
             </Border>
         </Grid>
 
-        <!-- System action catalog picker (modal) -->
-        <Grid x:Name="SystemActionPickerOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#B310131A"
-              MouseLeftButtonDown="OnSystemActionPickerBackdropClick">
-            <Border Width="460" CornerRadius="14" Background="#F214161D"
-                    BorderBrush="#59F5B301" BorderThickness="1" Padding="18"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    MouseLeftButtonDown="OnSystemActionPickerDialogClick">
-                <Border.Effect>
-                    <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="32" ShadowDepth="12" />
-                </Border.Effect>
-                <StackPanel>
-                    <TextBlock x:Name="SystemActionPickerTitle" FontSize="15" FontWeight="SemiBold"
-                               Foreground="#F2FFFFFF" />
-                    <StackPanel x:Name="SystemActionPickerList" Margin="0,12,0,0" />
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                        <Border Style="{StaticResource ButtonStyle}" Padding="12,5"
-                                MouseLeftButtonUp="OnSystemActionPickerCancelClick">
-                            <TextBlock Text="{l:Loc Common_Cancel}" FontSize="12" Foreground="#BFFFFFFF" />
-                        </Border>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </Grid>
     </Grid>
 </Window>

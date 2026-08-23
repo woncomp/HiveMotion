@@ -95,6 +95,9 @@
   <data name="Cell_ClickToLaunch" xml:space="preserve">
     <value>Click to launch</value>
   </data>
+  <data name="Cell_NotConfigured" xml:space="preserve">
+    <value>Not configured</value>
+  </data>
   <data name="Grid_AllWindowsCount" xml:space="preserve">
     <value>All windows · {0}</value>
   </data>
@@ -171,6 +174,51 @@ Working directory: {1}</value>
   <data name="Pins_EditorEmpty" xml:space="preserve">
     <value>Click a tile above to view or edit a pin</value>
   </data>
+  <data name="Motion_ListHeader" xml:space="preserve">
+    <value>Motions</value>
+  </data>
+  <data name="Motion_ListHint" xml:space="preserve">
+    <value>Drag a motion type onto any cell</value>
+  </data>
+  <data name="Motion_ApplicationName" xml:space="preserve">
+    <value>Application</value>
+  </data>
+  <data name="Motion_ApplicationDesc" xml:space="preserve">
+    <value>Launch or switch to an application</value>
+  </data>
+  <data name="Motion_FolderName" xml:space="preserve">
+    <value>Folder</value>
+  </data>
+  <data name="Motion_FolderDesc" xml:space="preserve">
+    <value>Group motions on a child grid</value>
+  </data>
+  <data name="Motion_FolderHomeOnly" xml:space="preserve">
+    <value>Folders can only be placed on the home grid</value>
+  </data>
+  <data name="Motion_SystemActionName" xml:space="preserve">
+    <value>System action</value>
+  </data>
+  <data name="Motion_SystemActionDesc" xml:space="preserve">
+    <value>Run a built-in Windows action</value>
+  </data>
+  <data name="Motion_EmptyCellHint" xml:space="preserve">
+    <value>Cell {0} is empty · Drag a motion from the right</value>
+  </data>
+  <data name="Motion_ReplaceConfirm" xml:space="preserve">
+    <value>Replace {0}: "{1}" with {2}?</value>
+  </data>
+  <data name="Motion_NotConfigured" xml:space="preserve">
+    <value>Not configured · activation does nothing</value>
+  </data>
+  <data name="Motion_SelectApplication" xml:space="preserve">
+    <value>Select an application from launch history</value>
+  </data>
+  <data name="Motion_BrowseApplication" xml:space="preserve">
+    <value>Browse for an application…</value>
+  </data>
+  <data name="Motion_Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
   <data name="Pins_ProgramPath" xml:space="preserve">
     <value>Program path</value>
   </data>
@@ -189,9 +237,6 @@ Working directory: {1}</value>
   <data name="Pins_Launch" xml:space="preserve">
     <value>Launch now</value>
   </data>
-  <data name="Pins_Delete" xml:space="preserve">
-    <value>Delete pin</value>
-  </data>
   <data name="Pins_StatusRunning" xml:space="preserve">
     <value>● Running (a window matches this command line)</value>
   </data>
@@ -206,9 +251,6 @@ Working directory: {1}</value>
   </data>
   <data name="Pins_ClearAllConfirm" xml:space="preserve">
     <value>Clear all pins? This cannot be undone.</value>
-  </data>
-  <data name="Pins_PickerTitle" xml:space="preserve">
-    <value>Pin to {0}</value>
   </data>
   <data name="Priority_Header" xml:space="preserve">
     <value>Priority</value>
@@ -323,12 +365,6 @@ Working directory: {1}</value>
   </data>
   <data name="Cheat_Close" xml:space="preserve">
     <value>Close the hive</value>
-  </data>
-  <data name="Picker_Desc" xml:space="preserve">
-    <value>From past hive scans, sorted by launch count</value>
-  </data>
-  <data name="Picker_Manual" xml:space="preserve">
-    <value>Enter manually…</value>
   </data>
   <data name="Picker_Empty" xml:space="preserve">
     <value>No matching history</value>
@@ -504,17 +540,11 @@ Working directory: {1}</value>
   <data name="Folder_DefaultName" xml:space="preserve">
     <value>New Folder</value>
   </data>
-  <data name="Picker_NewFolder" xml:space="preserve">
-    <value>New folder</value>
-  </data>
   <data name="Motion_ClearIcon" xml:space="preserve">
     <value>Clear</value>
   </data>
   <data name="Folder_ItemsHeader" xml:space="preserve">
     <value>Items · drag to reassign, click to edit</value>
-  </data>
-  <data name="Folder_Delete" xml:space="preserve">
-    <value>Delete folder</value>
   </data>
   <data name="Folder_DeleteConfirm" xml:space="preserve">
     <value>Delete folder "{0}"? Its items will be deleted with it.</value>
@@ -567,22 +597,13 @@ Working directory: {1}</value>
   <data name="SystemAction_Lock_Desc" xml:space="preserve">
     <value>Lock this PC immediately (Win+L)</value>
   </data>
-  <data name="SystemAction_PickerTitle" xml:space="preserve">
-    <value>Assign a system action to {0}</value>
-  </data>
   <data name="App_RemoveSystemActionMessage" xml:space="preserve">
     <value>Remove the system action "{1}" on {0}?</value>
   </data>
   <data name="Grid_StatusSystemAction" xml:space="preserve">
     <value>System action</value>
   </data>
-  <data name="Picker_AddSystemAction" xml:space="preserve">
-    <value>Add system action</value>
-  </data>
   <data name="SystemAction_ActionsHeader" xml:space="preserve">
     <value>Action · click to change</value>
-  </data>
-  <data name="SystemAction_Delete" xml:space="preserve">
-    <value>Remove system action</value>
   </data>
 </root>

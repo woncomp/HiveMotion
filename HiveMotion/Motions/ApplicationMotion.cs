@@ -18,11 +18,16 @@ public sealed class ApplicationMotion : Motion
     public string WorkingDirectory { get; set; } = string.Empty;
 
     [JsonIgnore]
+    public override bool IsConfigured => !string.IsNullOrWhiteSpace(ExecutablePath);
+
+    [JsonIgnore]
     public string CommandLine =>
         string.IsNullOrEmpty(Arguments) ? ExecutablePath : $"{ExecutablePath} {Arguments}";
 
     public bool Matches(RunningWindow window)
     {
+        if (!IsConfigured)
+            return false;
         if (window.ExecutablePath == null)
             return false;
         if (!string.Equals(window.ExecutablePath, ExecutablePath, StringComparison.OrdinalIgnoreCase))
@@ -48,6 +53,8 @@ public sealed class ApplicationMotion : Motion
     /// <summary>Running: the window's live DWM thumbnail; not running: the launch identity.</summary>
     public override MotionHoverPreview DescribeHover(HiveCell cell)
     {
+        if (!IsConfigured)
+            return MotionHoverPreview.Info(Loc.Get("Motion_ApplicationName"), Loc.Get("Motion_NotConfigured"));
         if (cell.IsRunning)
             return MotionHoverPreview.Thumbnail;
 

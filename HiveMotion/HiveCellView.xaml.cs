@@ -59,8 +59,13 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         // folders get the "click to open" variant.
         bool awaitingLaunch = cell.IsPinned && !cell.IsRunning;
         bool isFolder = cell.Folder != null;
-        HintText.Text = Loc.Get(isFolder ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
-        HintText.Visibility = awaitingLaunch || isFolder ? Visibility.Visible : Visibility.Collapsed;
+        bool unconfigured = cell.Motion is { IsConfigured: false };
+        HintText.Text = Loc.Get(unconfigured
+            ? "Cell_NotConfigured"
+            : isFolder ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
+        HintText.Visibility = awaitingLaunch || isFolder || unconfigured
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // A padlock marks application cells, a folder silhouette marks folder cells
         PinBadge.Visibility = cell.IsPinned ? Visibility.Visible : Visibility.Collapsed;

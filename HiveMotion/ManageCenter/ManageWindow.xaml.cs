@@ -21,14 +21,22 @@ using Point = System.Windows.Point;
 namespace HiveMotion.ManageCenter;
 
 /// <summary>
-/// Manage center: motion overview (drag a tile to move/swap its letter), application
-/// and folder editors, launch-history picker, and general settings. Edits write
+/// Manage center: motion overview (drag a tile to move/swap its letter), Stream Deck-style
+/// motion type assignment, application/folder/system-action editors, and general settings. Edits write
 /// through to the stores immediately; the overlay picks them up on its next open.
 /// </summary>
 public partial class ManageWindow : Window
 {
     private const string DragFormat = "HiveMotion.PinLetter";
     private const string ChildDragFormat = "HiveMotion.FolderChildLetter";
+    private const string MotionTemplateDragFormat = "HiveMotion.MotionTemplate";
+
+    private enum MotionTemplate
+    {
+        Application,
+        Folder,
+        SystemAction
+    }
 
     private readonly MotionStore _motionStore;
     private readonly HistoryStore _historyStore;
@@ -48,9 +56,6 @@ public partial class ManageWindow : Window
     private FolderMotion? _selectedAppFolder;
     /// <summary>Parent folder when the system action editor edits a folder child; null for home layer.</summary>
     private FolderMotion? _selectedSystemActionFolder;
-    private char _pickerLetter;
-    /// <summary>Folder the picker is adding a child to; null when picking for the home layer.</summary>
-    private FolderMotion? _pickerFolder;
     private Action? _confirmAction;
     private bool _editorLoading;
     private bool _dragArmed;
@@ -59,6 +64,12 @@ public partial class ManageWindow : Window
     private bool _childDragArmed;
     private char _childDragLetter;
     private Point _childDragStart;
+    private bool _motionTemplateDragArmed;
+    private MotionTemplate _motionTemplate;
+    private Point _motionTemplateDragStart;
+    private char? _selectedHomeLetter;
+    private char? _selectedChildLetter;
+    private FolderMotion? _selectedChildFolder;
     private bool _capturingHotkey;
 
     public ManageWindow(MotionStore motionStore, HistoryStore historyStore, SettingsStore settingsStore,
@@ -116,10 +127,19 @@ public partial class ManageWindow : Window
         UpdateHistoryCount();
         RefreshHotkeyUi();
         InitAboutPage();
-        if (PickerOverlay.Visibility == Visibility.Visible)
-            RebuildPickerList();
-        if (SystemActionPickerOverlay.Visibility == Visibility.Visible)
-            BuildSystemActionPickerList();
+        if (_selectedApp is { IsConfigured: false })
+        {
+            EditorName.Text = Loc.Get("Motion_ApplicationName");
+            RebuildApplicationHistoryList();
+        }
+        if (_selectedHomeLetter is { } emptyLetter &&
+            _selectedApp == null && _selectedFolder == null && _selectedSystemAction == null)
+            EditorEmpty.Text = Loc.Format("Motion_EmptyCellHint", emptyLetter);
+        if (_selectedChildFolder != null && _selectedChildLetter is { } childLetter && _selectedFolder != null)
+        {
+            FolderAssignmentHint.Text = Loc.Format("Motion_EmptyCellHint", childLetter);
+            FolderAssignmentHint.Visibility = Visibility.Visible;
+        }
         UpdateLanguageButtons();
     }
 
@@ -191,17 +211,19 @@ public partial class ManageWindow : Window
     private Border BuildTile(char letter)
     {
         var motion = _motionStore.FindByKey(letter);
+        bool selected = _selectedHomeLetter == letter;
         var tile = new Border
         {
             Width = 60,
             Height = 60,
             Margin = new Thickness(4),
             CornerRadius = new CornerRadius(10),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(selected ? 2 : 1),
             Tag = letter,
             AllowDrop = true,
             Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(motion != null ? "#1AFFFFFF" : "#0AFFFFFF")),
-            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(motion != null ? "#80F5B301" : "#26FFFFFF")),
+            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+                selected ? "#FFF5B301" : motion != null ? "#80F5B301" : "#26FFFFFF")),
             ToolTip = motion != null ? $"{letter}: {MotionDisplayName(motion)}" : Loc.Format("Pins_PinToLetter", letter)
         };
 
@@ -342,9 +364,13 @@ public partial class ManageWindow : Window
 
     /// <summary>System actions take their localized catalog name; other kinds store their own.</summary>
     private static string MotionDisplayName(Motion motion) =>
-        motion is SystemActionMotion systemAction
-            ? SystemActions.DisplayNameOf(systemAction.ActionId)
-            : motion.DisplayName;
+        motion switch
+        {
+            ApplicationMotion app when !app.IsConfigured => Loc.Get("Motion_ApplicationName"),
+            SystemActionMotion systemAction when !systemAction.IsConfigured => Loc.Get("Motion_SystemActionName"),
+            SystemActionMotion systemAction => SystemActions.DisplayNameOf(systemAction.ActionId),
+            _ => motion.DisplayName
+        };
 
     /// <summary>Shared folder silhouette (overlay badge, tiles, folder editor).</summary>
     private static System.Windows.Shapes.Path BuildFolderGlyph(double width)
@@ -394,6 +420,13 @@ public partial class ManageWindow : Window
     private void OnTileDragEnter(object sender, DragEventArgs e)
     {
         var tile = (Border)sender;
+        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+        {
+            e.Effects = DragDropEffects.Copy;
+            tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
+            e.Handled = true;
+            return;
+        }
         if (!e.Data.GetDataPresent(DragFormat))
             return;
         e.Effects = DragDropEffects.Move;
@@ -405,17 +438,24 @@ public partial class ManageWindow : Window
     {
         var tile = (Border)sender;
         char letter = (char)tile.Tag;
+        bool selected = _selectedHomeLetter == letter;
         tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-            _motionStore.FindByKey(letter) != null ? "#80F5B301" : "#26FFFFFF"));
+            selected ? "#FFF5B301" : _motionStore.FindByKey(letter) != null ? "#80F5B301" : "#26FFFFFF"));
     }
 
     private void OnTileDrop(object sender, DragEventArgs e)
     {
         OnTileDragLeave(sender, e);
+        char target = (char)((Border)sender).Tag;
+        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+        {
+            AssignMotionTemplate((MotionTemplate)e.Data.GetData(MotionTemplateDragFormat), target, null);
+            e.Handled = true;
+            return;
+        }
         if (!e.Data.GetDataPresent(DragFormat))
             return;
 
-        char target = (char)((Border)sender).Tag;
         char source = (char)e.Data.GetData(DragFormat);
         if (source == target)
             return;
@@ -451,8 +491,106 @@ public partial class ManageWindow : Window
 
     private void OnEmptyTileClick(object sender, MouseButtonEventArgs e)
     {
-        OpenPicker((char)((Border)sender).Tag, null);
+        ShowEmptyCell((char)((Border)sender).Tag, null);
         e.Handled = true;
+    }
+
+    private void ShowEmptyCell(char letter, FolderMotion? folder)
+    {
+        if (folder == null)
+        {
+            _selectedHomeLetter = letter;
+            _selectedChildLetter = null;
+            _selectedChildFolder = null;
+            ShowEditor(null);
+            _selectedHomeLetter = letter;
+            EditorEmpty.Text = Loc.Format("Motion_EmptyCellHint", letter);
+            BuildLetterTiles();
+            return;
+        }
+
+        ShowEditor(folder);
+        _selectedHomeLetter = folder.Key;
+        _selectedChildLetter = letter;
+        _selectedChildFolder = folder;
+        DeleteMotionButton.Visibility = Visibility.Collapsed;
+        FolderAssignmentHint.Text = Loc.Format("Motion_EmptyCellHint", letter);
+        FolderAssignmentHint.Visibility = Visibility.Visible;
+        BuildFolderChildTiles();
+    }
+
+    private void AssignMotionTemplate(MotionTemplate template, char letter, FolderMotion? folder)
+    {
+        if (folder != null && template == MotionTemplate.Folder)
+            return;
+
+        Motion? existing = folder == null
+            ? _motionStore.FindByKey(letter)
+            : folder.Items.FirstOrDefault(item => item.Key == letter);
+        void Replace()
+        {
+            Motion motion = template switch
+            {
+                MotionTemplate.Application => new ApplicationMotion { Key = letter },
+                MotionTemplate.Folder => new FolderMotion
+                {
+                    Key = letter,
+                    DisplayName = Loc.Get("Folder_DefaultName")
+                },
+                _ => new SystemActionMotion { Key = letter }
+            };
+
+            if (folder == null)
+            {
+                _motionStore.Set(motion);
+                BuildLetterTiles();
+                ShowEditor(motion);
+            }
+            else
+            {
+                folder.Items.RemoveAll(item => item.Key == letter);
+                folder.Items.Add(motion);
+                _motionStore.Save();
+                ShowEditor(motion, folder);
+            }
+        }
+
+        if (existing == null)
+        {
+            Replace();
+            return;
+        }
+
+        ShowConfirm(Loc.Format("Motion_ReplaceConfirm", letter, MotionDisplayName(existing),
+            MotionTemplateName(template)), Replace);
+    }
+
+    private static string MotionTemplateName(MotionTemplate template) => template switch
+    {
+        MotionTemplate.Application => Loc.Get("Motion_ApplicationName"),
+        MotionTemplate.Folder => Loc.Get("Motion_FolderName"),
+        _ => Loc.Get("Motion_SystemActionName")
+    };
+
+    private void OnMotionTemplateDragStart(object sender, MouseButtonEventArgs e)
+    {
+        _motionTemplateDragArmed = true;
+        _motionTemplateDragStart = e.GetPosition(this);
+        _motionTemplate = Enum.Parse<MotionTemplate>((string)((Border)sender).Tag);
+    }
+
+    private void OnMotionTemplateDragMove(object sender, MouseEventArgs e)
+    {
+        if (!_motionTemplateDragArmed || e.LeftButton != MouseButtonState.Pressed)
+            return;
+        Point position = e.GetPosition(this);
+        if (Math.Abs(position.X - _motionTemplateDragStart.X) < 8 &&
+            Math.Abs(position.Y - _motionTemplateDragStart.Y) < 8)
+            return;
+
+        _motionTemplateDragArmed = false;
+        DragDrop.DoDragDrop((Border)sender,
+            new DataObject(MotionTemplateDragFormat, _motionTemplate), DragDropEffects.Copy);
     }
 
     // ---------- editor ----------
@@ -464,18 +602,25 @@ public partial class ManageWindow : Window
         _selectedSystemAction = motion as SystemActionMotion;
         _selectedAppFolder = _selectedApp != null ? childParent : null;
         _selectedSystemActionFolder = _selectedSystemAction != null ? childParent : null;
+        _selectedHomeLetter = motion == null ? null : childParent?.Key ?? motion.Key;
+        _selectedChildLetter = childParent != null ? motion?.Key : null;
+        _selectedChildFolder = childParent;
         _editorLoading = true;
 
         EditorEmpty.Visibility = motion == null ? Visibility.Visible : Visibility.Collapsed;
         EditorPanel.Visibility = _selectedApp != null ? Visibility.Visible : Visibility.Collapsed;
         FolderEditorPanel.Visibility = _selectedFolder != null ? Visibility.Visible : Visibility.Collapsed;
         SystemActionEditorPanel.Visibility = _selectedSystemAction != null ? Visibility.Visible : Visibility.Collapsed;
+        DeleteMotionButton.Visibility = motion != null ? Visibility.Visible : Visibility.Collapsed;
+        EditorEmpty.Text = Loc.Get("Pins_EditorEmpty");
+        FolderAssignmentHint.Visibility = Visibility.Collapsed;
 
         if (_selectedApp is { } app)
         {
             EditorLetterBadge.Text = app.Key.ToString();
             UpdateApplicationEditorIcon();
-            EditorName.Text = app.DisplayName;
+            EditorName.Text = app.IsConfigured ? app.DisplayName : Loc.Get("Motion_ApplicationName");
+            EditorName.IsEnabled = app.IsConfigured;
             EditorPath.Text = app.ExecutablePath;
             EditorArgs.Text = app.Arguments;
             EditorCwd.Text = app.WorkingDirectory;
@@ -484,6 +629,12 @@ public partial class ManageWindow : Window
             UpdateEditorStatus();
             UpdatePreview();
             ValidatePath();
+            ApplicationSetupPanel.Visibility = app.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
+            if (!app.IsConfigured)
+            {
+                ApplicationHistorySearch.Text = string.Empty;
+                RebuildApplicationHistoryList();
+            }
         }
         else if (_selectedFolder is { } folder)
         {
@@ -502,6 +653,7 @@ public partial class ManageWindow : Window
         }
 
         _editorLoading = false;
+        BuildLetterTiles();
     }
 
     private void OnEditorBackClick(object sender, MouseButtonEventArgs e)
@@ -517,6 +669,12 @@ public partial class ManageWindow : Window
     {
         if (_selectedApp == null)
             return;
+        if (!_selectedApp.IsConfigured)
+        {
+            EditorStatus.Text = Loc.Get("Motion_NotConfigured");
+            EditorStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFD97A"));
+            return;
+        }
         bool running = IsIdentityRunning(_selectedApp);
         EditorStatus.Text = Loc.Get(running ? "Pins_StatusRunning" : "Pins_StatusNotRunning");
         EditorStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
@@ -564,6 +722,8 @@ public partial class ManageWindow : Window
         }
         UpdateEditorStatus();
         UpdateApplicationEditorIcon();
+        if (!_selectedApp.IsConfigured)
+            ShowEditor(_selectedApp, _selectedAppFolder);
     }
 
     private void OnEditorFieldLostFocus(object sender, RoutedEventArgs e) => CommitEditor();
@@ -669,25 +829,35 @@ public partial class ManageWindow : Window
         e.Handled = true;
     }
 
-    private void OnDeletePinClick(object sender, MouseButtonEventArgs e)
+    private void OnDeleteSelectedMotionClick(object sender, MouseButtonEventArgs e)
     {
-        if (_selectedApp == null)
+        Motion? motion = _selectedApp ?? (Motion?)_selectedFolder ?? _selectedSystemAction;
+        FolderMotion? parent = _selectedApp != null ? _selectedAppFolder : _selectedSystemActionFolder;
+        if (motion == null)
             return;
-        var app = _selectedApp;
-        var parent = _selectedAppFolder;
-        ShowConfirm(Loc.Format("Pins_DeleteConfirm", app.Key, app.DisplayName), () =>
+
+        string message = motion switch
+        {
+            ApplicationMotion app => Loc.Format("Pins_DeleteConfirm", app.Key,
+                app.DisplayName.Length > 0 ? app.DisplayName : Loc.Get("Motion_ApplicationName")),
+            FolderMotion folder => Loc.Format("Folder_DeleteConfirm", folder.DisplayName),
+            SystemActionMotion action => Loc.Format("App_RemoveSystemActionMessage", action.Key,
+                action.IsConfigured ? SystemActions.DisplayNameOf(action.ActionId) : Loc.Get("Motion_SystemActionName")),
+            _ => string.Empty
+        };
+
+        ShowConfirm(message, () =>
         {
             if (parent != null)
             {
-                parent.Items.RemoveAll(i => i.Key == app.Key);
+                parent.Items.RemoveAll(item => item.Key == motion.Key);
                 _motionStore.Save();
-                ShowEditor(parent);
+                ShowEmptyCell(motion.Key, parent);
             }
             else
             {
-                _motionStore.Remove(app.Key);
-                BuildLetterTiles();
-                ShowEditor(null);
+                _motionStore.Remove(motion.Key);
+                ShowEmptyCell(motion.Key, null);
             }
         });
         e.Handled = true;
@@ -778,20 +948,6 @@ public partial class ManageWindow : Window
         BuildLetterTiles();
     }
 
-    private void OnDeleteFolderClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedFolder == null)
-            return;
-        var folder = _selectedFolder;
-        ShowConfirm(Loc.Format("Folder_DeleteConfirm", folder.DisplayName), () =>
-        {
-            _motionStore.Remove(folder.Key);
-            BuildLetterTiles();
-            ShowEditor(null);
-        });
-        e.Handled = true;
-    }
-
     // ---------- system action editor ----------
 
     /// <summary>Fills the header and rebuilds the action list with the current action highlighted.</summary>
@@ -803,8 +959,12 @@ public partial class ManageWindow : Window
         SystemActionIconClearButton.Visibility = HasCustomIcon(_selectedSystemAction)
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SystemActionName.Text = SystemActions.DisplayNameOf(_selectedSystemAction.ActionId);
-        SystemActionStatus.Text = SystemActions.DescriptionOf(_selectedSystemAction.ActionId);
+        SystemActionName.Text = _selectedSystemAction.IsConfigured
+            ? SystemActions.DisplayNameOf(_selectedSystemAction.ActionId)
+            : Loc.Get("Motion_SystemActionName");
+        SystemActionStatus.Text = _selectedSystemAction.IsConfigured
+            ? SystemActions.DescriptionOf(_selectedSystemAction.ActionId)
+            : Loc.Get("Motion_NotConfigured");
         BuildSystemActionList();
     }
 
@@ -868,7 +1028,7 @@ public partial class ManageWindow : Window
         UpdateSystemActionEditor();
     }
 
-    /// <summary>Glyph + name + description row, shared by the editor list and the catalog picker.</summary>
+    /// <summary>Glyph + name + description row used by the system-action editor.</summary>
     private static Border BuildSystemActionRow(SystemAction action, bool current, Action onClick)
     {
         var icon = new Image
@@ -931,90 +1091,6 @@ public partial class ManageWindow : Window
         return row;
     }
 
-    private void OnDeleteSystemActionClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedSystemAction == null)
-            return;
-        var systemAction = _selectedSystemAction;
-        var parent = _selectedSystemActionFolder;
-        ShowConfirm(Loc.Format("App_RemoveSystemActionMessage", systemAction.Key,
-            SystemActions.DisplayNameOf(systemAction.ActionId)), () =>
-        {
-            if (parent != null)
-            {
-                parent.Items.RemoveAll(i => i.Key == systemAction.Key);
-                _motionStore.Save();
-                ShowEditor(parent);
-            }
-            else
-            {
-                _motionStore.Remove(systemAction.Key);
-                BuildLetterTiles();
-                ShowEditor(null);
-            }
-        });
-        e.Handled = true;
-    }
-
-    // ---------- system action catalog picker ----------
-
-    private void OnPickerSystemActionClick(object sender, MouseButtonEventArgs e)
-    {
-        SystemActionPickerTitle.Text = Loc.Format("SystemAction_PickerTitle", _pickerLetter);
-        BuildSystemActionPickerList();
-        SystemActionPickerOverlay.Visibility = Visibility.Visible;
-        e.Handled = true;
-    }
-
-    private void BuildSystemActionPickerList()
-    {
-        SystemActionPickerList.Children.Clear();
-        foreach (var action in SystemActions.All)
-            SystemActionPickerList.Children.Add(BuildSystemActionRow(action, current: false, () => PickSystemAction(action)));
-    }
-
-    private void PickSystemAction(SystemAction action)
-    {
-        var motion = new SystemActionMotion { Key = _pickerLetter, ActionId = action.Id };
-        CloseSystemActionPicker();
-        if (_pickerFolder is { } folder)
-        {
-            folder.Items.RemoveAll(i => i.Key == motion.Key);
-            folder.Items.Add(motion);
-            _motionStore.Save();
-            ClosePicker();
-            // Rebuild the child grid, then open the new child in the system action editor.
-            ShowEditor(folder);
-            ShowEditor(motion, folder);
-        }
-        else
-        {
-            _motionStore.Set(motion);
-            ClosePicker();
-            BuildLetterTiles();
-            ShowEditor(motion);
-        }
-    }
-
-    private void CloseSystemActionPicker()
-    {
-        SystemActionPickerOverlay.Visibility = Visibility.Collapsed;
-    }
-
-    private void OnSystemActionPickerCancelClick(object sender, MouseButtonEventArgs e)
-    {
-        CloseSystemActionPicker();
-        e.Handled = true;
-    }
-
-    private void OnSystemActionPickerBackdropClick(object sender, MouseButtonEventArgs e)
-    {
-        CloseSystemActionPicker();
-        e.Handled = true;
-    }
-
-    private void OnSystemActionPickerDialogClick(object sender, MouseButtonEventArgs e) => e.Handled = true;
-
     // ---------- folder child tiles ----------
 
     private void BuildFolderChildTiles()
@@ -1043,17 +1119,19 @@ public partial class ManageWindow : Window
     private Border BuildChildTile(char letter)
     {
         var item = _selectedFolder!.Items.FirstOrDefault(i => i.Key == letter);
+        bool selected = _selectedChildFolder == _selectedFolder && _selectedChildLetter == letter;
         var tile = new Border
         {
             Width = 46,
             Height = 46,
             Margin = new Thickness(3),
             CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(selected ? 2 : 1),
             Tag = letter,
             AllowDrop = true,
             Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item != null ? "#1AFFFFFF" : "#0AFFFFFF")),
-            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item != null ? "#80F5B301" : "#26FFFFFF")),
+            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+                selected ? "#FFF5B301" : item != null ? "#80F5B301" : "#26FFFFFF")),
             ToolTip = item != null ? $"{letter}: {MotionDisplayName(item)}" : Loc.Format("Pins_PinToLetter", letter)
         };
 
@@ -1187,7 +1265,7 @@ public partial class ManageWindow : Window
     private void OnChildEmptyTileClick(object sender, MouseButtonEventArgs e)
     {
         if (_selectedFolder != null)
-            OpenPicker((char)((Border)sender).Tag, _selectedFolder);
+            ShowEmptyCell((char)((Border)sender).Tag, _selectedFolder);
         e.Handled = true;
     }
 
@@ -1215,6 +1293,15 @@ public partial class ManageWindow : Window
     private void OnChildDragEnter(object sender, DragEventArgs e)
     {
         var tile = (Border)sender;
+        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+        {
+            var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
+            e.Effects = template == MotionTemplate.Folder ? DragDropEffects.None : DragDropEffects.Copy;
+            if (e.Effects != DragDropEffects.None)
+                tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
+            e.Handled = true;
+            return;
+        }
         if (!e.Data.GetDataPresent(ChildDragFormat))
             return;
         e.Effects = DragDropEffects.Move;
@@ -1227,17 +1314,29 @@ public partial class ManageWindow : Window
         var tile = (Border)sender;
         char letter = (char)tile.Tag;
         bool occupied = _selectedFolder?.Items.Any(i => i.Key == letter) == true;
+        bool selected = _selectedChildFolder == _selectedFolder && _selectedChildLetter == letter;
         tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-            occupied ? "#80F5B301" : "#26FFFFFF"));
+            selected ? "#FFF5B301" : occupied ? "#80F5B301" : "#26FFFFFF"));
     }
 
     private void OnChildTileDrop(object sender, DragEventArgs e)
     {
         OnChildDragLeave(sender, e);
-        if (!e.Data.GetDataPresent(ChildDragFormat) || _selectedFolder == null)
+        if (_selectedFolder == null)
             return;
 
         char target = (char)((Border)sender).Tag;
+        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+        {
+            var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
+            if (template != MotionTemplate.Folder)
+                AssignMotionTemplate(template, target, _selectedFolder);
+            e.Handled = true;
+            return;
+        }
+        if (!e.Data.GetDataPresent(ChildDragFormat))
+            return;
+
         char source = (char)e.Data.GetData(ChildDragFormat);
         if (source == target)
             return;
@@ -1259,31 +1358,13 @@ public partial class ManageWindow : Window
         e.Handled = true;
     }
 
-    // ---------- history picker ----------
+    // ---------- inline application setup ----------
 
-    private void OpenPicker(char letter, FolderMotion? folder)
+    private void RebuildApplicationHistoryList()
     {
-        _pickerLetter = letter;
-        _pickerFolder = folder;
-        PickerTitle.Text = Loc.Format("Pins_PickerTitle", letter);
-        // Folders cannot nest, so the new-folder action only exists for the home layer.
-        PickerNewFolderButton.Visibility = folder == null ? Visibility.Visible : Visibility.Collapsed;
-        PickerSearch.Text = string.Empty;
-        RebuildPickerList();
-        PickerOverlay.Visibility = Visibility.Visible;
-        PickerSearch.Focus();
-    }
+        ApplicationHistoryList.Children.Clear();
 
-    private void ClosePicker()
-    {
-        PickerOverlay.Visibility = Visibility.Collapsed;
-    }
-
-    private void RebuildPickerList()
-    {
-        PickerList.Children.Clear();
-
-        string query = PickerSearch.Text.Trim();
+        string query = ApplicationHistorySearch.Text.Trim();
         var runningKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var window in _windows)
         {
@@ -1300,7 +1381,7 @@ public partial class ManageWindow : Window
 
         if (entries.Count == 0)
         {
-            PickerList.Children.Add(new TextBlock
+            ApplicationHistoryList.Children.Add(new TextBlock
             {
                 Text = Loc.Get("Picker_Empty"),
                 FontSize = 12,
@@ -1312,10 +1393,11 @@ public partial class ManageWindow : Window
         }
 
         foreach (var entry in entries)
-            PickerList.Children.Add(BuildPickerItem(entry, runningKeys.Contains(entry.IdentityKey)));
+            ApplicationHistoryList.Children.Add(BuildApplicationHistoryItem(entry,
+                runningKeys.Contains(entry.IdentityKey)));
     }
 
-    private Border BuildPickerItem(HistoryEntry entry, bool isRunning)
+    private Border BuildApplicationHistoryItem(HistoryEntry entry, bool isRunning)
     {
         bool missing = !File.Exists(entry.ExecutablePath);
 
@@ -1393,58 +1475,40 @@ public partial class ManageWindow : Window
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
         row.MouseLeftButtonUp += (_, e) =>
         {
-            PickEntry(new ApplicationMotion
-            {
-                Key = _pickerLetter,
-                ProcessName = entry.ProcessName,
-                ExecutablePath = entry.ExecutablePath,
-                Arguments = entry.Arguments,
-                WorkingDirectory = entry.WorkingDirectory,
-                DisplayName = entry.DisplayName
-            });
+            ConfigureSelectedApplication(entry.ProcessName, entry.ExecutablePath, entry.Arguments,
+                entry.WorkingDirectory, entry.DisplayName);
             e.Handled = true;
         };
         return row;
     }
 
-    private void PickEntry(ApplicationMotion app)
+    private void ConfigureSelectedApplication(string processName, string executablePath, string arguments,
+        string workingDirectory, string displayName)
     {
-        if (_pickerFolder is { } folder)
-        {
-            folder.Items.RemoveAll(i => i.Key == app.Key);
-            folder.Items.Add(app);
+        if (_selectedApp == null)
+            return;
+
+        var app = _selectedApp;
+        var parent = _selectedAppFolder;
+        app.ProcessName = processName;
+        app.ExecutablePath = executablePath;
+        app.Arguments = arguments;
+        app.WorkingDirectory = workingDirectory;
+        app.DisplayName = displayName.Length > 0 ? displayName : Path.GetFileNameWithoutExtension(executablePath);
+        if (parent != null)
             _motionStore.Save();
-            ClosePicker();
-            // Rebuild the child grid, then open the new child in the app editor.
-            ShowEditor(folder);
-            ShowEditor(app, folder);
-        }
         else
-        {
             _motionStore.Set(app);
-            ClosePicker();
-            BuildLetterTiles();
-            ShowEditor(app);
-        }
+        ShowEditor(app, parent);
     }
 
-    private void OnPickerNewFolderClick(object sender, MouseButtonEventArgs e)
+    private void OnApplicationHistorySearchChanged(object sender, TextChangedEventArgs e)
     {
-        var folder = new FolderMotion
-        {
-            Key = _pickerLetter,
-            DisplayName = Loc.Get("Folder_DefaultName")
-        };
-        _motionStore.Set(folder);
-        ClosePicker();
-        BuildLetterTiles();
-        ShowEditor(folder);
-        e.Handled = true;
+        if (!_editorLoading && _selectedApp is { IsConfigured: false })
+            RebuildApplicationHistoryList();
     }
 
-    private void OnPickerSearchChanged(object sender, TextChangedEventArgs e) => RebuildPickerList();
-
-    private void OnPickerManualClick(object sender, MouseButtonEventArgs e)
+    private void OnBrowseNewApplicationClick(object sender, MouseButtonEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -1452,30 +1516,10 @@ public partial class ManageWindow : Window
             Title = Loc.Get("Dialog_SelectPinProgram")
         };
         if (dialog.ShowDialog(this) == true)
-        {
-            PickEntry(new ApplicationMotion
-            {
-                Key = _pickerLetter,
-                ExecutablePath = dialog.FileName,
-                DisplayName = Path.GetFileNameWithoutExtension(dialog.FileName)
-            });
-        }
+            ConfigureSelectedApplication(string.Empty, dialog.FileName, string.Empty, string.Empty,
+                Path.GetFileNameWithoutExtension(dialog.FileName));
         e.Handled = true;
     }
-
-    private void OnPickerCancelClick(object sender, MouseButtonEventArgs e)
-    {
-        ClosePicker();
-        e.Handled = true;
-    }
-
-    private void OnPickerBackdropClick(object sender, MouseButtonEventArgs e)
-    {
-        ClosePicker();
-        e.Handled = true;
-    }
-
-    private void OnPickerDialogClick(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
     // ---------- priority page ----------
 
@@ -2021,16 +2065,6 @@ public partial class ManageWindow : Window
         if (ConfirmOverlay.Visibility == Visibility.Visible)
         {
             HideConfirm();
-            e.Handled = true;
-        }
-        else if (SystemActionPickerOverlay.Visibility == Visibility.Visible)
-        {
-            CloseSystemActionPicker();
-            e.Handled = true;
-        }
-        else if (PickerOverlay.Visibility == Visibility.Visible)
-        {
-            ClosePicker();
             e.Handled = true;
         }
     }

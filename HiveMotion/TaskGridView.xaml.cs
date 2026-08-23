@@ -670,7 +670,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         LaunchInfoPanel.Visibility = Visibility.Visible;
         LaunchInfoName.Text = info.Title;
         LaunchInfoCommand.Text = info.Detail;
-        LaunchInfoHint.Text = Loc.Get(cell.Folder != null ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
+        LaunchInfoHint.Text = Loc.Get(cell.Motion is { IsConfigured: false }
+            ? "Cell_NotConfigured"
+            : cell.Folder != null ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
 
         bool wasVisible = _previewVisible;
         _previewVisible = true;
