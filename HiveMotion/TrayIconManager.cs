@@ -16,9 +16,9 @@ public sealed class TrayIconManager : IDisposable
     private bool _disposed;
 
     public event EventHandler? ExitRequested;
-    /// <summary>Left-click on the tray icon: show the overlay.</summary>
+    /// <summary>"Open HiveMotion" menu item: show the overlay.</summary>
     public event EventHandler? ShowRequested;
-    /// <summary>"Manage center…" menu item: open the manage window.</summary>
+    /// <summary>Manage menu item or tray-icon left double-click: open the manage window.</summary>
     public event EventHandler? ManageRequested;
     /// <summary>"View logs…" menu item: open the live log viewer.</summary>
     public event EventHandler? LogRequested;
@@ -52,10 +52,10 @@ public sealed class TrayIconManager : IDisposable
             Visible = true,
             ContextMenuStrip = _contextMenu
         };
-        _notifyIcon.MouseClick += (_, e) =>
+        _notifyIcon.MouseDoubleClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
-                ShowRequested?.Invoke(this, EventArgs.Empty);
+                ManageRequested?.Invoke(this, EventArgs.Empty);
         };
 
         ApplyLocalizedStrings();
