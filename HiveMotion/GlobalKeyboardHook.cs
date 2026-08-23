@@ -8,12 +8,16 @@ namespace HiveMotion;
 
 /// <summary>
 /// Global low-level keyboard hook driven by a list of <see cref="HotkeyRule"/> combos.
-/// Hidden overlay: swallow the combo and ask to open. Open overlay: let the combo through
-/// to the system (native function fires) and notify so we close.
+/// Hidden overlay: swallow the combo and ask to open, except when Win+Tab is confirmed to
+/// belong to Task View. Open overlay: swallow the combo and ask to close.
 /// </summary>
 public sealed class GlobalKeyboardHook : IDisposable
 {
     private const int VkUnassigned = 0xE8;
+    private const string TaskViewClassWin11 = "XamlExplorerHostIslandWindow";
+    private const string TaskViewClassLegacy = "MultitaskingViewFrame";
+    private const string TaskViewTitleEnglish = "Task View";
+    private const string TaskViewTitleChinese = "任务视图";
 
     private readonly IReadOnlyList<HotkeyRule> _rules;
     private readonly Dictionary<int, string> _swallowedKeys = new();
@@ -24,19 +28,13 @@ public sealed class GlobalKeyboardHook : IDisposable
     private NativeMethods.LowLevelKeyboardProc? _hookProc;
     private bool _disposed;
 
-    /// <summary>Mirror of the overlay visibility, written by the app; decides swallow vs pass-through.</summary>
+    /// <summary>Mirror of the overlay visibility, written by the app; decides open vs close.</summary>
     public bool IsOverlayOpen { get; set; }
-
-    /// <summary>
-    /// True: a second press while open reaches the system (native UI fires). False: the
-    /// second press is swallowed, the app only closes the overlay.
-    /// </summary>
-    public bool PassThroughOnSecondPress { get; set; } = true;
 
     /// <summary>A registered combo fired while the overlay was hidden: open the overlay.</summary>
     public event EventHandler<HotkeyEventArgs>? HotkeyOpenRequested;
-    /// <summary>A registered combo fired while the overlay was open: passed to the system, close the overlay.</summary>
-    public event EventHandler<HotkeyEventArgs>? HotkeyPassthrough;
+    /// <summary>A registered combo fired while the overlay was open: close the overlay.</summary>
+    public event EventHandler<HotkeyEventArgs>? HotkeyCloseRequested;
 
     public GlobalKeyboardHook(IReadOnlyList<HotkeyRule> rules)
     {
@@ -159,27 +157,24 @@ public sealed class GlobalKeyboardHook : IDisposable
             Logger.ActivationInfo($"Recognized hotkey {rule.Name}; overlayOpen={IsOverlayOpen}; foreground={DescribeForeground()}.", correlationId);
             var request = new HotkeyEventArgs(rule, receiptTimestamp, correlationId);
 
-            // The combo's own native UI (Task View, Game Bar…) is foreground: let the key
-            // reach it so the native UI toggles itself closed instead of reopening our overlay.
-            if (IsForegroundNativeUi(rule, out string nativeUiReason))
-            {
-                Logger.ActivationInfo($"Foreground native UI matched ({nativeUiReason}); passing key through unchanged.", correlationId);
-                return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-            }
-            Logger.ActivationInfo("Foreground native-UI check did not match.", correlationId);
-
             if (IsOverlayOpen)
             {
-                Logger.ActivationInfo($"Overlay already open; notifying pass-through listeners; passThrough={PassThroughOnSecondPress}.", correlationId);
-                HotkeyPassthrough?.Invoke(this, request);
-                if (PassThroughOnSecondPress)
-                {
-                    Logger.ActivationInfo("Second press passed through to Windows.", correlationId);
-                    return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-                }
-                // Close-only mode: swallow the combo so its native UI never fires.
+                Logger.ActivationInfo("Overlay already open; notifying close listeners and swallowing the hotkey.", correlationId);
+                HotkeyCloseRequested?.Invoke(this, request);
                 SwallowKey(vk, rule, correlationId);
                 return (IntPtr)1;
+            }
+
+            // Task View can be opened independently from HiveMotion through the taskbar.
+            // Only a strictly confirmed Task View receives Win+Tab so Windows can close it.
+            if (IsWinTab(rule))
+            {
+                if (IsForegroundTaskView(out string taskViewReason))
+                {
+                    Logger.ActivationInfo($"Foreground Task View confirmed ({taskViewReason}); passing Win+Tab through unchanged.", correlationId);
+                    return NativeMethods.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+                }
+                Logger.ActivationInfo($"Foreground Task View not confirmed ({taskViewReason}); opening the overlay.", correlationId);
             }
 
             Logger.ActivationInfo("Overlay hidden; notifying overlay-open listeners.", correlationId);
@@ -208,9 +203,11 @@ public sealed class GlobalKeyboardHook : IDisposable
         {
             IntPtr foreground = NativeMethods.GetForegroundWindow();
             var className = new System.Text.StringBuilder(256);
+            var title = new System.Text.StringBuilder(512);
             NativeMethods.GetClassName(foreground, className, className.Capacity);
+            NativeMethods.GetWindowText(foreground, title, title.Capacity);
             NativeMethods.GetWindowThreadProcessId(foreground, out uint pid);
-            return $"handle={FormatHandle(foreground)}, class={className}, pid={pid}";
+            return $"handle={FormatHandle(foreground)}, class={className}, title=\"{SanitizeLogValue(title.ToString())}\", pid={pid}";
         }
         catch (Exception ex)
         {
@@ -219,55 +216,98 @@ public sealed class GlobalKeyboardHook : IDisposable
         }
     }
 
-    private static bool IsForegroundNativeUi(HotkeyRule rule, out string reason)
+    private static bool IsForegroundTaskView(out string reason)
     {
-        reason = "no configured native UI";
-        if (rule.NativeClassNames.Length == 0 && rule.NativeProcessNames.Length == 0)
-            return false;
-
-        IntPtr foreground = NativeMethods.GetForegroundWindow();
-        if (foreground == IntPtr.Zero)
+        IntPtr initialForeground = NativeMethods.GetForegroundWindow();
+        if (initialForeground == IntPtr.Zero)
         {
             reason = "no foreground window";
             return false;
         }
 
-        if (rule.NativeClassNames.Length > 0)
+        if (!NativeMethods.IsWindowVisible(initialForeground))
         {
-            var className = new System.Text.StringBuilder(256);
-            NativeMethods.GetClassName(foreground, className, className.Capacity);
-            foreach (string name in rule.NativeClassNames)
-            {
-                if (string.Equals(className.ToString(), name, StringComparison.OrdinalIgnoreCase))
-                {
-                    reason = "window class";
-                    return true;
-                }
-            }
+            reason = "foreground window is not visible";
+            return false;
         }
 
-        if (rule.NativeProcessNames.Length > 0)
+        var className = new System.Text.StringBuilder(256);
+        if (NativeMethods.GetClassName(initialForeground, className, className.Capacity) == 0)
         {
-            try
-            {
-                NativeMethods.GetWindowThreadProcessId(foreground, out uint pid);
-                string processName = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
-                foreach (string name in rule.NativeProcessNames)
-                {
-                    if (string.Equals(processName, name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        reason = "window process";
-                        return true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                reason = $"process inspection failed ({ex.GetType().Name})";
-            }
+            reason = "unable to read foreground window class";
+            return false;
+        }
+        string classValue = className.ToString();
+        if (!string.Equals(classValue, TaskViewClassWin11, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(classValue, TaskViewClassLegacy, StringComparison.OrdinalIgnoreCase))
+        {
+            reason = $"unsupported class={classValue}";
+            return false;
         }
 
-        return false;
+        var title = new System.Text.StringBuilder(512);
+        if (NativeMethods.GetWindowText(initialForeground, title, title.Capacity) == 0)
+        {
+            reason = $"empty title; class={classValue}";
+            return false;
+        }
+        string titleValue = title.ToString();
+        if (!string.Equals(titleValue, TaskViewTitleEnglish, StringComparison.Ordinal) &&
+            !string.Equals(titleValue, TaskViewTitleChinese, StringComparison.Ordinal))
+        {
+            reason = $"unsupported title=\"{SanitizeLogValue(titleValue)}\"; class={classValue}";
+            return false;
+        }
+
+        NativeMethods.GetWindowThreadProcessId(initialForeground, out uint foregroundPid);
+        IntPtr shellWindow = NativeMethods.GetShellWindow();
+        if (shellWindow == IntPtr.Zero)
+        {
+            reason = $"no shell window; class={classValue}; title=\"{SanitizeLogValue(titleValue)}\"; pid={foregroundPid}";
+            return false;
+        }
+        NativeMethods.GetWindowThreadProcessId(shellWindow, out uint shellPid);
+        if (foregroundPid == 0 || shellPid == 0 || foregroundPid != shellPid)
+        {
+            reason = $"shell PID mismatch; class={classValue}; title=\"{SanitizeLogValue(titleValue)}\"; pid={foregroundPid}; shellPid={shellPid}";
+            return false;
+        }
+
+        try
+        {
+            int result = NativeMethods.DwmGetWindowAttribute(
+                initialForeground, NativeMethods.DWMWA_CLOAKED, out int cloaked, sizeof(int));
+            if (result != 0)
+            {
+                reason = $"cloak inspection failed; hresult=0x{result:X8}; class={classValue}; title=\"{SanitizeLogValue(titleValue)}\"; pid={foregroundPid}";
+                return false;
+            }
+            if (cloaked != 0)
+            {
+                reason = $"foreground window is cloaked; class={classValue}; title=\"{SanitizeLogValue(titleValue)}\"; pid={foregroundPid}";
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            reason = $"cloak inspection threw {ex.GetType().Name}; class={classValue}; title=\"{SanitizeLogValue(titleValue)}\"; pid={foregroundPid}";
+            return false;
+        }
+
+        IntPtr finalForeground = NativeMethods.GetForegroundWindow();
+        if (finalForeground != initialForeground)
+        {
+            reason = $"foreground changed during inspection; initial={FormatHandle(initialForeground)}; final={FormatHandle(finalForeground)}";
+            return false;
+        }
+
+        reason = $"handle={FormatHandle(initialForeground)}; class={classValue}; title=\"{SanitizeLogValue(titleValue)}\"; pid={foregroundPid}";
+        return true;
+    }
+
+    private static bool IsWinTab(HotkeyRule rule)
+    {
+        return rule.Win && !rule.Ctrl && !rule.Alt && !rule.Shift && rule.Vk == NativeMethods.VK_TAB;
     }
 
     private static bool ModifiersMatch(HotkeyRule rule)
@@ -280,6 +320,8 @@ public sealed class GlobalKeyboardHook : IDisposable
 
         return rule.Win == win && rule.Ctrl == ctrl && rule.Alt == alt && rule.Shift == shift;
     }
+
+    private static string SanitizeLogValue(string value) => value.Replace('\r', ' ').Replace('\n', ' ');
 
     private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
 

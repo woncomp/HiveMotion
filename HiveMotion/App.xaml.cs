@@ -158,10 +158,7 @@ public partial class App : System.Windows.Application
     {
         var settings = _settingsStore!.Settings;
         _activeHotkeyJson = System.Text.Json.JsonSerializer.Serialize(settings.Hotkeys);
-        var hook = new GlobalKeyboardHook(settings.Hotkeys)
-        {
-            PassThroughOnSecondPress = settings.SecondPressPassthrough
-        };
+        var hook = new GlobalKeyboardHook(settings.Hotkeys);
         hook.HotkeyOpenRequested += (_, request) =>
         {
             Logger.ActivationInfo("Queued overlay-open work on the UI dispatcher.", request.CorrelationId);
@@ -178,14 +175,13 @@ public partial class App : System.Windows.Application
                 }
             });
         };
-        hook.HotkeyPassthrough += (_, request) =>
+        hook.HotkeyCloseRequested += (_, request) =>
         {
-            Logger.ActivationInfo("Queued overlay close after hotkey pass-through.", request.CorrelationId);
+            Logger.ActivationInfo("Queued overlay close after repeated hotkey.", request.CorrelationId);
             Dispatcher.BeginInvoke(() =>
             {
-                Logger.ActivationInfo("Executing overlay close after hotkey pass-through.", request.CorrelationId);
-                // The combo went to the system (Task View & co.); the native UI takes over.
-                CloseOverlay(restoreFocus: false, request.CorrelationId, LogChannel.Activation);
+                Logger.ActivationInfo("Executing overlay close after repeated hotkey.", request.CorrelationId);
+                CloseOverlay(restoreFocus: true, request.CorrelationId, LogChannel.Activation);
             });
         };
         return hook;
@@ -195,9 +191,6 @@ public partial class App : System.Windows.Application
     private void ApplyHotkeySettings()
     {
         var settings = _settingsStore!.Settings;
-        if (_keyboardHook != null)
-            _keyboardHook.PassThroughOnSecondPress = settings.SecondPressPassthrough;
-
         if (System.Text.Json.JsonSerializer.Serialize(settings.Hotkeys) == _activeHotkeyJson)
             return;
 

@@ -1760,16 +1760,8 @@ public partial class ManageWindow : Window
     {
         var settings = _settingsStore.Settings;
         HotkeyCurrentText.Text = string.Join(", ", settings.Hotkeys.Select(r => r.Name));
-        PassthroughBox.IsChecked = settings.SecondPressPassthrough;
         RecordHotkeyText.Text = Loc.Get(_capturingHotkey ? "Hotkeys_Recording" : "Hotkeys_Record");
         UpdateCheatsheet();
-    }
-
-    private void OnPassthroughChanged(object sender, RoutedEventArgs e)
-    {
-        _settingsStore.Settings.SecondPressPassthrough = PassthroughBox.IsChecked == true;
-        _settingsStore.Save();
-        _applyHotkeys();
     }
 
     private void OnRecordHotkeyClick(object sender, MouseButtonEventArgs e)
@@ -2056,7 +2048,6 @@ public partial class ManageWindow : Window
             settings.PriorityProcessNames.AddRange(bundle.Settings.PriorityProcessNames);
             settings.Hotkeys.Clear();
             settings.Hotkeys.AddRange(bundle.Settings.Hotkeys);
-            settings.SecondPressPassthrough = bundle.Settings.SecondPressPassthrough;
             settings.Language = bundle.Settings.Language ?? LocalizationManager.SystemSetting;
             _settingsStore.Save();
             _applyHotkeys();

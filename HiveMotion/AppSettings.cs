@@ -13,20 +13,11 @@ public sealed class AppSettings
         "Code"
     };
 
-    /// <summary>
-    /// Global hotkeys that summon the hive. First press (overlay hidden) opens the overlay;
-    /// second press behavior is controlled by <see cref="SecondPressPassthrough"/>.
-    /// </summary>
+    /// <summary>Global hotkeys that open the hive while hidden and close it while open.</summary>
     public List<HotkeyRule> Hotkeys { get; set; } = new()
     {
         HotkeyRule.WinTab
     };
-
-    /// <summary>
-    /// True: a second press while the overlay is open falls through to the combo's native
-    /// system function (Task View). False: the second press is swallowed and only closes.
-    /// </summary>
-    public bool SecondPressPassthrough { get; set; } = true;
 
     /// <summary>
     /// UI language: "system" follows the OS (non-Chinese falls back to English),

@@ -306,15 +306,6 @@
   <data name="Hotkeys_CaptureHint" xml:space="preserve">
     <value>请按下新的组合键(需包含至少一个修饰键),Esc 取消</value>
   </data>
-  <data name="Hotkeys_Behavior" xml:space="preserve">
-    <value>行 为</value>
-  </data>
-  <data name="Hotkeys_Passthrough" xml:space="preserve">
-    <value>蜂巢打开时再次按下:穿透给系统原生功能(如任务视图)</value>
-  </data>
-  <data name="Hotkeys_PassthroughDesc" xml:space="preserve">
-    <value>关闭后,再次按下只会关闭蜂巢,不会触发组合键的系统功能</value>
-  </data>
   <data name="Hotkeys_NeedModifier" xml:space="preserve">
     <value>组合键需要至少一个修饰键(Win / Ctrl / Alt / Shift)</value>
   </data>

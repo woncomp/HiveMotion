@@ -309,15 +309,6 @@ Working directory: {1}</value>
   <data name="Hotkeys_CaptureHint" xml:space="preserve">
     <value>Press the new combo (needs at least one modifier); Esc cancels</value>
   </data>
-  <data name="Hotkeys_Behavior" xml:space="preserve">
-    <value>Behavior</value>
-  </data>
-  <data name="Hotkeys_Passthrough" xml:space="preserve">
-    <value>Press again while the hive is open: pass through to the system's native action (e.g. Task View)</value>
-  </data>
-  <data name="Hotkeys_PassthroughDesc" xml:space="preserve">
-    <value>When off, pressing again only closes the hive and never triggers the combo's system action</value>
-  </data>
   <data name="Hotkeys_NeedModifier" xml:space="preserve">
     <value>The combo needs at least one modifier (Win / Ctrl / Alt / Shift)</value>
   </data>
