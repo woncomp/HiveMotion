@@ -27,8 +27,9 @@ public sealed class MotionStore
     public static string StoreDirectoryPath => StoreDirectory;
     public static string MotionsFilePath => StoreFile;
 
-    /// <summary>Home-layer application, folder, and system-action motions.</summary>
+    /// <summary>Configured motions on the home layer.</summary>
     public List<Motion> Home { get; } = new();
+    public event EventHandler? Changed;
 
     public MotionStore()
     {
@@ -66,6 +67,9 @@ public sealed class MotionStore
     {
         try
         {
+            var sanitized = Sanitize(Home);
+            Home.Clear();
+            Home.AddRange(sanitized);
             Directory.CreateDirectory(StoreDirectory);
             File.WriteAllText(StoreFile,
                 JsonSerializer.Serialize(Home, new JsonSerializerOptions { WriteIndented = true }));
@@ -74,6 +78,7 @@ public sealed class MotionStore
         {
             // best effort; motions stay in memory for this session
         }
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     private void Load()
@@ -122,7 +127,7 @@ public sealed class MotionStore
 
     /// <summary>
     /// Keeps only placeable motions: A-Z letters, unique per layer, known configured
-    /// system actions or empty drafts, and no folders nested inside folders.
+    /// system actions or empty drafts, and no home-only motions inside folders.
     /// </summary>
     private static List<Motion> Sanitize(IEnumerable<Motion> motions)
     {
@@ -140,6 +145,8 @@ public sealed class MotionStore
             }
             if (motion is FolderMotion folder)
                 SanitizeFolder(folder);
+            if (motion is WindowViewMotion windowView)
+                windowView.NormalizeExecutableNames();
             kept.Add(motion);
         }
         return kept;
@@ -151,9 +158,9 @@ public sealed class MotionStore
         var kept = new List<Motion>();
         foreach (var item in folder.Items)
         {
-            if (item is FolderMotion)
+            if (item is FolderMotion or WindowViewMotion)
             {
-                Logger.Warning($"Dropped nested folder '{item.DisplayName}' from folder '{folder.DisplayName}'; folders cannot nest.");
+                Logger.Warning($"Dropped home-only motion '{item.DisplayName}' from folder '{folder.DisplayName}'.");
                 continue;
             }
             if (item.Key is < 'A' or > 'Z' || !taken.Add(item.Key))

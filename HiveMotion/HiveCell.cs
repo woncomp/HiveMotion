@@ -27,6 +27,7 @@ public sealed class HiveCell
     public ApplicationMotion? Application => Motion as ApplicationMotion;
     public FolderMotion? Folder => Motion as FolderMotion;
     public SystemActionMotion? SystemAction => Motion as SystemActionMotion;
+    public WindowViewMotion? WindowView => Motion as WindowViewMotion;
 
     public static HiveCell FromWindow(char letter, RunningWindow window) => new()
     {

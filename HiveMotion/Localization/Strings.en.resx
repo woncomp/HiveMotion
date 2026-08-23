@@ -64,6 +64,9 @@
   <data name="Common_Browse" xml:space="preserve">
     <value>Browse…</value>
   </data>
+  <data name="Common_Add" xml:space="preserve">
+    <value>Add</value>
+  </data>
   <data name="Tray_OpenHive" xml:space="preserve">
     <value>Open hive</value>
   </data>
@@ -188,6 +191,39 @@ Working directory: {1}</value>
   </data>
   <data name="Motion_FolderHomeOnly" xml:space="preserve">
     <value>Folders can only be placed on the home grid</value>
+  </data>
+  <data name="Motion_WindowViewName" xml:space="preserve">
+    <value>Window View</value>
+  </data>
+  <data name="Motion_WindowViewDesc" xml:space="preserve">
+    <value>Show active windows on a dynamic child grid</value>
+  </data>
+  <data name="Motion_WindowViewHomeOnly" xml:space="preserve">
+    <value>Window Views can only be placed on the home grid</value>
+  </data>
+  <data name="WindowView_AllApplications" xml:space="preserve">
+    <value>All applications</value>
+  </data>
+  <data name="WindowView_ApplicationCount" xml:space="preserve">
+    <value>{0} applications</value>
+  </data>
+  <data name="WindowView_ApplicationCount_One" xml:space="preserve">
+    <value>{0} application</value>
+  </data>
+  <data name="WindowView_FilterHint" xml:space="preserve">
+    <value>Add executable names to limit this view. Enter a full path or file name; paths are not stored.</value>
+  </data>
+  <data name="WindowView_EmptyFilter" xml:space="preserve">
+    <value>No filters · all active windows are shown</value>
+  </data>
+  <data name="WindowView_InvalidExecutable" xml:space="preserve">
+    <value>Enter a valid executable file name or full path</value>
+  </data>
+  <data name="WindowView_SelectExecutable" xml:space="preserve">
+    <value>Select an application to include</value>
+  </data>
+  <data name="WindowView_DeleteConfirm" xml:space="preserve">
+    <value>Delete Window View "{0}"?</value>
   </data>
   <data name="Motion_SystemActionName" xml:space="preserve">
     <value>System action</value>

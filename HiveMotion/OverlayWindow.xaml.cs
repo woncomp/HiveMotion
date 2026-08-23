@@ -69,9 +69,14 @@ public partial class OverlayWindow : Window
     public void UpdateCells(IReadOnlyList<HiveCell> cells) =>
         Dispatcher.BeginInvoke(() => TaskGrid.SetCells(cells));
 
-    /// <summary>Switches the grid chrome (Esc hint) between the home layer and a folder layer.</summary>
-    public void SetActiveFolder(string? folderName) =>
-        Dispatcher.BeginInvoke(() => TaskGrid.SetActiveFolder(folderName));
+    /// <summary>Switches the grid chrome and shortcuts for the active layer.</summary>
+    public void SetActiveLayer(GridLayerKind kind, string? layerName = null)
+    {
+        if (Dispatcher.CheckAccess())
+            TaskGrid.SetActiveLayer(kind, layerName);
+        else
+            Dispatcher.BeginInvoke(() => TaskGrid.SetActiveLayer(kind, layerName));
+    }
 
     /// <summary>Modal in-overlay question; null action shows a dismiss-only notice.</summary>
     public void ShowConfirm(string message, string confirmText, Action? onConfirm) =>

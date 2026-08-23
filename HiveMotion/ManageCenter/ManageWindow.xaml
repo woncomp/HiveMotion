@@ -312,6 +312,76 @@
                                 </StackPanel>
                             </Grid>
                         </Grid>
+
+                        <!-- Window view editor -->
+                        <Grid x:Name="WindowViewEditorPanel" Visibility="Collapsed">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
+                                            BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top"
+                                            Cursor="Hand" ToolTip="{l:Loc Dialog_SelectCellIcon}"
+                                            MouseLeftButtonUp="OnBrowseWindowViewIconClick">
+                                        <Grid>
+                                            <Image x:Name="WindowViewEditorIcon" Width="30" Height="30"
+                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <Border x:Name="WindowViewIconClearButton" Width="15" Height="15"
+                                                    CornerRadius="8" Background="#E5484D" BorderBrush="#FFFF8A8E"
+                                                    BorderThickness="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                    Visibility="Collapsed" ToolTip="{l:Loc Motion_ClearIcon}"
+                                                    MouseLeftButtonUp="OnClearWindowViewIconClick">
+                                                <TextBlock Text="×" FontSize="12" FontWeight="Bold" Foreground="White"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Margin="0,-2,0,0" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
+                                                    BorderBrush="#80F5B301" BorderThickness="1"
+                                                    VerticalAlignment="Center" Margin="0,0,8,0">
+                                                <TextBlock x:Name="WindowViewLetterBadge" Text="N" FontSize="12"
+                                                           FontWeight="Bold" Foreground="#FFFFD97A" />
+                                            </Border>
+                                            <TextBox x:Name="WindowViewName" Style="{StaticResource FieldStyle}"
+                                                     FontSize="15" FontWeight="SemiBold" MinWidth="240"
+                                                     LostFocus="OnWindowViewNameLostFocus" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="WindowViewStatus" FontSize="11"
+                                                   Foreground="#66FFFFFF" Margin="2,6,0,0" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="{l:Loc WindowView_FilterHint}" FontSize="11"
+                                           Foreground="#66FFFFFF" Margin="2,16,0,6" TextWrapping="Wrap" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="WindowViewExecutableInput" Style="{StaticResource FieldStyle}"
+                                             KeyDown="OnWindowViewExecutableInputKeyDown" />
+                                    <Border Grid.Column="1" Style="{StaticResource ButtonStyle}" Margin="8,0,0,0"
+                                            MouseLeftButtonUp="OnAddWindowViewExecutableClick">
+                                        <TextBlock Text="{l:Loc Common_Add}" FontSize="12" Foreground="#FFFFD97A" />
+                                    </Border>
+                                    <Border Grid.Column="2" Style="{StaticResource ButtonStyle}" Margin="8,0,0,0"
+                                            MouseLeftButtonUp="OnBrowseWindowViewExecutableClick">
+                                        <TextBlock Text="{l:Loc Common_Browse}" FontSize="12" Foreground="#BFFFFFFF" />
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="WindowViewInputWarning" Text="{l:Loc WindowView_InvalidExecutable}"
+                                           Visibility="Collapsed" FontSize="10" Foreground="#FFE5484D"
+                                           Margin="2,4,0,0" />
+                                <StackPanel x:Name="WindowViewExecutableList" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Grid>
+
                         <!-- System action editor -->
                         <Grid x:Name="SystemActionEditorPanel" Visibility="Collapsed">
                             <StackPanel>
@@ -414,6 +484,27 @@
                                         <TextBlock Text="{l:Loc Motion_FolderName}" FontSize="12"
                                                    Foreground="#E6FFFFFF" />
                                         <TextBlock Text="{l:Loc Motion_FolderDesc}" FontSize="9"
+                                                   Foreground="#59FFFFFF" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Tag="WindowView" Style="{StaticResource ButtonStyle}" Padding="10" Margin="0,3"
+                                    ToolTip="{l:Loc Motion_WindowViewHomeOnly}"
+                                    PreviewMouseLeftButtonDown="OnMotionTemplateDragStart"
+                                    PreviewMouseMove="OnMotionTemplateDragMove">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE7C4;" FontFamily="Segoe MDL2 Assets" FontSize="22"
+                                               Foreground="#FFFFD97A" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="{l:Loc Motion_WindowViewName}" FontSize="12"
+                                                   Foreground="#E6FFFFFF" />
+                                        <TextBlock Text="{l:Loc Motion_WindowViewDesc}" FontSize="9"
                                                    Foreground="#59FFFFFF" TextWrapping="Wrap" Margin="0,2,0,0" />
                                     </StackPanel>
                                 </Grid>

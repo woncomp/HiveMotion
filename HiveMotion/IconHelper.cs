@@ -14,6 +14,7 @@ public static class IconHelper
 {
     private const string ApplicationFallbackGlyph = "\uE71D";
     private const string SystemActionFallbackGlyph = "\uE713";
+    private const string WindowViewFallbackGlyph = "\uE7C4";
     private static readonly Dictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object CacheGate = new();
 
@@ -55,6 +56,7 @@ public static class IconHelper
             SystemActionMotion systemAction => systemAction.IsConfigured
                 ? GlyphIcon.ForAction(systemAction.ActionId)
                 : GlyphIcon.ForGlyph(SystemActionFallbackGlyph),
+            WindowViewMotion => GlyphIcon.ForGlyph(WindowViewFallbackGlyph),
             _ => null
         };
     }
@@ -66,6 +68,8 @@ public static class IconHelper
             GlyphIcon.ForGlyph(ApplicationFallbackGlyph);
         else if (motion is SystemActionMotion { IsConfigured: false })
             GlyphIcon.ForGlyph(SystemActionFallbackGlyph);
+        else if (motion is WindowViewMotion)
+            GlyphIcon.ForGlyph(WindowViewFallbackGlyph);
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]

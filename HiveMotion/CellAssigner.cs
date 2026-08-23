@@ -40,17 +40,38 @@ public sealed class CellAssigner
                 case SystemActionMotion systemAction:
                     cells[systemAction.Key] = SystemActionCell(systemAction);
                     break;
+                case WindowViewMotion windowView:
+                    cells[windowView.Key] = WindowViewCell(windowView);
+                    break;
             }
         }
 
-        // 2. Remaining windows, priority queue first (Edge, VS Code), z-order as tiebreak.
+        AssignWindows(windows, cells, placed);
+        return cells.Values.OrderBy(c => c.Letter).ToList();
+    }
+
+    /// <summary>
+    /// Dynamic window-view layer: filter the latest snapshot, then apply the same
+    /// priority, preferred-letter, and nearest-free-cell rules without reservations.
+    /// </summary>
+    public IReadOnlyList<HiveCell> AssignWindowView(WindowViewMotion view, IReadOnlyList<RunningWindow> windows)
+    {
+        var cells = new Dictionary<char, HiveCell>();
+        AssignWindows(windows.Where(view.Matches), cells, new HashSet<RunningWindow>());
+        return cells.Values.OrderBy(c => c.Letter).ToList();
+    }
+
+    private static void AssignWindows(IEnumerable<RunningWindow> windows, Dictionary<char, HiveCell> cells,
+        HashSet<RunningWindow> placed)
+    {
+        // Remaining windows, priority queue first (Edge, VS Code), z-order as tiebreak.
         var pool = windows
             .Where(w => !placed.Contains(w))
             .OrderBy(w => w.Priority)
             .ThenBy(w => w.ZOrder)
             .ToList();
 
-        // 3. First tier: exact initial-letter matches.
+        // First tier: exact initial-letter matches.
         var secondTier = new List<RunningWindow>();
         foreach (var window in pool)
         {
@@ -64,7 +85,7 @@ public sealed class CellAssigner
             }
         }
 
-        // 4. Second tier: nearest free cell around the one each window originally wanted.
+        // Second tier: nearest free cell around the one each window originally wanted.
         foreach (var window in secondTier)
         {
             char target = window.PreferredLetter ?? 'G'; // grid centre when the name has no A-Z initial
@@ -83,7 +104,6 @@ public sealed class CellAssigner
             cells[free.Value] = HiveCell.FromWindow(free.Value, window);
         }
 
-        return cells.Values.OrderBy(c => c.Letter).ToList();
     }
 
     /// <summary>
@@ -155,6 +175,15 @@ public sealed class CellAssigner
         AppName = folder.DisplayName,
         Title = folder.DisplayName,
         Icon = IconHelper.ForMotion(folder)
+    };
+
+    private static HiveCell WindowViewCell(WindowViewMotion view) => new()
+    {
+        Letter = view.Key,
+        Motion = view,
+        AppName = view.DisplayName,
+        Title = view.DisplayName,
+        Icon = IconHelper.ForMotion(view)
     };
 
     /// <summary>System actions never bind a window: name and glyph icon come from the catalog.</summary>

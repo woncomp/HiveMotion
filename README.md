@@ -14,6 +14,8 @@ A modal window manager for Windows. Press `Win+Tab` to bring up an overlay, then
 - If the application is not running, it launches a new instance.
 - If the application is already running, it switches to the existing window.
 - When multiple application windows are open, a sub-menu appears so you can pick one by number.
+- Window View motions provide a dedicated child grid for all active windows, or only
+  windows owned by a configured set of executable file names.
 - Lets you cancel the action with `Esc` or trigger the native Task View by pressing `Win+Tab` again.
 - Runs from the system tray and can start automatically on login.
 

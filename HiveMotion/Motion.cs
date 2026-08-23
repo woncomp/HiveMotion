@@ -31,13 +31,13 @@ public sealed class MotionHoverPreview
 /// <summary>
 /// Anything that can occupy a letter cell of the hive grid. Motions are the content,
 /// cells are the containers. New motion kinds extend this type (one file per kind in
-/// the Motions folder) and become placeable on the home layer and inside folders
-/// without model changes.
+/// the Motions folder); store and editor validation define which layers accept them.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(ApplicationMotion), "application")]
 [JsonDerivedType(typeof(FolderMotion), "folder")]
 [JsonDerivedType(typeof(SystemActionMotion), "systemaction")]
+[JsonDerivedType(typeof(WindowViewMotion), "windowview")]
 public abstract class Motion
 {
     /// <summary>Letter (A-Z) this motion occupies on its layer (home, or inside a folder).</summary>

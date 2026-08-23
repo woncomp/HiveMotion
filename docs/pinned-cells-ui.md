@@ -21,9 +21,13 @@ anything that can occupy a cell:
   not by the item type, so future motion kinds stay placeable inside folders).
 - **SystemActionMotion** — a configured Windows action selected from the built-in
   action catalog. Catalog and picker rows retain their standard action glyphs.
+- **WindowViewMotion** — a home-only entry into a dynamic child layer populated from
+  the latest window snapshot. With no executable filters it shows every candidate
+  window; otherwise it shows windows whose executable file name is in its filter.
+  Paths and command-line arguments never participate in this match.
 
-New motion kinds extend the abstract `Motion` type and become placeable on the home
-layer and inside folders without model changes.
+Application and System Action motions may be placed on the home layer or inside a
+folder. Folder and Window View motions are home-only.
 
 Every configured motion can reference a custom icon in place. PNG, ICO, JPG/JPEG,
 BMP, EXE, and DLL sources are supported. A valid custom icon overrides application
@@ -37,7 +41,8 @@ its custom icon. When a custom path is stored, the small red × at the icon's
 bottom-right corner clears it and restores the normal fallback icon.
 
 Motions persist across restarts in `%AppData%/HiveMotion/motions.json` as a
-polymorphic JSON array (`"$type": "application" | "folder" | "systemaction"`).
+polymorphic JSON array (`"$type": "application" | "folder" | "systemaction" |
+"windowview"`).
 Application and System Action motions may persist as unconfigured drafts (empty
 executable path or action ID). Drafts reserve their cells, use generic frozen glyphs,
 and remain editable across restart/export/import.
@@ -120,12 +125,12 @@ reassignment happens by dragging tiles:
 | Drop outside the grid | Cancels; the motion stays put |
 
 The right Motion list is a type catalog, not a list of configured cells. Dragging
-Application, Folder, or System Action creates a new motion on the target cell with
+Application, Folder, Window View, or System Action creates a new motion on the target cell with
 copy semantics. Dropping on an occupied cell asks for confirmation and replaces it
 only after confirmation. Application and System Action begin with empty configuration;
 Folder is immediately usable and receives a localized letter-based name (`Folder J`
 or `文件夹 J`). Application/System Action may also be dropped into folder layers,
-while Folder drops are rejected because folders cannot nest.
+while Folder and Window View drops are rejected because both kinds are home-only.
 
 While dragging, the hovered target tile gets a bright honey border as the landing
 preview. The store saves immediately on drop, and the editor follows the dragged
@@ -200,6 +205,15 @@ Folder children support Application and System Action motions. Application runni
 status dots reuse the same 5-second scan. Deleting the Folder while viewing its layer
 returns to Hive before removing it.
 
+### 7.1 Window View editor
+
+Window View motions are immediately usable. Their editor supports a custom name and
+icon plus a repeatable executable-name list. Each item may be entered as a full path,
+an executable file name, or selected with the executable picker. The store strips
+quotes and directories, adds `.exe` when no extension is supplied, and removes
+case-insensitive duplicates. Manual paths do not need to exist. An empty list means
+all candidate windows, not an unconfigured draft.
+
 ## 8. Overlay behavior
 
 | Overlay UI | Behavior |
@@ -207,17 +221,20 @@ returns to Hive before removing it.
 | Letter key / click on an application cell (running) | Activates the matched window |
 | Letter key / click on an application cell (not running) | Relaunches with the exact pinned arguments and working directory |
 | Letter key / click on a folder cell | **Enters the folder**: the 26 cells swap to the folder's items in place; the overlay stays open |
-| `Esc` | Pops one layer: folder → home, home → close |
+| Letter key / click on a Window View cell | **Enters the window view**: the 26 cells are assigned from its filtered live-window snapshot without home-motion reservations |
+| `Esc` | Pops one layer: Folder/Window View → home, home → close |
 | `Backspace` | Same layer pop as `Esc` (no-op on the home layer) |
 | `Space` (search) | Searches the **current layer's** cells only |
 | `Ctrl+P` on an unpinned running cell (home layer) | Captures exe + arguments + working directory from the process (PEB) and pins it to that letter |
 | `Ctrl+P` on a pinned application cell (running or not) | In-overlay confirm: remove the pin |
 | `Ctrl+P` on a cell whose identity is pinned on another letter | Confirm: move the pin to the hovered letter |
 | `Ctrl+P` inside a folder layer | No-op; folder contents are edited in the manage center |
+| `Ctrl+P` inside a Window View layer | No-op; dynamic cell letters must not replace home motions |
 | Pinned-not-running cell | Amber name + `点击启动` hint; hover shows the full command line in the preview area instead of a DWM thumbnail; click relaunches |
 | Folder cell | Folder badge + `点击进入` hint; hover shows the folder name and item count; snapshot refreshes never backfill folder layers |
+| Window View cell | Window glyph + `点击进入` hint; hover shows all applications or the configured executable count |
 | Unconfigured Application/System Action | Generic glyph and not-configured preview; activation is ignored and the overlay remains open |
-| Search list extras | `Ctrl+R` reveals the exe in Explorer, `Ctrl+S` copies the command line (home layer only) |
+| Search list extras | `Ctrl+R` reveals the exe in Explorer and `Ctrl+S` copies the command line on home and Window View layers |
 
 Rejection notices in the overlay: UWP windows (`ApplicationFrameHost`, identity
 cannot be relaunched) and processes whose image path cannot be queried.
@@ -252,16 +269,18 @@ window in z-order wins the cell.
 - `ApplicationMotion` — `ProcessName`, `ExecutablePath`, `Arguments`,
   `WorkingDirectory`, matching helpers
 - `FolderMotion` — `Items` (`List<Motion>`; nesting rejected at load/edit)
+- `WindowViewMotion` — `ExecutableNames` (normalized executable basenames; empty means all windows)
 - `SystemActionMotion` — `ActionId` referencing the built-in action catalog
 - `motions.json` — one polymorphic array (`$type` discriminator), written on every
   mutation (`MotionStore.Set`/`Remove`/`ReplaceAll`/`Save`). Load sanitizes A-Z
-  letters, uniqueness per layer, unknown non-empty system-action IDs, and nested
-  folders while retaining blank Application/System Action drafts.
+  letters, uniqueness per layer, unknown non-empty system-action IDs, home-only
+  motions inside folders, and Window View executable names while retaining blank
+  Application/System Action drafts.
 - `pins.json` — legacy format; migrated once into `motions.json` (see §1), then ignored
 - `history.json` — `HistoryEntry` records with `LaunchCount`, `FirstSeen`, `LastSeen`;
   capped at 200 entries, least-recently-seen evicted first
-- Export/import (常规 page) bundles motions, history and settings into one JSON file;
-  v1 bundles with a flat `Pins` payload import as application motions
+- Export/import (常规 page) bundle v3 includes all motion kinds, history and settings;
+  v1 bundles with a flat `Pins` payload and v2 motion bundles remain importable
 
 ## 11. Known limitations
 
@@ -273,4 +292,6 @@ window in z-order wins the cell.
 - `explorer.exe` pins relaunch to the default folder, not the previously open folder.
 - Letter reassignment has no keyboard-only path yet (drag & drop only).
 - Folder contents cannot be edited from the overlay (manage center only).
+- Filtering `ApplicationFrameHost.exe` includes every matching UWP host window; it
+  cannot distinguish individual UWP applications.
 - Dragging a tile onto a folder tile swaps letters instead of inserting into the folder.

@@ -64,6 +64,9 @@
   <data name="Common_Browse" xml:space="preserve">
     <value>浏览…</value>
   </data>
+  <data name="Common_Add" xml:space="preserve">
+    <value>添 加</value>
+  </data>
   <data name="Tray_OpenHive" xml:space="preserve">
     <value>打开蜂巢</value>
   </data>
@@ -188,6 +191,36 @@
   </data>
   <data name="Motion_FolderHomeOnly" xml:space="preserve">
     <value>文件夹只能放在主网格中</value>
+  </data>
+  <data name="Motion_WindowViewName" xml:space="preserve">
+    <value>窗口视图</value>
+  </data>
+  <data name="Motion_WindowViewDesc" xml:space="preserve">
+    <value>在动态子视图中显示活动窗口</value>
+  </data>
+  <data name="Motion_WindowViewHomeOnly" xml:space="preserve">
+    <value>窗口视图只能放在主网格中</value>
+  </data>
+  <data name="WindowView_AllApplications" xml:space="preserve">
+    <value>全部应用程序</value>
+  </data>
+  <data name="WindowView_ApplicationCount" xml:space="preserve">
+    <value>{0} 个应用程序</value>
+  </data>
+  <data name="WindowView_FilterHint" xml:space="preserve">
+    <value>添加二进制文件名来限制此视图。可以输入完整路径或文件名；路径不会被保存。</value>
+  </data>
+  <data name="WindowView_EmptyFilter" xml:space="preserve">
+    <value>未添加筛选条件 · 将显示所有活动窗口</value>
+  </data>
+  <data name="WindowView_InvalidExecutable" xml:space="preserve">
+    <value>请输入有效的二进制文件名或完整路径</value>
+  </data>
+  <data name="WindowView_SelectExecutable" xml:space="preserve">
+    <value>选择要包含的应用程序</value>
+  </data>
+  <data name="WindowView_DeleteConfirm" xml:space="preserve">
+    <value>删除窗口视图「{0}」?</value>
   </data>
   <data name="Motion_SystemActionName" xml:space="preserve">
     <value>系统操作</value>

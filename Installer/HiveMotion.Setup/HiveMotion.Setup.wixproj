@@ -4,7 +4,7 @@
     <OutputType>Package</OutputType>
     <Platforms>x64</Platforms>
     <Platform>x64</Platform>
-    <ProductVersion>0.1.2.0</ProductVersion>
+    <ProductVersion>0.1.2.1</ProductVersion>
   </PropertyGroup>
 
   <ItemGroup>

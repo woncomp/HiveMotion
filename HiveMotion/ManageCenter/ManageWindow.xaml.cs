@@ -22,7 +22,7 @@ namespace HiveMotion.ManageCenter;
 
 /// <summary>
 /// Manage center: motion overview (drag a tile to move/swap its letter), Stream Deck-style
-/// motion type assignment, application/folder/system-action editors, and general settings. Edits write
+/// motion type assignment, per-kind editors, and general settings. Edits write
 /// through to the stores immediately; the overlay picks them up on its next open.
 /// </summary>
 public partial class ManageWindow : Window
@@ -35,6 +35,7 @@ public partial class ManageWindow : Window
     {
         Application,
         Folder,
+        WindowView,
         SystemAction
     }
 
@@ -60,6 +61,7 @@ public partial class ManageWindow : Window
     private IReadOnlyList<RunningWindow> _windows = Array.Empty<RunningWindow>();
     private ApplicationMotion? _selectedApp;
     private FolderMotion? _selectedFolder;
+    private WindowViewMotion? _selectedWindowView;
     private SystemActionMotion? _selectedSystemAction;
     /// <summary>The folder whose contents currently replace the Hive grid; null on the home layer.</summary>
     private FolderMotion? _currentFolder;
@@ -318,6 +320,33 @@ public partial class ManageWindow : Window
             tile.PreviewMouseMove += OnTileDragMove;
             tile.MouseLeftButtonUp += OnOccupiedTileClick;
         }
+        else if (motion is WindowViewMotion windowView)
+        {
+            content.Children.Add(new Image
+            {
+                Width = 28,
+                Height = 28,
+                Source = IconHelper.ForMotion(windowView),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            content.Children.Add(BuildTileLetterBadge(letter));
+            content.Children.Add(new TextBlock
+            {
+                Text = "\uE7C4",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 10,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#B3FFD97A")),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 5, 4)
+            });
+
+            tile.Cursor = Cursors.Hand;
+            tile.PreviewMouseLeftButtonDown += OnTileDragStart;
+            tile.PreviewMouseMove += OnTileDragMove;
+            tile.MouseLeftButtonUp += OnOccupiedTileClick;
+        }
         else if (motion is SystemActionMotion systemAction)
         {
             var icon = IconHelper.ForMotion(systemAction);
@@ -380,6 +409,8 @@ public partial class ManageWindow : Window
             ApplicationMotion app when !app.IsConfigured => Loc.Get("Motion_ApplicationName"),
             SystemActionMotion systemAction when !systemAction.IsConfigured => Loc.Get("Motion_SystemActionName"),
             SystemActionMotion systemAction => SystemActions.DisplayNameOf(systemAction.ActionId),
+            WindowViewMotion windowView when string.IsNullOrWhiteSpace(windowView.DisplayName) =>
+                Loc.Get("Motion_WindowViewName"),
             _ => motion.DisplayName
         };
 
@@ -481,7 +512,7 @@ public partial class ManageWindow : Window
         if (e.Data.GetDataPresent(MotionTemplateDragFormat))
         {
             var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
-            e.Effects = _currentFolder != null && template == MotionTemplate.Folder
+            e.Effects = _currentFolder != null && template is (MotionTemplate.Folder or MotionTemplate.WindowView)
                 ? DragDropEffects.None
                 : DragDropEffects.Copy;
             if (e.Effects != DragDropEffects.None)
@@ -493,7 +524,7 @@ public partial class ManageWindow : Window
             return;
 
         var payload = (CellDragPayload)e.Data.GetData(CellDragFormat);
-        if (_currentFolder != null && payload.Motion is FolderMotion)
+        if (_currentFolder != null && payload.Motion is (FolderMotion or WindowViewMotion))
         {
             e.Effects = DragDropEffects.None;
             e.Handled = true;
@@ -537,7 +568,7 @@ public partial class ManageWindow : Window
         if (e.Data.GetDataPresent(MotionTemplateDragFormat))
         {
             var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
-            if (_currentFolder == null || template != MotionTemplate.Folder)
+            if (_currentFolder == null || template is not (MotionTemplate.Folder or MotionTemplate.WindowView))
                 AssignMotionTemplate(template, target, _currentFolder);
             e.Handled = true;
             return;
@@ -598,12 +629,12 @@ public partial class ManageWindow : Window
             ReferenceEquals(item, payload.Motion) && item.Key == payload.SourceKey);
         if (sourceMotion == null ||
             payload.SourceFolder == targetFolder && payload.SourceKey == targetKey ||
-            targetFolder != null && sourceMotion is FolderMotion)
+            targetFolder != null && sourceMotion is (FolderMotion or WindowViewMotion))
             return;
 
         var targetLayer = LayerMotions(targetFolder);
         Motion? targetMotion = targetLayer.FirstOrDefault(item => item.Key == targetKey);
-        if (payload.SourceFolder != null && targetMotion is FolderMotion)
+        if (payload.SourceFolder != null && targetMotion is (FolderMotion or WindowViewMotion))
             return;
 
         sourceLayer.Remove(sourceMotion);
@@ -625,9 +656,11 @@ public partial class ManageWindow : Window
     private bool CanHoverIntoFolder(DragEventArgs e)
     {
         if (e.Data.GetDataPresent(MotionTemplateDragFormat))
-            return (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat) != MotionTemplate.Folder;
+            return (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat) is not
+                (MotionTemplate.Folder or MotionTemplate.WindowView);
         return e.Data.GetDataPresent(CellDragFormat) &&
-               ((CellDragPayload)e.Data.GetData(CellDragFormat)).Motion is not FolderMotion;
+               ((CellDragPayload)e.Data.GetData(CellDragFormat)).Motion is not
+                   (FolderMotion or WindowViewMotion);
     }
 
     private void NavigateIntoFolder(FolderMotion folder)
@@ -719,7 +752,7 @@ public partial class ManageWindow : Window
 
     private void AssignMotionTemplate(MotionTemplate template, char letter, FolderMotion? folder)
     {
-        if (folder != null && template == MotionTemplate.Folder)
+        if (folder != null && template is MotionTemplate.Folder or MotionTemplate.WindowView)
             return;
 
         Motion? existing = folder == null
@@ -734,6 +767,11 @@ public partial class ManageWindow : Window
                 {
                     Key = letter,
                     DisplayName = Loc.Format("Folder_DefaultNameFormat", letter)
+                },
+                MotionTemplate.WindowView => new WindowViewMotion
+                {
+                    Key = letter,
+                    DisplayName = Loc.Get("Motion_WindowViewName")
                 },
                 _ => new SystemActionMotion { Key = letter }
             };
@@ -767,6 +805,7 @@ public partial class ManageWindow : Window
     {
         MotionTemplate.Application => Loc.Get("Motion_ApplicationName"),
         MotionTemplate.Folder => Loc.Get("Motion_FolderName"),
+        MotionTemplate.WindowView => Loc.Get("Motion_WindowViewName"),
         _ => Loc.Get("Motion_SystemActionName")
     };
 
@@ -798,6 +837,7 @@ public partial class ManageWindow : Window
     {
         _selectedApp = motion as ApplicationMotion;
         _selectedFolder = motion as FolderMotion;
+        _selectedWindowView = motion as WindowViewMotion;
         _selectedSystemAction = motion as SystemActionMotion;
         _selectedAppFolder = _selectedApp != null ? childParent : null;
         _selectedSystemActionFolder = _selectedSystemAction != null ? childParent : null;
@@ -809,6 +849,7 @@ public partial class ManageWindow : Window
         EditorEmpty.Visibility = motion == null ? Visibility.Visible : Visibility.Collapsed;
         EditorPanel.Visibility = _selectedApp != null ? Visibility.Visible : Visibility.Collapsed;
         FolderEditorPanel.Visibility = _selectedFolder != null ? Visibility.Visible : Visibility.Collapsed;
+        WindowViewEditorPanel.Visibility = _selectedWindowView != null ? Visibility.Visible : Visibility.Collapsed;
         SystemActionEditorPanel.Visibility = _selectedSystemAction != null ? Visibility.Visible : Visibility.Collapsed;
         DeleteMotionButton.Visibility = motion != null ? Visibility.Visible : Visibility.Collapsed;
         EditorEmpty.Text = Loc.Get("Pins_EditorEmpty");
@@ -838,6 +879,13 @@ public partial class ManageWindow : Window
             FolderName.Text = folder.DisplayName;
             UpdateFolderHeaderIcon();
             UpdateFolderStatus();
+        }
+        else if (_selectedWindowView is { } windowView)
+        {
+            WindowViewLetterBadge.Text = windowView.Key.ToString();
+            WindowViewName.Text = windowView.DisplayName;
+            WindowViewExecutableInput.Text = string.Empty;
+            UpdateWindowViewEditor();
         }
         else if (_selectedSystemAction is { } systemAction)
         {
@@ -1015,7 +1063,7 @@ public partial class ManageWindow : Window
 
     private void OnDeleteSelectedMotionClick(object sender, MouseButtonEventArgs e)
     {
-        Motion? motion = _selectedApp ?? (Motion?)_selectedFolder ?? _selectedSystemAction;
+        Motion? motion = _selectedApp ?? (Motion?)_selectedFolder ?? (Motion?)_selectedWindowView ?? _selectedSystemAction;
         FolderMotion? parent = _selectedApp != null ? _selectedAppFolder : _selectedSystemActionFolder;
         if (motion == null)
             return;
@@ -1025,6 +1073,7 @@ public partial class ManageWindow : Window
             ApplicationMotion app => Loc.Format("Pins_DeleteConfirm", app.Key,
                 app.DisplayName.Length > 0 ? app.DisplayName : Loc.Get("Motion_ApplicationName")),
             FolderMotion folder => Loc.Format("Folder_DeleteConfirm", folder.DisplayName),
+            WindowViewMotion view => Loc.Format("WindowView_DeleteConfirm", view.DisplayName),
             SystemActionMotion action => Loc.Format("App_RemoveSystemActionMessage", action.Key,
                 action.IsConfigured ? SystemActions.DisplayNameOf(action.ActionId) : Loc.Get("Motion_SystemActionName")),
             _ => string.Empty
@@ -1119,6 +1168,171 @@ public partial class ManageWindow : Window
     {
         _motionStore.Save();
         UpdateFolderHeaderIcon();
+        BuildLetterTiles();
+    }
+
+    // ---------- window view editor ----------
+
+    private void UpdateWindowViewEditor()
+    {
+        if (_selectedWindowView == null)
+            return;
+
+        WindowViewEditorIcon.Source = IconHelper.ForMotion(_selectedWindowView);
+        WindowViewIconClearButton.Visibility = HasCustomIcon(_selectedWindowView)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        WindowViewStatus.Text = _selectedWindowView.ExecutableNames.Count == 0
+            ? Loc.Get("WindowView_AllApplications")
+            : Loc.Plural("WindowView_ApplicationCount", _selectedWindowView.ExecutableNames.Count,
+                _selectedWindowView.ExecutableNames.Count);
+        BuildWindowViewExecutableList();
+    }
+
+    private void BuildWindowViewExecutableList()
+    {
+        WindowViewExecutableList.Children.Clear();
+        if (_selectedWindowView == null)
+            return;
+
+        if (_selectedWindowView.ExecutableNames.Count == 0)
+        {
+            WindowViewExecutableList.Children.Add(new TextBlock
+            {
+                Text = Loc.Get("WindowView_EmptyFilter"),
+                FontSize = 11,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#59FFFFFF")),
+                Margin = new Thickness(2, 4, 0, 0)
+            });
+            return;
+        }
+
+        foreach (string executableName in _selectedWindowView.ExecutableNames)
+        {
+            var name = new TextBlock
+            {
+                Text = executableName,
+                FontSize = 12,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E6FFFFFF")),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var remove = new TextBlock
+            {
+                Text = "×",
+                FontSize = 15,
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFE5484D")),
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Hand
+            };
+            remove.MouseLeftButtonUp += (_, e) =>
+            {
+                if (_selectedWindowView == null)
+                    return;
+                _selectedWindowView.ExecutableNames.RemoveAll(nameValue =>
+                    nameValue.Equals(executableName, StringComparison.OrdinalIgnoreCase));
+                SaveWindowViewChanges();
+                e.Handled = true;
+            };
+
+            var row = new Grid { Margin = new Thickness(2, 2, 2, 2) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(remove, 1);
+            row.Children.Add(name);
+            row.Children.Add(remove);
+            WindowViewExecutableList.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(7),
+                Padding = new Thickness(10, 6, 10, 6),
+                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0DFFFFFF")),
+                BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26FFFFFF")),
+                BorderThickness = new Thickness(1),
+                Child = row
+            });
+        }
+    }
+
+    private void OnWindowViewNameLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_editorLoading || _selectedWindowView == null)
+            return;
+        _selectedWindowView.DisplayName = WindowViewName.Text.Trim();
+        if (_selectedWindowView.DisplayName.Length == 0)
+            _selectedWindowView.DisplayName = Loc.Get("Motion_WindowViewName");
+        SaveWindowViewChanges();
+    }
+
+    private void AddWindowViewExecutable(string value)
+    {
+        if (_selectedWindowView == null)
+            return;
+
+        string? executableName = WindowViewMotion.NormalizeExecutableName(value);
+        WindowViewInputWarning.Visibility = executableName == null ? Visibility.Visible : Visibility.Collapsed;
+        if (executableName == null)
+            return;
+
+        if (!_selectedWindowView.ExecutableNames.Contains(executableName, StringComparer.OrdinalIgnoreCase))
+            _selectedWindowView.ExecutableNames.Add(executableName);
+        WindowViewExecutableInput.Text = string.Empty;
+        SaveWindowViewChanges();
+    }
+
+    private void OnAddWindowViewExecutableClick(object sender, MouseButtonEventArgs e)
+    {
+        AddWindowViewExecutable(WindowViewExecutableInput.Text);
+        e.Handled = true;
+    }
+
+    private void OnWindowViewExecutableInputKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+        AddWindowViewExecutable(WindowViewExecutableInput.Text);
+        e.Handled = true;
+    }
+
+    private void OnBrowseWindowViewExecutableClick(object sender, MouseButtonEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = Loc.Get("Dialog_ExeFilter"),
+            Title = Loc.Get("WindowView_SelectExecutable")
+        };
+        if (dialog.ShowDialog(this) == true)
+            AddWindowViewExecutable(dialog.FileName);
+        e.Handled = true;
+    }
+
+    private void OnBrowseWindowViewIconClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_selectedWindowView != null && SelectIconFile() is { } path)
+        {
+            _selectedWindowView.IconPath = path;
+            SaveWindowViewChanges();
+        }
+        e.Handled = true;
+    }
+
+    private void OnClearWindowViewIconClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_selectedWindowView != null)
+        {
+            _selectedWindowView.IconPath = string.Empty;
+            SaveWindowViewChanges();
+        }
+        e.Handled = true;
+    }
+
+    private void SaveWindowViewChanges()
+    {
+        if (_selectedWindowView == null)
+            return;
+        _selectedWindowView.NormalizeExecutableNames();
+        _motionStore.Set(_selectedWindowView);
+        WindowViewName.Text = _selectedWindowView.DisplayName;
+        WindowViewInputWarning.Visibility = Visibility.Collapsed;
+        UpdateWindowViewEditor();
         BuildLetterTiles();
     }
 
@@ -1752,7 +1966,7 @@ public partial class ManageWindow : Window
 
     private sealed class ConfigBundle
     {
-        public int Version { get; set; } = 2;
+        public int Version { get; set; } = 3;
         public List<Motion>? Motions { get; set; }
         /// <summary>Legacy v1 backup payload: flat pins without a type discriminator.</summary>
         public List<LegacyPin>? Pins { get; set; }

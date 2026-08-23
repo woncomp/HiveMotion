@@ -19,10 +19,17 @@ using Point = System.Windows.Point;
 
 namespace HiveMotion;
 
+public enum GridLayerKind
+{
+    Home,
+    Folder,
+    WindowView
+}
+
 public partial class TaskGridView : System.Windows.Controls.UserControl
 {
     private readonly List<HiveCellView> _cellViews = new();
-    private readonly List<(Border Root, Border Bar, HiveCell Cell)> _itemVisuals = new();
+    private readonly List<SearchResultVisual> _itemVisuals = new();
     private IReadOnlyList<HiveCell> _cells = Array.Empty<HiveCell>();
     private List<HiveCell> _results = new();
     private string _query = string.Empty;
@@ -44,6 +51,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     /// <summary>Physical pixels the cursor must travel from its show-time anchor before it re-arms.</summary>
     private const int MouseWakeThreshold = 6;
+    private static readonly SolidColorBrush ActiveStatusBrush = FrozenBrush("#D9FFD97A");
+    private static readonly SolidColorBrush InactiveStatusBrush = FrozenBrush("#4DFFFFFF");
 
     private enum PreviewMode
     {
@@ -58,6 +67,19 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         Entering,
         Search,
         Exiting
+    }
+
+    private sealed class SearchResultVisual
+    {
+        public Border Root { get; init; } = null!;
+        public Border Bar { get; init; } = null!;
+        public Image IconImage { get; init; } = null!;
+        public TextBlock FallbackIcon { get; init; } = null!;
+        public TextBlock Title { get; init; } = null!;
+        public TextBlock Subtitle { get; init; } = null!;
+        public Border StatusDot { get; init; } = null!;
+        public TextBlock StatusText { get; init; } = null!;
+        public HiveCell? Cell { get; set; }
     }
 
     /// <summary>HWND of the owning overlay window; the DWM thumbnail draws into it.</summary>
@@ -92,6 +114,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
                 e.Handled = true;
         };
         CreateCellPool();
+        CreateResultPool();
     }
 
     public bool Searching => _searching;
@@ -132,7 +155,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         ArmMouse();
     }
 
-    private string? _activeFolderName;
+    private GridLayerKind _activeLayerKind;
+    private string? _activeLayerName;
 
     private void ApplyLocalizedStrings()
     {
@@ -143,19 +167,22 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             ShowPreview(_hoveredCell);
     }
 
-    /// <summary>Switches the grid chrome between the home layer and a folder layer.</summary>
-    public void SetActiveFolder(string? folderName)
+    /// <summary>Switches the grid chrome and shortcuts for the active overlay layer.</summary>
+    public void SetActiveLayer(GridLayerKind kind, string? layerName)
     {
-        _activeFolderName = folderName;
+        _activeLayerKind = kind;
+        _activeLayerName = layerName;
+        PinHintPanel.Visibility = kind == GridLayerKind.Home ? Visibility.Visible : Visibility.Collapsed;
         UpdateEscHint();
+        UpdateOverviewEmptyState();
     }
 
     private void UpdateEscHint()
     {
         EscHintText.Text = _searching
             ? Loc.Get("Grid_HintExitSearch")
-            : _activeFolderName != null
-                ? Loc.Format("Grid_HintBack", _activeFolderName)
+            : _activeLayerKind != GridLayerKind.Home
+                ? Loc.Format("Grid_HintBack", _activeLayerName ?? Loc.Get("Motion_WindowViewName"))
                 : Loc.Get("Grid_HintClose");
     }
 
@@ -181,6 +208,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private void ApplyCells(IReadOnlyList<HiveCell> cells, bool resetSearch)
     {
         _cells = cells;
+        UpdateOverviewEmptyState();
         _hoveredCell = null;
         HideConfirm();
         var byLetter = cells.ToDictionary(cell => cell.Letter);
@@ -215,6 +243,14 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         RebuildResults();
     }
 
+    private void UpdateOverviewEmptyState()
+    {
+        OverviewEmpty.Visibility = _activeLayerKind == GridLayerKind.WindowView &&
+                                   !_searching && _cells.Count == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
     /// <summary>Creates the fixed A-Z visual pool once; reopening only swaps model content.</summary>
     private void CreateCellPool()
     {
@@ -246,6 +282,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (_searching)
             return;
         _searching = true;
+        UpdateOverviewEmptyState();
         _transitionState = SearchTransitionState.Entering;
         HidePreview();
 
@@ -276,6 +313,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         if (!_searching)
             return;
         _searching = false;
+        UpdateOverviewEmptyState();
         _transitionState = SearchTransitionState.Exiting;
 
         // Return keyboard focus to the window itself: with null focus (ClearFocus)
@@ -306,6 +344,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private void ExitSearchImmediate()
     {
         _searching = false;
+        UpdateOverviewEmptyState();
         _transitionGeneration++;
         _transitionTimer?.Stop();
         _transitionState = SearchTransitionState.Overview;
@@ -403,7 +442,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
         if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            if (HighlightedCell is { } highlighted)
+            if (_activeLayerKind == GridLayerKind.Home && HighlightedCell is { } highlighted)
                 PinToggleRequested?.Invoke(this, highlighted);
             e.Handled = true;
             return;
@@ -492,7 +531,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         }
         if (key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            if (_hoveredCell != null)
+            if (_activeLayerKind == GridLayerKind.Home && _hoveredCell != null)
                 PinToggleRequested?.Invoke(this, _hoveredCell);
             e.Handled = true;
             return;
@@ -672,7 +711,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         LaunchInfoCommand.Text = info.Detail;
         LaunchInfoHint.Text = Loc.Get(cell.Motion is { IsConfigured: false }
             ? "Cell_NotConfigured"
-            : cell.Folder != null ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
+            : cell.Folder != null || cell.WindowView != null ? "Cell_ClickToOpen" : "Cell_ClickToLaunch");
 
         bool wasVisible = _previewVisible;
         _previewVisible = true;
@@ -749,14 +788,16 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             .ThenBy(c => c.Letter)
             .ToList();
 
-        ResultList.Children.Clear();
-        _itemVisuals.Clear();
-
-        for (int i = 0; i < _results.Count; i++)
+        for (int i = 0; i < _itemVisuals.Count; i++)
         {
-            var visual = BuildResultItem(_results[i], i);
-            ResultList.Children.Add(visual.Root);
-            _itemVisuals.Add(visual);
+            var visual = _itemVisuals[i];
+            if (i < _results.Count)
+                UpdateResultItem(visual, _results[i]);
+            else
+            {
+                visual.Cell = null;
+                visual.Root.Visibility = Visibility.Collapsed;
+            }
         }
 
         ResultHeaderText.Text = Loc.Format("Grid_AllWindowsCount", _results.Count);
@@ -776,7 +817,17 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             || (q.Length == 1 && char.ToUpperInvariant(q[0]) == cell.Letter);
     }
 
-    private (Border Root, Border Bar, HiveCell Cell) BuildResultItem(HiveCell cell, int index)
+    private void CreateResultPool()
+    {
+        for (int index = 0; index < 26; index++)
+        {
+            var visual = BuildResultItem(index);
+            _itemVisuals.Add(visual);
+            ResultList.Children.Add(visual.Root);
+        }
+    }
+
+    private SearchResultVisual BuildResultItem(int index)
     {
         var bar = new Border
         {
@@ -792,32 +843,20 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
                 (Color)ColorConverter.ConvertFromString("#F5B301"), 90)
         };
 
-        FrameworkElement iconContent;
-        if (cell.Icon != null)
+        var iconImage = new Image { Width = 24, Height = 24, Visibility = Visibility.Collapsed };
+        RenderOptions.SetBitmapScalingMode(iconImage, BitmapScalingMode.HighQuality);
+        var fallbackIcon = new TextBlock
         {
-            var iconImage = new Image
-            {
-                Source = cell.Icon,
-                Width = 24,
-                Height = 24,
-                Opacity = cell.IsRunning ? 1 : 0.55
-            };
-            RenderOptions.SetBitmapScalingMode(iconImage, BitmapScalingMode.HighQuality);
-            iconContent = iconImage;
-        }
-        else
-        {
-            iconContent = new TextBlock
-            {
-                Text = string.IsNullOrEmpty(cell.AppName) ? "?" : cell.AppName.Substring(0, 1).ToUpperInvariant(),
-                FontSize = 14,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFFFFF")),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-        }
-
+            Text = "?",
+            FontSize = 14,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFFFFF")),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var iconGrid = new Grid();
+        iconGrid.Children.Add(iconImage);
+        iconGrid.Children.Add(fallbackIcon);
         var iconBorder = new Border
         {
             Width = 40,
@@ -826,77 +865,42 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26FFFFFF")),
             BorderThickness = new Thickness(1),
             ClipToBounds = true,
-            Child = new Grid { Children = { iconContent } },
+            Child = iconGrid,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
 
         var title = new TextBlock
         {
-            Text = cell.Title,
             FontSize = 13,
             Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E6FFFFFF")),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-
         var subtitle = new TextBlock
         {
-            Text = cell.AppName,
             FontSize = 11,
             Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#66FFFFFF")),
             Margin = new Thickness(0, 2, 0, 0),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-
         var texts = new StackPanel { Margin = new Thickness(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
         texts.Children.Add(title);
         texts.Children.Add(subtitle);
 
-        // Status on the far right: running / not running / system action
-        var status = new StackPanel
+        var statusDot = new Border
         {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
+            Width = 6,
+            Height = 6,
+            CornerRadius = new CornerRadius(3),
+            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5B301")),
+            Margin = new Thickness(0, 0, 5, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Collapsed
         };
-        if (cell.SystemAction != null)
-        {
-            status.Children.Add(new TextBlock
-            {
-                Text = Loc.Get("Grid_StatusSystemAction"),
-                FontSize = 11,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D9FFD97A")),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-        }
-        else if (cell.IsRunning)
-        {
-            status.Children.Add(new Border
-            {
-                Width = 6,
-                Height = 6,
-                CornerRadius = new CornerRadius(3),
-                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5B301")),
-                Margin = new Thickness(0, 0, 5, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            status.Children.Add(new TextBlock
-            {
-                Text = Loc.Get("Grid_StatusRunning"),
-                FontSize = 11,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D9FFD97A")),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-        }
-        else
-        {
-            status.Children.Add(new TextBlock
-            {
-                Text = Loc.Get("Grid_StatusNotRunning"),
-                FontSize = 11,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4DFFFFFF")),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-        }
+        var statusText = new TextBlock { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        status.Children.Add(statusDot);
+        status.Children.Add(statusText);
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -916,17 +920,59 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             Padding = new Thickness(12, 8, 12, 8),
             Margin = new Thickness(2),
             Cursor = Cursors.Hand,
-            Child = grid
+            Child = grid,
+            Tag = index,
+            Visibility = Visibility.Collapsed
         };
-
         root.MouseEnter += (_, _) => SetHighlight(index);
         root.MouseLeftButtonUp += (_, e) =>
         {
-            CellChosen?.Invoke(this, cell);
+            if (_itemVisuals[index].Cell is { } cell)
+                CellChosen?.Invoke(this, cell);
             e.Handled = true;
         };
 
-        return (root, bar, cell);
+        return new SearchResultVisual
+        {
+            Root = root,
+            Bar = bar,
+            IconImage = iconImage,
+            FallbackIcon = fallbackIcon,
+            Title = title,
+            Subtitle = subtitle,
+            StatusDot = statusDot,
+            StatusText = statusText
+        };
+    }
+
+    private static void UpdateResultItem(SearchResultVisual visual, HiveCell cell)
+    {
+        visual.Cell = cell;
+        visual.Root.Visibility = Visibility.Visible;
+        visual.IconImage.Source = cell.Icon;
+        visual.IconImage.Opacity = cell.IsRunning ? 1 : 0.55;
+        visual.IconImage.Visibility = cell.Icon != null ? Visibility.Visible : Visibility.Collapsed;
+        visual.FallbackIcon.Text = string.IsNullOrEmpty(cell.AppName)
+            ? "?"
+            : cell.AppName.Substring(0, 1).ToUpperInvariant();
+        visual.FallbackIcon.Visibility = cell.Icon == null ? Visibility.Visible : Visibility.Collapsed;
+        visual.Title.Text = cell.Title;
+        visual.Subtitle.Text = cell.AppName;
+
+        visual.StatusDot.Visibility = cell.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+        visual.StatusText.Text = cell.SystemAction != null
+            ? Loc.Get("Grid_StatusSystemAction")
+            : Loc.Get(cell.IsRunning ? "Grid_StatusRunning" : "Grid_StatusNotRunning");
+        visual.StatusText.Foreground = cell.SystemAction != null || cell.IsRunning
+            ? ActiveStatusBrush
+            : InactiveStatusBrush;
+    }
+
+    private static SolidColorBrush FrozenBrush(string value)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
+        brush.Freeze();
+        return brush;
     }
 
     private void SetHighlight(int index)

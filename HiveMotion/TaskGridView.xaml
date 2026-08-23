@@ -25,6 +25,10 @@
             <Viewbox x:Name="HiveBox" Stretch="Uniform" StretchDirection="DownOnly">
                 <Grid Width="1470" Height="460">
                     <Canvas x:Name="HexCanvas" Width="1410" Height="400" />
+                    <TextBlock x:Name="OverviewEmpty" Text="{l:Loc Grid_NoMatches}"
+                               Visibility="Collapsed" FontSize="20" Foreground="#59FFFFFF"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False" />
                 </Grid>
             </Viewbox>
 
@@ -202,10 +206,12 @@
             </Border>
             <TextBlock Text="{l:Loc Grid_HintSearch}" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,20,0" />
 
-            <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
-                <TextBlock Text="Ctrl+P" FontSize="11" Foreground="#CCFFD97A" />
-            </Border>
-            <TextBlock Text="{l:Loc Grid_HintPin}" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,20,0" />
+            <StackPanel x:Name="PinHintPanel" Orientation="Horizontal">
+                <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
+                    <TextBlock Text="Ctrl+P" FontSize="11" Foreground="#CCFFD97A" />
+                </Border>
+                <TextBlock Text="{l:Loc Grid_HintPin}" FontSize="12" Foreground="#66FFFFFF" VerticalAlignment="Center" Margin="6,0,20,0" />
+            </StackPanel>
 
             <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
                 <TextBlock Text="Esc" FontSize="11" Foreground="#CCFFD97A" />

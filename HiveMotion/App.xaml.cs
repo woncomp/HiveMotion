@@ -36,10 +36,18 @@ public partial class App : System.Windows.Application
 
     private OverlayState _state = OverlayState.Hidden;
     private IReadOnlyList<HiveCell> _currentCells = new List<HiveCell>();
-    /// <summary>The folder layer currently shown in the overlay; null means the home layer.</summary>
-    private FolderMotion? _activeFolder;
+    /// <summary>The home-only motion whose child layer is shown; null means the home layer.</summary>
+    private Motion? _activeChildLayer;
+    private readonly Dictionary<WindowViewMotion, WindowViewProjection> _windowViewProjections = new();
+    private WindowViewDefinitionSet _windowViewDefinitions = new(0, Array.Empty<WindowViewDefinition>());
     private IntPtr _previousForeground;
     private int _overlayGeneration;
+
+    private sealed record WindowViewProjection(DateTimeOffset CapturedAt, IReadOnlyList<HiveCell> Cells);
+    private sealed record WindowViewDefinition(WindowViewMotion Motion, string[] ExecutableNames);
+    private sealed record WindowViewDefinitionSet(int Generation, WindowViewDefinition[] Items);
+    private sealed record WindowViewProjectionBatch(int DefinitionGeneration, DateTimeOffset CapturedAt,
+        Dictionary<WindowViewMotion, WindowViewProjection> Projections);
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -53,6 +61,7 @@ public partial class App : System.Windows.Application
         }
 
         _motionStore = new MotionStore();
+        _motionStore.Changed += OnMotionStoreChanged;
         _historyStore = new HistoryStore();
         _settingsStore = new SettingsStore();
         Logger.IsVerboseEnabled = _settingsStore.Settings.VerboseLogging;
@@ -62,22 +71,23 @@ public partial class App : System.Windows.Application
         _windowSnapshots = new WindowSnapshotService(_windowScanner);
         _windowSnapshots.SnapshotPublished += OnSnapshotPublished;
         _windowSnapshots.ForegroundWindowChanged += OnForegroundWindowChanged;
-        _windowSnapshots.Start();
         _cellAssigner = new CellAssigner(_motionStore.Home);
+        RefreshWindowViewDefinitions();
+        _windowSnapshots.Start();
         _overlayWindow = new OverlayWindow();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
         _overlayWindow.CloseRequested += (_, _) =>
         {
-            // Esc pops one layer at a time: folder → home, home → close.
-            if (_activeFolder != null)
-                ExitFolder();
+            // Esc pops one layer at a time: child layer → home, home → close.
+            if (_activeChildLayer != null)
+                ExitChildLayer();
             else
                 CloseOverlay(restoreFocus: true);
         };
         _overlayWindow.BackRequested += (_, _) =>
         {
-            if (_activeFolder != null)
-                ExitFolder();
+            if (_activeChildLayer != null)
+                ExitChildLayer();
         };
         _overlayWindow.PinToggleRequested += (_, cell) => TogglePin(cell);
         _overlayWindow.RevealRequested += (_, cell) => RevealCell(cell);
@@ -230,7 +240,7 @@ public partial class App : System.Windows.Application
         Logger.Info($"Captured previous foreground handle={FormatHandle(_previousForeground)}.", correlationId, channel);
 
         ++_overlayGeneration;
-        _activeFolder = null;
+        _activeChildLayer = null;
         var snapshot = _windowSnapshots!.Latest;
         Logger.Info($"Snapshot state: {(snapshot == null ? "empty" : $"ready with {snapshot.Windows.Count} windows")}.", correlationId, channel);
         timing.Checkpoint(snapshot == null ? "snapshot-empty-shell" : "snapshot-ready");
@@ -241,7 +251,7 @@ public partial class App : System.Windows.Application
         _state = OverlayState.TaskGrid;
         _keyboardHook!.IsOverlayOpen = true;
         Logger.Info("Updated overlay and keyboard-hook state to open.", correlationId, channel);
-        _overlayWindow!.SetActiveFolder(null);
+        _overlayWindow!.SetActiveLayer(GridLayerKind.Home);
         _overlayWindow!.ShowTaskGrid(cells, timing, correlationId, channel);
         if (snapshot != null)
             RecordHistoryWhenIdle(snapshot.Windows);
@@ -259,7 +269,7 @@ public partial class App : System.Windows.Application
                 _windowSnapshots.RequestRefresh();
                 return;
             }
-            var cells = AssignCurrentLayer(snapshot.Windows);
+            var cells = AssignCurrentLayer(snapshot);
             _currentCells = cells;
             _overlayWindow!.UpdateCells(cells);
         }
@@ -269,27 +279,98 @@ public partial class App : System.Windows.Application
         }
     }
 
-    /// <summary>Folder layers hold only the folder's items; the home layer takes the full assignment.</summary>
-    private IReadOnlyList<HiveCell> AssignCurrentLayer(IReadOnlyList<RunningWindow> windows) =>
-        _activeFolder is { } folder
-            ? _cellAssigner!.AssignFolder(folder, windows)
-            : _cellAssigner!.Assign(windows);
+    /// <summary>Assigns the latest immutable snapshot according to the current layer.</summary>
+    private IReadOnlyList<HiveCell> AssignCurrentLayer(WindowSnapshot snapshot) =>
+        _activeChildLayer switch
+        {
+            FolderMotion folder => _cellAssigner!.AssignFolder(folder, snapshot.Windows),
+            WindowViewMotion view when _windowViewProjections.TryGetValue(view, out var projection) &&
+                                       projection.CapturedAt == snapshot.CapturedAt => projection.Cells,
+            WindowViewMotion => Array.Empty<HiveCell>(),
+            _ => _cellAssigner!.Assign(snapshot.Windows)
+        };
+
+    private void RefreshWindowViewDefinitions()
+    {
+        int generation = System.Threading.Volatile.Read(ref _windowViewDefinitions).Generation + 1;
+        var definitions = _motionStore!.Home.OfType<WindowViewMotion>()
+            .Select(view => new WindowViewDefinition(view, view.ExecutableNames.ToArray()))
+            .ToArray();
+        System.Threading.Volatile.Write(ref _windowViewDefinitions,
+            new WindowViewDefinitionSet(generation, definitions));
+    }
+
+    private WindowViewProjectionBatch BuildWindowViewProjectionBatch(WindowSnapshot snapshot,
+        WindowViewDefinitionSet definitions)
+    {
+        var projections = new Dictionary<WindowViewMotion, WindowViewProjection>();
+        foreach (var definition in definitions.Items)
+        {
+            var immutableFilter = new WindowViewMotion
+            {
+                ExecutableNames = definition.ExecutableNames.ToList()
+            };
+            projections[definition.Motion] = new WindowViewProjection(snapshot.CapturedAt,
+                _cellAssigner!.AssignWindowView(immutableFilter, snapshot.Windows));
+        }
+        return new WindowViewProjectionBatch(definitions.Generation, snapshot.CapturedAt, projections);
+    }
+
+    private void ApplyWindowViewProjectionBatch(WindowViewProjectionBatch batch, WindowSnapshot snapshot)
+    {
+        var currentDefinitions = System.Threading.Volatile.Read(ref _windowViewDefinitions);
+        if (batch.DefinitionGeneration != currentDefinitions.Generation ||
+            _windowSnapshots?.Latest?.CapturedAt != batch.CapturedAt)
+            return;
+
+        _windowViewProjections.Clear();
+        foreach (var pair in batch.Projections)
+            _windowViewProjections[pair.Key] = pair.Value;
+
+        if (_state != OverlayState.TaskGrid)
+            return;
+        int generation = _overlayGeneration;
+        var cells = AssignCurrentLayer(snapshot);
+        if (_state == OverlayState.TaskGrid && generation == _overlayGeneration)
+        {
+            _currentCells = cells;
+            _overlayWindow!.UpdateCells(cells);
+        }
+    }
+
+    private void QueueWindowViewProjectionBuild(WindowSnapshot snapshot)
+    {
+        var definitions = System.Threading.Volatile.Read(ref _windowViewDefinitions);
+        System.Threading.Tasks.Task.Run(() => BuildWindowViewProjectionBatch(snapshot, definitions))
+            .ContinueWith(task =>
+            {
+                if (task.IsFaulted)
+                {
+                    Logger.Error(task.Exception!.GetBaseException(), "Preparing Window View projections");
+                    return;
+                }
+                if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                    return;
+                Dispatcher.BeginInvoke(() => ApplyWindowViewProjectionBatch(task.Result, snapshot));
+            }, System.Threading.Tasks.TaskScheduler.Default);
+    }
+
+    private void OnMotionStoreChanged(object? sender, EventArgs e)
+    {
+        RefreshWindowViewDefinitions();
+        _windowViewProjections.Clear();
+        var snapshot = _windowSnapshots?.Latest;
+        if (snapshot != null)
+            QueueWindowViewProjectionBuild(snapshot);
+        _windowSnapshots?.RequestRefresh();
+    }
 
     private void OnSnapshotPublished(object? sender, WindowSnapshot snapshot)
     {
-        // The worker never touches WPF or history state. A newer snapshot may replace an empty/older grid.
-        Dispatcher.BeginInvoke(() =>
-        {
-            if (_state != OverlayState.TaskGrid)
-                return;
-            int generation = _overlayGeneration;
-            var cells = AssignCurrentLayer(snapshot.Windows);
-            if (_state == OverlayState.TaskGrid && generation == _overlayGeneration)
-            {
-                _currentCells = cells;
-                _overlayWindow!.UpdateCells(cells);
-            }
-        });
+        // Build dynamic-view projections on the snapshot worker; marshal only bounded cells to WPF.
+        var definitions = System.Threading.Volatile.Read(ref _windowViewDefinitions);
+        var batch = BuildWindowViewProjectionBatch(snapshot, definitions);
+        Dispatcher.BeginInvoke(() => ApplyWindowViewProjectionBatch(batch, snapshot));
     }
 
     private void OnForegroundWindowChanged(object? sender, ForegroundWindowChangedEventArgs change)
@@ -385,7 +466,7 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void TogglePin(HiveCell cell)
     {
-        if (_state != OverlayState.TaskGrid || _activeFolder != null)
+        if (_state != OverlayState.TaskGrid || _activeChildLayer != null)
             return;
 
         if (cell.Application is { } app)
@@ -469,7 +550,7 @@ public partial class App : System.Windows.Application
     /// <summary>Ctrl+R in the search list: reveal the app's executable in Explorer.</summary>
     private void RevealCell(HiveCell cell)
     {
-        if (_state != OverlayState.TaskGrid || _activeFolder != null)
+        if (_state != OverlayState.TaskGrid || _activeChildLayer is FolderMotion)
             return;
 
         if (IsUwpCell(cell))
@@ -497,7 +578,7 @@ public partial class App : System.Windows.Application
     /// <summary>Ctrl+S in the search list: copy exe path + original arguments to the clipboard.</summary>
     private void CopyCellCommandLine(HiveCell cell)
     {
-        if (_state != OverlayState.TaskGrid || _activeFolder != null)
+        if (_state != OverlayState.TaskGrid || _activeChildLayer is FolderMotion)
             return;
 
         if (IsUwpCell(cell))
@@ -557,6 +638,12 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (cell.WindowView is { } windowView)
+        {
+            EnterWindowView(windowView);
+            return;
+        }
+
         // A deliberate switch, not a cancel: focus goes to the chosen window, not back.
         _previousForeground = IntPtr.Zero;
         // Mark hidden up front so the Deactivated handler stays a no-op during the switch.
@@ -595,17 +682,38 @@ public partial class App : System.Windows.Application
     /// <summary>Folder activation swaps the grid contents in place; the overlay stays open.</summary>
     private void EnterFolder(FolderMotion folder)
     {
-        _activeFolder = folder;
-        _overlayWindow!.SetActiveFolder(folder.DisplayName);
+        _activeChildLayer = folder;
+        _overlayWindow!.SetActiveLayer(GridLayerKind.Folder, folder.DisplayName);
         RefreshTaskGrid();
         _windowSnapshots!.RequestRefresh();
     }
 
-    /// <summary>Esc/Backspace inside a folder pops back to the home layer without closing.</summary>
-    private void ExitFolder()
+    private void EnterWindowView(WindowViewMotion view)
     {
-        _activeFolder = null;
-        _overlayWindow!.SetActiveFolder(null);
+        _activeChildLayer = view;
+        _overlayWindow!.SetActiveLayer(GridLayerKind.WindowView, view.DisplayName);
+        var snapshot = _windowSnapshots!.Latest;
+        if (snapshot != null && _windowViewProjections.TryGetValue(view, out var projection) &&
+            projection.CapturedAt == snapshot.CapturedAt)
+        {
+            _currentCells = projection.Cells;
+            _overlayWindow.UpdateCells(projection.Cells);
+        }
+        else
+        {
+            _currentCells = Array.Empty<HiveCell>();
+            _overlayWindow.UpdateCells(_currentCells);
+            if (snapshot != null)
+                QueueWindowViewProjectionBuild(snapshot);
+        }
+        _windowSnapshots.RequestRefresh();
+    }
+
+    /// <summary>Esc/Backspace inside a child layer pops back to the home layer without closing.</summary>
+    private void ExitChildLayer()
+    {
+        _activeChildLayer = null;
+        _overlayWindow!.SetActiveLayer(GridLayerKind.Home);
         RefreshTaskGrid();
     }
 
@@ -614,7 +722,7 @@ public partial class App : System.Windows.Application
         Logger.Info($"Closing overlay; restoreFocus={restoreFocus}; state={_state}.", correlationId, channel);
         ++_overlayGeneration;
         _state = OverlayState.Hidden;
-        _activeFolder = null;
+        _activeChildLayer = null;
         if (_keyboardHook != null)
             _keyboardHook.IsOverlayOpen = false;
         _overlayWindow!.HideOverlay();
