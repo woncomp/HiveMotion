@@ -162,14 +162,8 @@ Working directory: {1}</value>
   <data name="Nav_About" xml:space="preserve">
     <value>About</value>
   </data>
-  <data name="Pins_Header" xml:space="preserve">
-    <value>Letter assignment</value>
-  </data>
-  <data name="Pins_Hint" xml:space="preserve">
-    <value>Drag tiles to change letters · Click a tile to edit</value>
-  </data>
-  <data name="Pins_ClearAll" xml:space="preserve">
-    <value>Clear all pins</value>
+  <data name="Pins_Back" xml:space="preserve">
+    <value>← Back</value>
   </data>
   <data name="Pins_EditorEmpty" xml:space="preserve">
     <value>Click a tile above to view or edit a pin</value>
@@ -248,9 +242,6 @@ Working directory: {1}</value>
   </data>
   <data name="Pins_DeleteConfirm" xml:space="preserve">
     <value>Remove the pin on {0} for "{1}"?</value>
-  </data>
-  <data name="Pins_ClearAllConfirm" xml:space="preserve">
-    <value>Clear all pins? This cannot be undone.</value>
   </data>
   <data name="Priority_Header" xml:space="preserve">
     <value>Priority</value>
@@ -537,20 +528,14 @@ Working directory: {1}</value>
   <data name="Grid_FolderItemCount_One" xml:space="preserve">
     <value>{0} item</value>
   </data>
-  <data name="Folder_DefaultName" xml:space="preserve">
-    <value>New Folder</value>
+  <data name="Folder_DefaultNameFormat" xml:space="preserve">
+    <value>Folder {0}</value>
   </data>
   <data name="Motion_ClearIcon" xml:space="preserve">
     <value>Clear</value>
   </data>
-  <data name="Folder_ItemsHeader" xml:space="preserve">
-    <value>Items · drag to reassign, click to edit</value>
-  </data>
   <data name="Folder_DeleteConfirm" xml:space="preserve">
     <value>Delete folder "{0}"? Its items will be deleted with it.</value>
-  </data>
-  <data name="Folder_BackToFolder" xml:space="preserve">
-    <value>← Back to folder</value>
   </data>
   <data name="Dialog_IconFilter" xml:space="preserve">
     <value>Images or programs (*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll)|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll|All files (*.*)|*.*</value>

@@ -162,14 +162,8 @@
   <data name="Nav_About" xml:space="preserve">
     <value>关 于</value>
   </data>
-  <data name="Pins_Header" xml:space="preserve">
-    <value>字 母 分 配</value>
-  </data>
-  <data name="Pins_Hint" xml:space="preserve">
-    <value>拖拽格子调整字母 · 点击格子编辑</value>
-  </data>
-  <data name="Pins_ClearAll" xml:space="preserve">
-    <value>清空全部固定</value>
+  <data name="Pins_Back" xml:space="preserve">
+    <value>← 返回</value>
   </data>
   <data name="Pins_EditorEmpty" xml:space="preserve">
     <value>点 击 上 方 格 子 查 看 或 编 辑 固 定</value>
@@ -248,9 +242,6 @@
   </data>
   <data name="Pins_DeleteConfirm" xml:space="preserve">
     <value>移除固定在 {0} 键的「{1}」?</value>
-  </data>
-  <data name="Pins_ClearAllConfirm" xml:space="preserve">
-    <value>清空全部固定?此操作不可撤销。</value>
   </data>
   <data name="Priority_Header" xml:space="preserve">
     <value>优 先 级</value>
@@ -525,20 +516,14 @@
   <data name="Grid_FolderItemCount" xml:space="preserve">
     <value>{0} 个项目</value>
   </data>
-  <data name="Folder_DefaultName" xml:space="preserve">
-    <value>新建文件夹</value>
+  <data name="Folder_DefaultNameFormat" xml:space="preserve">
+    <value>文件夹 {0}</value>
   </data>
   <data name="Motion_ClearIcon" xml:space="preserve">
     <value>清 除</value>
   </data>
-  <data name="Folder_ItemsHeader" xml:space="preserve">
-    <value>内容 · 拖拽调整字母，点击编辑</value>
-  </data>
   <data name="Folder_DeleteConfirm" xml:space="preserve">
     <value>删除文件夹「{0}」?其中的项目将一并删除。</value>
-  </data>
-  <data name="Folder_BackToFolder" xml:space="preserve">
-    <value>← 返回文件夹</value>
   </data>
   <data name="Dialog_IconFilter" xml:space="preserve">
     <value>图片或程序 (*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll)|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.exe;*.dll|所有文件 (*.*)|*.*</value>

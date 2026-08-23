@@ -27,9 +27,9 @@ namespace HiveMotion.ManageCenter;
 /// </summary>
 public partial class ManageWindow : Window
 {
-    private const string DragFormat = "HiveMotion.PinLetter";
-    private const string ChildDragFormat = "HiveMotion.FolderChildLetter";
+    private const string CellDragFormat = "HiveMotion.CellMotion";
     private const string MotionTemplateDragFormat = "HiveMotion.MotionTemplate";
+    private static readonly TimeSpan HoverNavigationDelay = TimeSpan.FromMilliseconds(500);
 
     private enum MotionTemplate
     {
@@ -38,6 +38,15 @@ public partial class ManageWindow : Window
         SystemAction
     }
 
+    private enum HoverNavigationKind
+    {
+        None,
+        IntoFolder,
+        Back
+    }
+
+    private sealed record CellDragPayload(Motion Motion, FolderMotion? SourceFolder, char SourceKey);
+
     private readonly MotionStore _motionStore;
     private readonly HistoryStore _historyStore;
     private readonly SettingsStore _settingsStore;
@@ -45,13 +54,15 @@ public partial class ManageWindow : Window
     private readonly WindowScanner _windowScanner;
     private readonly Action _applyHotkeys;
     private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
-    private readonly List<(Ellipse Dot, char Letter)> _tileDots = new();
-    private readonly List<(Ellipse Dot, ApplicationMotion App)> _childTileDots = new();
+    private readonly System.Windows.Threading.DispatcherTimer _hoverNavigationTimer;
+    private readonly List<(Ellipse Dot, ApplicationMotion App)> _tileDots = new();
 
     private IReadOnlyList<RunningWindow> _windows = Array.Empty<RunningWindow>();
     private ApplicationMotion? _selectedApp;
     private FolderMotion? _selectedFolder;
     private SystemActionMotion? _selectedSystemAction;
+    /// <summary>The folder whose contents currently replace the Hive grid; null on the home layer.</summary>
+    private FolderMotion? _currentFolder;
     /// <summary>Parent folder when the app editor edits a folder child; null for home-layer apps.</summary>
     private FolderMotion? _selectedAppFolder;
     /// <summary>Parent folder when the system action editor edits a folder child; null for home layer.</summary>
@@ -61,15 +72,15 @@ public partial class ManageWindow : Window
     private bool _dragArmed;
     private char _dragLetter;
     private Point _dragStart;
-    private bool _childDragArmed;
-    private char _childDragLetter;
-    private Point _childDragStart;
     private bool _motionTemplateDragArmed;
     private MotionTemplate _motionTemplate;
     private Point _motionTemplateDragStart;
     private char? _selectedHomeLetter;
     private char? _selectedChildLetter;
     private FolderMotion? _selectedChildFolder;
+    private HoverNavigationKind _hoverNavigationKind;
+    private FolderMotion? _hoverNavigationFolder;
+    private Border? _hoverNavigationElement;
     private bool _capturingHotkey;
 
     public ManageWindow(MotionStore motionStore, HistoryStore historyStore, SettingsStore settingsStore,
@@ -82,6 +93,12 @@ public partial class ManageWindow : Window
         _autoStartManager = autoStartManager;
         _windowScanner = windowScanner;
         _applyHotkeys = applyHotkeys;
+
+        _hoverNavigationTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = HoverNavigationDelay
+        };
+        _hoverNavigationTimer.Tick += OnHoverNavigationTick;
 
         Rescan();
         BuildLetterTiles();
@@ -104,6 +121,7 @@ public partial class ManageWindow : Window
         Closed += (_, _) =>
         {
             _statusTimer.Stop();
+            _hoverNavigationTimer.Stop();
             LocalizationManager.Instance.CultureChanged -= OnCultureChanged;
         };
     }
@@ -116,14 +134,8 @@ public partial class ManageWindow : Window
         BuildLetterTiles();
         UpdateEditorStatus();
         UpdateFolderStatus();
-        if (_selectedFolder != null)
-            BuildFolderChildTiles();
         if (_selectedSystemAction != null)
             UpdateSystemActionEditor();
-        if (_selectedAppFolder != null)
-            EditorBackText.Text = Loc.Get("Folder_BackToFolder");
-        if (_selectedSystemActionFolder != null)
-            SystemActionBackText.Text = Loc.Get("Folder_BackToFolder");
         UpdateHistoryCount();
         RefreshHotkeyUi();
         InitAboutPage();
@@ -132,13 +144,12 @@ public partial class ManageWindow : Window
             EditorName.Text = Loc.Get("Motion_ApplicationName");
             RebuildApplicationHistoryList();
         }
-        if (_selectedHomeLetter is { } emptyLetter &&
-            _selectedApp == null && _selectedFolder == null && _selectedSystemAction == null)
-            EditorEmpty.Text = Loc.Format("Motion_EmptyCellHint", emptyLetter);
-        if (_selectedChildFolder != null && _selectedChildLetter is { } childLetter && _selectedFolder != null)
+        if (_selectedApp == null && _selectedFolder == null && _selectedSystemAction == null)
         {
-            FolderAssignmentHint.Text = Loc.Format("Motion_EmptyCellHint", childLetter);
-            FolderAssignmentHint.Visibility = Visibility.Visible;
+            if (_selectedChildFolder != null && _selectedChildLetter is { } childLetter)
+                EditorEmpty.Text = Loc.Format("Motion_EmptyCellHint", childLetter);
+            else if (_selectedHomeLetter is { } emptyLetter)
+                EditorEmpty.Text = Loc.Format("Motion_EmptyCellHint", emptyLetter);
         }
         UpdateLanguageButtons();
     }
@@ -157,7 +168,6 @@ public partial class ManageWindow : Window
         }
         UpdateTileStatus();
         UpdateEditorStatus();
-        UpdateChildTileStatus();
     }
 
     private bool IsIdentityRunning(ApplicationMotion app) => _windows.Any(app.Matches);
@@ -191,6 +201,7 @@ public partial class ManageWindow : Window
     {
         LetterRows.Children.Clear();
         _tileDots.Clear();
+        UpdateLayerChrome();
 
         foreach (var row in KeyGrid.Rows)
         {
@@ -210,8 +221,8 @@ public partial class ManageWindow : Window
 
     private Border BuildTile(char letter)
     {
-        var motion = _motionStore.FindByKey(letter);
-        bool selected = _selectedHomeLetter == letter;
+        var motion = FindMotion(_currentFolder, letter);
+        bool selected = IsTileSelected(letter);
         var tile = new Border
         {
             Width = 60,
@@ -265,7 +276,7 @@ public partial class ManageWindow : Window
                 Margin = new Thickness(0, 0, 6, 5)
             };
             content.Children.Add(dot);
-            _tileDots.Add((dot, letter));
+            _tileDots.Add((dot, app));
 
             tile.Cursor = Cursors.Hand;
             tile.PreviewMouseLeftButtonDown += OnTileDragStart;
@@ -389,20 +400,47 @@ public partial class ManageWindow : Window
 
     private void UpdateTileStatus()
     {
-        foreach (var (dot, letter) in _tileDots)
-        {
-            bool running = _motionStore.FindByKey(letter) is ApplicationMotion app && IsIdentityRunning(app);
-            dot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(running ? "#CC7CFC00" : "#59FFFFFF"));
-        }
+        foreach (var (dot, app) in _tileDots)
+            dot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
+                IsIdentityRunning(app) ? "#CC7CFC00" : "#59FFFFFF"));
     }
 
-    // ---------- drag & drop (home layer) ----------
+    private Motion? FindMotion(FolderMotion? folder, char letter) =>
+        folder == null
+            ? _motionStore.FindByKey(letter)
+            : folder.Items.FirstOrDefault(item => item.Key == letter);
+
+    private List<Motion> LayerMotions(FolderMotion? folder) => folder?.Items ?? _motionStore.Home;
+
+    private bool IsTileSelected(char letter) => _currentFolder == null
+        ? _selectedHomeLetter == letter && _selectedChildFolder == null
+        : _selectedChildFolder == _currentFolder && _selectedChildLetter == letter;
+
+    private void UpdateLayerChrome()
+    {
+        BreadcrumbText.Text = _currentFolder == null
+            ? "Hive"
+            : $"Hive > {_currentFolder.DisplayName}";
+        LayerBackButton.Visibility = _currentFolder == null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // ---------- current-layer navigation and drag & drop ----------
 
     private void OnTileDragStart(object sender, MouseButtonEventArgs e)
     {
+        var tile = (Border)sender;
+        char letter = (char)tile.Tag;
+        if (e.ClickCount == 2 && _currentFolder == null && FindMotion(null, letter) is FolderMotion folder)
+        {
+            _dragArmed = false;
+            NavigateIntoFolder(folder);
+            e.Handled = true;
+            return;
+        }
+
         _dragArmed = true;
         _dragStart = e.GetPosition(this);
-        _dragLetter = (char)((Border)sender).Tag;
+        _dragLetter = letter;
     }
 
     private void OnTileDragMove(object sender, MouseEventArgs e)
@@ -413,22 +451,54 @@ public partial class ManageWindow : Window
         if (Math.Abs(pos.X - _dragStart.X) < 8 && Math.Abs(pos.Y - _dragStart.Y) < 8)
             return;
         _dragArmed = false;
+        Motion? motion = FindMotion(_currentFolder, _dragLetter);
+        if (motion == null)
+            return;
+
+        var payload = new CellDragPayload(motion, _currentFolder, _dragLetter);
         DragDrop.DoDragDrop((Border)sender,
-            new DataObject(DragFormat, _dragLetter), DragDropEffects.Move);
+            new DataObject(CellDragFormat, payload), DragDropEffects.Move);
+        CancelHoverNavigation();
     }
 
     private void OnTileDragEnter(object sender, DragEventArgs e)
     {
         var tile = (Border)sender;
-        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+        char letter = (char)tile.Tag;
+        Motion? targetMotion = FindMotion(_currentFolder, letter);
+
+        if (_currentFolder == null && targetMotion is FolderMotion folder && CanHoverIntoFolder(e))
         {
-            e.Effects = DragDropEffects.Copy;
+            e.Effects = e.Data.GetDataPresent(MotionTemplateDragFormat)
+                ? DragDropEffects.Copy
+                : DragDropEffects.Move;
             tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
+            StartHoverNavigation(HoverNavigationKind.IntoFolder, folder, tile);
             e.Handled = true;
             return;
         }
-        if (!e.Data.GetDataPresent(DragFormat))
+
+        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+        {
+            var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
+            e.Effects = _currentFolder != null && template == MotionTemplate.Folder
+                ? DragDropEffects.None
+                : DragDropEffects.Copy;
+            if (e.Effects != DragDropEffects.None)
+                tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
+            e.Handled = true;
             return;
+        }
+        if (!e.Data.GetDataPresent(CellDragFormat))
+            return;
+
+        var payload = (CellDragPayload)e.Data.GetData(CellDragFormat);
+        if (_currentFolder != null && payload.Motion is FolderMotion)
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
         e.Effects = DragDropEffects.Move;
         tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
         e.Handled = true;
@@ -437,61 +507,64 @@ public partial class ManageWindow : Window
     private void OnTileDragLeave(object sender, DragEventArgs e)
     {
         var tile = (Border)sender;
+        if (_hoverNavigationElement == tile)
+            CancelHoverNavigation();
+        RestoreTileBorder(tile);
+    }
+
+    private void RestoreTileBorder(Border tile)
+    {
         char letter = (char)tile.Tag;
-        bool selected = _selectedHomeLetter == letter;
+        bool selected = IsTileSelected(letter);
         tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-            selected ? "#FFF5B301" : _motionStore.FindByKey(letter) != null ? "#80F5B301" : "#26FFFFFF"));
+            selected ? "#FFF5B301" : FindMotion(_currentFolder, letter) != null ? "#80F5B301" : "#26FFFFFF"));
     }
 
     private void OnTileDrop(object sender, DragEventArgs e)
     {
-        OnTileDragLeave(sender, e);
-        char target = (char)((Border)sender).Tag;
-        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+        var tile = (Border)sender;
+        CancelHoverNavigation();
+        RestoreTileBorder(tile);
+        char target = (char)tile.Tag;
+
+        if (_currentFolder == null && FindMotion(null, target) is FolderMotion && CanHoverIntoFolder(e))
         {
-            AssignMotionTemplate((MotionTemplate)e.Data.GetData(MotionTemplateDragFormat), target, null);
+            e.Effects = DragDropEffects.None;
             e.Handled = true;
             return;
         }
-        if (!e.Data.GetDataPresent(DragFormat))
-            return;
 
-        char source = (char)e.Data.GetData(DragFormat);
-        if (source == target)
-            return;
-
-        var sourceMotion = _motionStore.FindByKey(source);
-        if (sourceMotion == null)
-            return;
-        var targetMotion = _motionStore.FindByKey(target);
-
-        // Move to an empty letter, or swap with the occupying motion.
-        _motionStore.Remove(source);
-        _motionStore.Remove(target);
-        sourceMotion.Key = target;
-        if (targetMotion != null)
+        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
         {
-            targetMotion.Key = source;
-            _motionStore.Set(targetMotion);
+            var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
+            if (_currentFolder == null || template != MotionTemplate.Folder)
+                AssignMotionTemplate(template, target, _currentFolder);
+            e.Handled = true;
+            return;
         }
-        _motionStore.Set(sourceMotion);
+        if (!e.Data.GetDataPresent(CellDragFormat))
+            return;
 
-        BuildLetterTiles();
-        ShowEditor(sourceMotion);
+        MoveCellMotion((CellDragPayload)e.Data.GetData(CellDragFormat), target, _currentFolder);
         e.Handled = true;
     }
 
     private void OnOccupiedTileClick(object sender, MouseButtonEventArgs e)
     {
         _dragArmed = false;
+        if (e.ClickCount > 1)
+        {
+            e.Handled = true;
+            return;
+        }
         char letter = (char)((Border)sender).Tag;
-        ShowEditor(_motionStore.FindByKey(letter));
+        ShowEditor(FindMotion(_currentFolder, letter), _currentFolder);
         e.Handled = true;
     }
 
     private void OnEmptyTileClick(object sender, MouseButtonEventArgs e)
     {
-        ShowEmptyCell((char)((Border)sender).Tag, null);
+        ShowEmptyCell((char)((Border)sender).Tag, _currentFolder);
         e.Handled = true;
     }
 
@@ -509,14 +582,139 @@ public partial class ManageWindow : Window
             return;
         }
 
-        ShowEditor(folder);
+        ShowEditor(null);
         _selectedHomeLetter = folder.Key;
         _selectedChildLetter = letter;
         _selectedChildFolder = folder;
         DeleteMotionButton.Visibility = Visibility.Collapsed;
-        FolderAssignmentHint.Text = Loc.Format("Motion_EmptyCellHint", letter);
-        FolderAssignmentHint.Visibility = Visibility.Visible;
-        BuildFolderChildTiles();
+        EditorEmpty.Text = Loc.Format("Motion_EmptyCellHint", letter);
+        BuildLetterTiles();
+    }
+
+    private void MoveCellMotion(CellDragPayload payload, char targetKey, FolderMotion? targetFolder)
+    {
+        var sourceLayer = LayerMotions(payload.SourceFolder);
+        Motion? sourceMotion = sourceLayer.FirstOrDefault(item =>
+            ReferenceEquals(item, payload.Motion) && item.Key == payload.SourceKey);
+        if (sourceMotion == null ||
+            payload.SourceFolder == targetFolder && payload.SourceKey == targetKey ||
+            targetFolder != null && sourceMotion is FolderMotion)
+            return;
+
+        var targetLayer = LayerMotions(targetFolder);
+        Motion? targetMotion = targetLayer.FirstOrDefault(item => item.Key == targetKey);
+        if (payload.SourceFolder != null && targetMotion is FolderMotion)
+            return;
+
+        sourceLayer.Remove(sourceMotion);
+        if (targetMotion != null)
+            targetLayer.Remove(targetMotion);
+
+        sourceMotion.Key = targetKey;
+        targetLayer.Add(sourceMotion);
+        if (targetMotion != null)
+        {
+            targetMotion.Key = payload.SourceKey;
+            sourceLayer.Add(targetMotion);
+        }
+
+        _motionStore.Save();
+        ShowEditor(sourceMotion, targetFolder);
+    }
+
+    private bool CanHoverIntoFolder(DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
+            return (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat) != MotionTemplate.Folder;
+        return e.Data.GetDataPresent(CellDragFormat) &&
+               ((CellDragPayload)e.Data.GetData(CellDragFormat)).Motion is not FolderMotion;
+    }
+
+    private void NavigateIntoFolder(FolderMotion folder)
+    {
+        CancelHoverNavigation();
+        _currentFolder = folder;
+        ShowEditor(folder);
+    }
+
+    private void NavigateHome()
+    {
+        FolderMotion? folder = _currentFolder;
+        if (folder == null)
+            return;
+        CancelHoverNavigation();
+        _currentFolder = null;
+        ShowEditor(folder);
+    }
+
+    private void OnLayerBackClick(object sender, MouseButtonEventArgs e)
+    {
+        NavigateHome();
+        e.Handled = true;
+    }
+
+    private void OnLayerBackDragEnter(object sender, DragEventArgs e)
+    {
+        if (_currentFolder == null ||
+            !e.Data.GetDataPresent(CellDragFormat) && !e.Data.GetDataPresent(MotionTemplateDragFormat))
+            return;
+
+        e.Effects = e.Data.GetDataPresent(MotionTemplateDragFormat)
+            ? DragDropEffects.Copy
+            : DragDropEffects.Move;
+        LayerBackButton.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#26F5B301"));
+        StartHoverNavigation(HoverNavigationKind.Back, null, LayerBackButton);
+        e.Handled = true;
+    }
+
+    private void OnLayerBackDragLeave(object sender, DragEventArgs e)
+    {
+        CancelHoverNavigation();
+        LayerBackButton.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#14FFFFFF"));
+    }
+
+    private void OnLayerBackDrop(object sender, DragEventArgs e)
+    {
+        OnLayerBackDragLeave(sender, e);
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void StartHoverNavigation(HoverNavigationKind kind, FolderMotion? folder, Border element)
+    {
+        if (_hoverNavigationKind == kind && _hoverNavigationFolder == folder && _hoverNavigationElement == element)
+            return;
+        CancelHoverNavigation();
+        _hoverNavigationKind = kind;
+        _hoverNavigationFolder = folder;
+        _hoverNavigationElement = element;
+        _hoverNavigationTimer.Start();
+    }
+
+    private void CancelHoverNavigation()
+    {
+        Border? element = _hoverNavigationElement;
+        _hoverNavigationTimer.Stop();
+        _hoverNavigationKind = HoverNavigationKind.None;
+        _hoverNavigationFolder = null;
+        _hoverNavigationElement = null;
+        if (element == LayerBackButton)
+            LayerBackButton.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#14FFFFFF"));
+        else if (element?.Tag is char)
+            RestoreTileBorder(element);
+    }
+
+    private void OnHoverNavigationTick(object? sender, EventArgs e)
+    {
+        HoverNavigationKind kind = _hoverNavigationKind;
+        FolderMotion? folder = _hoverNavigationFolder;
+        CancelHoverNavigation();
+
+        if (kind == HoverNavigationKind.IntoFolder && folder != null &&
+            _currentFolder == null && _motionStore.Home.Contains(folder))
+            NavigateIntoFolder(folder);
+        else if (kind == HoverNavigationKind.Back && _currentFolder != null)
+            NavigateHome();
     }
 
     private void AssignMotionTemplate(MotionTemplate template, char letter, FolderMotion? folder)
@@ -535,7 +733,7 @@ public partial class ManageWindow : Window
                 MotionTemplate.Folder => new FolderMotion
                 {
                     Key = letter,
-                    DisplayName = Loc.Get("Folder_DefaultName")
+                    DisplayName = Loc.Format("Folder_DefaultNameFormat", letter)
                 },
                 _ => new SystemActionMotion { Key = letter }
             };
@@ -591,6 +789,7 @@ public partial class ManageWindow : Window
         _motionTemplateDragArmed = false;
         DragDrop.DoDragDrop((Border)sender,
             new DataObject(MotionTemplateDragFormat, _motionTemplate), DragDropEffects.Copy);
+        CancelHoverNavigation();
     }
 
     // ---------- editor ----------
@@ -613,7 +812,6 @@ public partial class ManageWindow : Window
         SystemActionEditorPanel.Visibility = _selectedSystemAction != null ? Visibility.Visible : Visibility.Collapsed;
         DeleteMotionButton.Visibility = motion != null ? Visibility.Visible : Visibility.Collapsed;
         EditorEmpty.Text = Loc.Get("Pins_EditorEmpty");
-        FolderAssignmentHint.Visibility = Visibility.Collapsed;
 
         if (_selectedApp is { } app)
         {
@@ -624,8 +822,6 @@ public partial class ManageWindow : Window
             EditorPath.Text = app.ExecutablePath;
             EditorArgs.Text = app.Arguments;
             EditorCwd.Text = app.WorkingDirectory;
-            EditorBackButton.Visibility = _selectedAppFolder != null ? Visibility.Visible : Visibility.Collapsed;
-            EditorBackText.Text = Loc.Get("Folder_BackToFolder");
             UpdateEditorStatus();
             UpdatePreview();
             ValidatePath();
@@ -642,27 +838,15 @@ public partial class ManageWindow : Window
             FolderName.Text = folder.DisplayName;
             UpdateFolderHeaderIcon();
             UpdateFolderStatus();
-            BuildFolderChildTiles();
         }
         else if (_selectedSystemAction is { } systemAction)
         {
             SystemActionLetterBadge.Text = systemAction.Key.ToString();
-            SystemActionBackButton.Visibility = _selectedSystemActionFolder != null ? Visibility.Visible : Visibility.Collapsed;
-            SystemActionBackText.Text = Loc.Get("Folder_BackToFolder");
             UpdateSystemActionEditor();
         }
 
         _editorLoading = false;
         BuildLetterTiles();
-    }
-
-    private void OnEditorBackClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedAppFolder != null)
-            ShowEditor(_selectedAppFolder);
-        else if (_selectedSystemActionFolder != null)
-            ShowEditor(_selectedSystemActionFolder);
-        e.Handled = true;
     }
 
     private void UpdateEditorStatus()
@@ -713,7 +897,7 @@ public partial class ManageWindow : Window
         if (_selectedAppFolder != null)
         {
             _motionStore.Save();
-            BuildFolderChildTiles();
+            BuildLetterTiles();
         }
         else
         {
@@ -797,7 +981,7 @@ public partial class ManageWindow : Window
         if (_selectedAppFolder != null)
         {
             _motionStore.Save();
-            BuildFolderChildTiles();
+            BuildLetterTiles();
         }
         else
         {
@@ -856,21 +1040,11 @@ public partial class ManageWindow : Window
             }
             else
             {
+                if (motion is FolderMotion folder && ReferenceEquals(_currentFolder, folder))
+                    _currentFolder = null;
                 _motionStore.Remove(motion.Key);
                 ShowEmptyCell(motion.Key, null);
             }
-        });
-        e.Handled = true;
-    }
-
-    private void OnClearPinsClick(object sender, MouseButtonEventArgs e)
-    {
-        ShowConfirm(Loc.Get("Pins_ClearAllConfirm"), () =>
-        {
-            foreach (var motion in _motionStore.Home.ToList())
-                _motionStore.Remove(motion.Key);
-            BuildLetterTiles();
-            ShowEditor(null);
         });
         e.Handled = true;
     }
@@ -884,7 +1058,7 @@ public partial class ManageWindow : Window
 
         _selectedFolder.DisplayName = FolderName.Text.Trim();
         if (_selectedFolder.DisplayName.Length == 0)
-            _selectedFolder.DisplayName = Loc.Get("Folder_DefaultName");
+            _selectedFolder.DisplayName = Loc.Format("Folder_DefaultNameFormat", _selectedFolder.Key);
         _motionStore.Save();
         UpdateFolderHeaderIcon();
         UpdateFolderStatus();
@@ -974,10 +1148,7 @@ public partial class ManageWindow : Window
             return;
 
         _motionStore.Save();
-        if (_selectedSystemActionFolder != null)
-            BuildFolderChildTiles();
-        else
-            BuildLetterTiles();
+        BuildLetterTiles();
         UpdateSystemActionEditor();
     }
 
@@ -1021,10 +1192,7 @@ public partial class ManageWindow : Window
             return;
         _selectedSystemAction.ActionId = action.Id;
         _motionStore.Save();
-        if (_selectedSystemActionFolder != null)
-            BuildFolderChildTiles();
-        else
-            BuildLetterTiles();
+        BuildLetterTiles();
         UpdateSystemActionEditor();
     }
 
@@ -1089,273 +1257,6 @@ public partial class ManageWindow : Window
             e.Handled = true;
         };
         return row;
-    }
-
-    // ---------- folder child tiles ----------
-
-    private void BuildFolderChildTiles()
-    {
-        FolderChildRows.Children.Clear();
-        _childTileDots.Clear();
-        if (_selectedFolder == null)
-            return;
-
-        foreach (var row in KeyGrid.Rows)
-        {
-            var panel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 2, 0, 2)
-            };
-            foreach (char letter in row)
-                panel.Children.Add(BuildChildTile(letter));
-            FolderChildRows.Children.Add(panel);
-        }
-
-        UpdateChildTileStatus();
-    }
-
-    private Border BuildChildTile(char letter)
-    {
-        var item = _selectedFolder!.Items.FirstOrDefault(i => i.Key == letter);
-        bool selected = _selectedChildFolder == _selectedFolder && _selectedChildLetter == letter;
-        var tile = new Border
-        {
-            Width = 46,
-            Height = 46,
-            Margin = new Thickness(3),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(selected ? 2 : 1),
-            Tag = letter,
-            AllowDrop = true,
-            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(item != null ? "#1AFFFFFF" : "#0AFFFFFF")),
-            BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-                selected ? "#FFF5B301" : item != null ? "#80F5B301" : "#26FFFFFF")),
-            ToolTip = item != null ? $"{letter}: {MotionDisplayName(item)}" : Loc.Format("Pins_PinToLetter", letter)
-        };
-
-        var content = new Grid();
-        if (item is ApplicationMotion app)
-        {
-            var icon = IconHelper.ForMotion(app);
-            var image = new Image
-            {
-                Width = 20,
-                Height = 20,
-                Source = icon,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
-            content.Children.Add(image);
-            if (icon == null)
-            {
-                content.Children.Add(new TextBlock
-                {
-                    Text = app.DisplayName.Length > 0 ? app.DisplayName.Substring(0, 1) : "?",
-                    FontSize = 14,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFFFFF")),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-            }
-
-            content.Children.Add(new TextBlock
-            {
-                Text = letter.ToString(),
-                FontSize = 8,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCFFD97A")),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(4, 3, 0, 0)
-            });
-
-            var dot = new Ellipse
-            {
-                Width = 6,
-                Height = 6,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(0, 0, 4, 3)
-            };
-            content.Children.Add(dot);
-            _childTileDots.Add((dot, app));
-
-            tile.Cursor = Cursors.Hand;
-            tile.PreviewMouseLeftButtonDown += OnChildDragStart;
-            tile.PreviewMouseMove += OnChildDragMove;
-            tile.MouseLeftButtonUp += OnChildTileClick;
-        }
-        else if (item is SystemActionMotion systemAction)
-        {
-            var icon = IconHelper.ForMotion(systemAction);
-            if (icon != null)
-            {
-                content.Children.Add(new Image
-                {
-                    Width = 20,
-                    Height = 20,
-                    Source = icon,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-            }
-
-            content.Children.Add(new TextBlock
-            {
-                Text = letter.ToString(),
-                FontSize = 8,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCFFD97A")),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(4, 3, 0, 0)
-            });
-            // System actions are never running; no status dot.
-
-            tile.Cursor = Cursors.Hand;
-            tile.PreviewMouseLeftButtonDown += OnChildDragStart;
-            tile.PreviewMouseMove += OnChildDragMove;
-            tile.MouseLeftButtonUp += OnChildTileClick;
-        }
-        else
-        {
-            content.Children.Add(new TextBlock
-            {
-                Text = letter.ToString(),
-                FontSize = 13,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#59FFFFFF")),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            tile.Cursor = Cursors.Hand;
-            tile.MouseLeftButtonUp += OnChildEmptyTileClick;
-        }
-
-        tile.Child = content;
-        tile.Drop += OnChildTileDrop;
-        tile.DragEnter += OnChildDragEnter;
-        tile.DragLeave += OnChildDragLeave;
-        return tile;
-    }
-
-    private void UpdateChildTileStatus()
-    {
-        foreach (var (dot, app) in _childTileDots)
-        {
-            bool running = IsIdentityRunning(app);
-            dot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(running ? "#CC7CFC00" : "#59FFFFFF"));
-        }
-    }
-
-    private void OnChildTileClick(object sender, MouseButtonEventArgs e)
-    {
-        _childDragArmed = false;
-        if (_selectedFolder == null)
-            return;
-        char letter = (char)((Border)sender).Tag;
-        if (_selectedFolder.Items.FirstOrDefault(i => i.Key == letter) is { } item)
-            ShowEditor(item, _selectedFolder);
-        e.Handled = true;
-    }
-
-    private void OnChildEmptyTileClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedFolder != null)
-            ShowEmptyCell((char)((Border)sender).Tag, _selectedFolder);
-        e.Handled = true;
-    }
-
-    // ---------- drag & drop (folder children) ----------
-
-    private void OnChildDragStart(object sender, MouseButtonEventArgs e)
-    {
-        _childDragArmed = true;
-        _childDragStart = e.GetPosition(this);
-        _childDragLetter = (char)((Border)sender).Tag;
-    }
-
-    private void OnChildDragMove(object sender, MouseEventArgs e)
-    {
-        if (!_childDragArmed || e.LeftButton != MouseButtonState.Pressed)
-            return;
-        var pos = e.GetPosition(this);
-        if (Math.Abs(pos.X - _childDragStart.X) < 8 && Math.Abs(pos.Y - _childDragStart.Y) < 8)
-            return;
-        _childDragArmed = false;
-        DragDrop.DoDragDrop((Border)sender,
-            new DataObject(ChildDragFormat, _childDragLetter), DragDropEffects.Move);
-    }
-
-    private void OnChildDragEnter(object sender, DragEventArgs e)
-    {
-        var tile = (Border)sender;
-        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
-        {
-            var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
-            e.Effects = template == MotionTemplate.Folder ? DragDropEffects.None : DragDropEffects.Copy;
-            if (e.Effects != DragDropEffects.None)
-                tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
-            e.Handled = true;
-            return;
-        }
-        if (!e.Data.GetDataPresent(ChildDragFormat))
-            return;
-        e.Effects = DragDropEffects.Move;
-        tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5B301"));
-        e.Handled = true;
-    }
-
-    private void OnChildDragLeave(object sender, DragEventArgs e)
-    {
-        var tile = (Border)sender;
-        char letter = (char)tile.Tag;
-        bool occupied = _selectedFolder?.Items.Any(i => i.Key == letter) == true;
-        bool selected = _selectedChildFolder == _selectedFolder && _selectedChildLetter == letter;
-        tile.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-            selected ? "#FFF5B301" : occupied ? "#80F5B301" : "#26FFFFFF"));
-    }
-
-    private void OnChildTileDrop(object sender, DragEventArgs e)
-    {
-        OnChildDragLeave(sender, e);
-        if (_selectedFolder == null)
-            return;
-
-        char target = (char)((Border)sender).Tag;
-        if (e.Data.GetDataPresent(MotionTemplateDragFormat))
-        {
-            var template = (MotionTemplate)e.Data.GetData(MotionTemplateDragFormat);
-            if (template != MotionTemplate.Folder)
-                AssignMotionTemplate(template, target, _selectedFolder);
-            e.Handled = true;
-            return;
-        }
-        if (!e.Data.GetDataPresent(ChildDragFormat))
-            return;
-
-        char source = (char)e.Data.GetData(ChildDragFormat);
-        if (source == target)
-            return;
-
-        var folder = _selectedFolder;
-        var sourceItem = folder.Items.FirstOrDefault(i => i.Key == source);
-        if (sourceItem == null)
-            return;
-        var targetItem = folder.Items.FirstOrDefault(i => i.Key == target);
-
-        // Move to an empty letter, or swap with the occupying child.
-        sourceItem.Key = target;
-        if (targetItem != null)
-            targetItem.Key = source;
-        _motionStore.Save();
-
-        BuildFolderChildTiles();
-        ShowEditor(sourceItem, folder);
-        e.Handled = true;
     }
 
     // ---------- inline application setup ----------
@@ -1948,6 +1849,7 @@ public partial class ManageWindow : Window
             LocalizationManager.Instance.ApplyLanguageSetting(settings.Language);
         }
 
+        _currentFolder = null;
         BuildLetterTiles();
         ShowEditor(null);
         BuildPriorityList();

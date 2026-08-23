@@ -70,7 +70,7 @@ reopening the menu item brings the existing window forward.
 
 ```
 ┌──────────────────────────────────────────────────┬──────────────┐
-│ 字母分配                          [清空全部固定] │ 动 作         │
+│ Hive                                  [← Back]   │ 动 作         │
 │  ┌────┐┌────┐┌────┐ … QWERTYUIOP                │ [应用程序] ⇢ │
 │  │icon││ W  ││ 📁│   ASDFGHJKL                  │ [文件夹]   ⇢ │
 │  └────┘└────┘└────┘   ZXCVBNM                   │ [系统操作] ⇢ │
@@ -82,13 +82,16 @@ reopening the menu item brings the existing window forward.
 └──────────────────────────────────────────────────┴──────────────┘
 ```
 
-The default window is wider to accommodate the fixed Motion list. Narrow windows
+The breadcrumb reads `Hive` on the home layer and `Hive > {folder name}` inside a
+folder. The Back button is hidden on the home layer. The default window is
+1600 × 900 to accommodate the fixed Motion list. Narrow windows
 retain the full keyboard and sidebar through horizontal scrolling.
 
-## 4. Letter overview (top card)
+## 4. Current-layer grid (top card)
 
-All 26 letters in keyboard rows. Tiles are built from `KeyGrid.Rows`, so the layout
-mirrors the hive overlay.
+All 26 letters use one keyboard-row grid built from `KeyGrid.Rows`, so the layout
+mirrors the hive overlay. It shows home motions at `Hive` and replaces them in place
+with the selected folder's children after folder navigation.
 
 - **Application tile**: honey-gold border, app icon, letter badge (top-left), status
   dot (bottom-right): green = a running window currently matches the identity,
@@ -96,7 +99,10 @@ mirrors the hive overlay.
 - **Folder tile**: custom icon or folder glyph, letter badge, small folder badge in
   place of the status dot (folders have no running state).
 - **Empty tile**: dim letter; clicking selects it and shows the drag-from-right hint.
-- **Click an occupied tile**: opens it in the matching editor (§5 / §7).
+- **Click an occupied tile**: opens it in the matching editor (§5 / §7). A single
+  click on a Folder edits its name and icon without changing the grid.
+- **Double-click a Folder tile**: enters the Folder, keeps the Folder editor open,
+  updates the breadcrumb, and reveals Back.
 - **Selected tile**: bright honey border, including selected empty home/folder cells.
 
 ### 4.1 Drag & drop
@@ -108,20 +114,25 @@ reassignment happens by dragging tiles:
 |---|---|
 | Drop on an empty letter | Move the motion to that letter |
 | Drop on an occupied letter | The two motions **swap** letters — no confirmation (cheap to undo by dragging back) |
+| Hover an eligible motion over a Folder for 500 ms | Enter the Folder without changing data; dropping inside moves or swaps across layers |
+| Hover Back for 500 ms while dragging | Return to Hive and continue the same drag |
+| Release an eligible motion on a Folder before 500 ms | Cancel without swapping or replacing the Folder |
 | Drop outside the grid | Cancels; the motion stays put |
 
 The right Motion list is a type catalog, not a list of configured cells. Dragging
 Application, Folder, or System Action creates a new motion on the target cell with
 copy semantics. Dropping on an occupied cell asks for confirmation and replaces it
 only after confirmation. Application and System Action begin with empty configuration;
-Folder is immediately usable. Application/System Action may also be dropped into
-folder child grids, while Folder drops are rejected because folders cannot nest.
+Folder is immediately usable and receives a localized letter-based name (`Folder J`
+or `文件夹 J`). Application/System Action may also be dropped into folder layers,
+while Folder drops are rejected because folders cannot nest.
 
 While dragging, the hovered target tile gets a bright honey border as the landing
 preview. The store saves immediately on drop, and the editor follows the dragged
-motion (its letter badge updates in place). Dropping a motion *onto* a folder tile
-does **not** insert it into the folder (folder contents are edited inside the
-folder editor).
+motion (its letter badge updates in place). Existing Application/System Action
+motions move between home and folder layers; an occupied destination swaps back to
+the source cell. Motion-list drags retain copy semantics and occupied targets retain
+the replacement confirmation.
 
 ## 5. Application editor (bottom card)
 
@@ -143,8 +154,8 @@ confirmation via the in-window modal.
 
 The header shows the centrally resolved icon. Clicking it selects a custom icon;
 the small red × clears a stored custom path.
-When the editor edits a **folder child**, a `← 返回文件夹` button appears in the
-header and deletion removes the child from its folder instead of the home layer.
+Deletion removes a folder child from its parent instead of the home layer. Layer
+navigation always uses the top-card Back button.
 
 ### 5.1 New application setup
 
@@ -176,17 +187,18 @@ and editor header may use a custom icon.
 
 ## 7. Folder editor (bottom card)
 
-Appears when a folder tile is selected.
+Appears when a folder tile is selected. Folder contents are not embedded in this
+editor; double-click the Folder tile in the top grid to enter its layer.
 
 | Field | Rules |
 |---|---|
-| 文件夹名称 | Free text; if cleared, falls back to the localized default ("新建文件夹") |
+| 文件夹名称 | Free text; if cleared, falls back to the localized letter-based default (`Folder {letter}` / `文件夹 {letter}`) |
 | 图标 | Optional custom icon image (png/ico/jpg/bmp/exe). Decoded at a bounded size, frozen, and cached by path + last-write time (`IconHelper.ForImageFile`). Cleared → folder glyph fallback |
-| 内容 (child grid) | 26 letters mirroring the home overview. Empty click selects; Motion-list drops add Application/System Action; child drag/drop moves or swaps letters |
 | 删除 | Shared top-right button; confirms and removes the folder and all its items |
 
 Folder children support Application and System Action motions. Application running
-status dots reuse the same 5-second scan.
+status dots reuse the same 5-second scan. Deleting the Folder while viewing its layer
+returns to Hive before removing it.
 
 ## 8. Overlay behavior
 
@@ -242,9 +254,9 @@ window in z-order wins the cell.
 - `FolderMotion` — `Items` (`List<Motion>`; nesting rejected at load/edit)
 - `SystemActionMotion` — `ActionId` referencing the built-in action catalog
 - `motions.json` — one polymorphic array (`$type` discriminator), written on every
-  mutation (`MotionStore.Set`/`Remove`/`ReplaceAll`/`Save`). Load sanitizes: A-Z
-  letters only, unique per layer, applications require an executable path, nested
-  folders are dropped with a log line.
+  mutation (`MotionStore.Set`/`Remove`/`ReplaceAll`/`Save`). Load sanitizes A-Z
+  letters, uniqueness per layer, unknown non-empty system-action IDs, and nested
+  folders while retaining blank Application/System Action drafts.
 - `pins.json` — legacy format; migrated once into `motions.json` (see §1), then ignored
 - `history.json` — `HistoryEntry` records with `LaunchCount`, `FirstSeen`, `LastSeen`;
   capped at 200 entries, least-recently-seen evicted first
