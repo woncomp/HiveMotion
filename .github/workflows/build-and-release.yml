@@ -43,9 +43,8 @@ jobs:
           dotnet publish HiveMotion/HiveMotion.csproj
           --configuration Release
           --runtime win-x64
-          --self-contained true
+          --self-contained false
           --output installer/publish
-          /p:PublishSingleFile=true
           /p:DebugType=None
           /p:DebugSymbols=false
           /p:Version=${{ steps.version.outputs.value }}

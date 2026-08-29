@@ -45,6 +45,7 @@ $RECYCLE.BIN/
 
 # Installer outputs
 Installer/publish/
+Installer/dist/
 Installer/artifacts/
 Installer/HiveMotion.Setup/HarvestedFiles.wxs
 *.msi

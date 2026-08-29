@@ -30,7 +30,7 @@ Core capabilities:
 - **Project language:** C# with `Nullable` enabled and `ImplicitUsings` enabled. WinForms global usings are explicitly removed in `HiveMotion.csproj` to avoid namespace clashes with WPF.
 - **Interop:** Heavy use of P/Invoke (`user32.dll`, `kernel32.dll`, `dwmapi.dll`, `ntdll.dll`, `shell32.dll`, `gdi32.dll`).
 - **Installer (local):** WiX Toolset v5 (`Installer/HiveMotion.Setup`, `Installer/HiveMotion.Bootstrapper`), framework-dependent publish, bootstrapper downloads the .NET 8 Desktop Runtime if missing.
-- **Installer (CI / release):** Inno Setup (`Installer/HiveMotion.iss`), self-contained publish. The CI workflow publishes a single-file self-contained executable and packages it with Inno Setup.
+- **Installer (CI / release):** Inno Setup (`Installer/HiveMotion.iss`), framework-dependent multi-file publish. The Inno script detects the .NET 8 Desktop Runtime and downloads/installs it from Microsoft at install time when missing.
 - **CI/CD:** GitHub Actions (`.github/workflows/build-and-release.yml`).
 
 ## Solution Layout
@@ -58,14 +58,13 @@ dotnet restore HiveMotion.sln
 dotnet build HiveMotion.sln -c Release
 ```
 
-Publish for the CI / Inno Setup path (self-contained, single-file, `win-x64`):
+Publish for the CI / Inno Setup path (framework-dependent, multi-file, `win-x64`):
 ```powershell
 dotnet publish HiveMotion/HiveMotion.csproj `
   --configuration Release `
   --runtime win-x64 `
-  --self-contained true `
+  --self-contained false `
   --output installer/publish `
-  /p:PublishSingleFile=true `
   /p:DebugType=None `
   /p:DebugSymbols=false `
   /p:Version=0.1.2
@@ -225,7 +224,7 @@ You may have access to a Computer Use facility in the development environment. D
 
 `.github/workflows/build-and-release.yml` runs on every push and on pull requests to `main`:
 - Determines the version (`vX.Y.Z` from a tag, otherwise `0.0.0-ci.{run_number}`).
-- Restores and publishes the app as a self-contained, single-file `win-x64` binary to `installer/publish`.
+- Restores and publishes the app as a framework-dependent, multi-file `win-x64` output to `installer/publish`.
 - Installs Inno Setup via Chocolatey and builds `Installer/HiveMotion.iss` with the version define.
 - Uploads the installer as a GitHub artifact.
 - For tags starting with `v`, the release job downloads the artifact and creates a GitHub Release.
