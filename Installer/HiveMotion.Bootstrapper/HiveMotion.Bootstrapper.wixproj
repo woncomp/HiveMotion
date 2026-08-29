@@ -4,6 +4,8 @@
     <OutputType>Bundle</OutputType>
     <Platforms>x64</Platforms>
     <Platform>x64</Platform>
+    <!-- Expose the shared version to the WiX preprocessor as $(var.HiveMotionVersion). -->
+    <DefineConstants>HiveMotionVersion=$(HiveMotionAssemblyVersion)</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

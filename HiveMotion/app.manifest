@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Template for the application manifest. During build, the GenerateAppManifest
+  target in HiveMotion.csproj substitutes the version placeholder below with
+  the HiveMotionAssemblyVersion from Directory.Build.props and writes the real
+  manifest to the intermediate output directory. Edit the version in
+  Directory.Build.props, not here.
+-->
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="0.1.2.1" name="HiveMotion.app" />
+  <assemblyIdentity version="@HiveMotionAssemblyVersion@" name="HiveMotion.app" />
 </assembly>

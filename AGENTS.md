@@ -97,27 +97,29 @@ This project uses a mix of semver and C# Assembly Version Number. The version st
 
 ### Version Editing
 
-Files to touch when modifying version (keep them in sync):
-- `HiveMotion/HiveMotion.csproj` (`Version`, `AssemblyVersion`, and `FileVersion`)
-- `HiveMotion/app.manifest` (`assemblyIdentity` version attribute)
-- `Installer/HiveMotion.Bootstrapper/Bundle.wxs` (`Bundle` `Version` attribute)
-- `Installer/HiveMotion.Setup/Package.wxs` (`Package` `Version` attribute)
-- `Installer/HiveMotion.Setup/HiveMotion.Setup.wixproj` (`ProductVersion`)
+The single source of truth is `Directory.Build.props` at the repository root:
+- `HiveMotionVersion` — package version (`x.y.z` for releases, `x.y.z-build-W` during daily development).
+- `HiveMotionAssemblyVersion` — four-part assembly/file/installer version (`x.y.z.W`).
+
+These properties flow automatically into all consumers; do not hardcode version numbers in these files:
+- `HiveMotion/HiveMotion.csproj` (`Version`, `AssemblyVersion`, `FileVersion` reference the properties).
+- `HiveMotion/app.manifest` (a template; the `GenerateAppManifest` target in the csproj replaces `@HiveMotionAssemblyVersion@` and writes the real manifest to the intermediate output directory).
+- `Installer/HiveMotion.Setup` and `Installer/HiveMotion.Bootstrapper` (each wixproj passes `HiveMotionAssemblyVersion` to the WiX preprocessor via `DefineConstants`, so `Package.wxs` and `Bundle.wxs` reference it as `$(var.HiveMotionVersion)`; `ProductVersion` in the Setup wixproj references it directly).
 
 For CI/Inno builds, the version is passed as `/DMyAppVersion={version}` to `ISCC.exe`; the Inno script itself defaults to `0.0.0` if the define is absent. Do not change the `UpgradeCode` GUIDs in the WiX files unless you are creating a new installer product family.
 
 ### Version Advancing During Daily Development
 
-When the user explicitly asks for a version bump, increase the **build** version by 1. If the build version does not exist at the moment, append one and start from version 1.
-- Format in the package version (`Version` in `HiveMotion.csproj`): `x.y.z-build-(W+1)`.
-- Format in the assembly version (`AssemblyVersion`): `x.y.z.(W+1)`.
+When the user explicitly asks for a version bump, increase the **build** version by 1 in `Directory.Build.props`. If the build version does not exist at the moment, append one and start from version 1.
+- `HiveMotionVersion`: `x.y.z-build-(W+1)`.
+- `HiveMotionAssemblyVersion`: `x.y.z.(W+1)`.
 
 ### Release Workflow
 
-When the user requests a release, reset the build version to 0 and bump the requested version component. If the user did not mention a component, bump the **patch** version. For the package version, remove the build suffix entirely.
+When the user requests a release, reset the build version to 0 and bump the requested version component in `Directory.Build.props`. If the user did not mention a component, bump the **patch** version. For `HiveMotionVersion`, remove the build suffix entirely (`x.y.z`); set `HiveMotionAssemblyVersion` to `x.y.z.0`.
 
 Release steps:
-1. Update the version files above and stage them.
+1. Update `Directory.Build.props` and stage it.
 2. Ask the user to review before committing.
 3. After the user approves, commit, push to `origin`, create a tag `vX.Y.Z`, and push the tag to `origin` to trigger the release workflow.
 4. The user must ask explicitly to start this process; do not run the release flow on ordinary commit requests.

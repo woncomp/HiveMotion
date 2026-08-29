@@ -4,7 +4,9 @@
     <OutputType>Package</OutputType>
     <Platforms>x64</Platforms>
     <Platform>x64</Platform>
-    <ProductVersion>0.1.2.1</ProductVersion>
+    <ProductVersion>$(HiveMotionAssemblyVersion)</ProductVersion>
+    <!-- Expose the shared version to the WiX preprocessor as $(var.HiveMotionVersion). -->
+    <DefineConstants>HiveMotionVersion=$(HiveMotionAssemblyVersion)</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

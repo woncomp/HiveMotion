@@ -9,10 +9,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>Resources\hive_icon.ico</ApplicationIcon>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.2-build-1</Version>
-    <AssemblyVersion>0.1.2.1</AssemblyVersion>
-    <FileVersion>0.1.2.1</FileVersion>
+    <Version>$(HiveMotionVersion)</Version>
+    <AssemblyVersion>$(HiveMotionAssemblyVersion)</AssemblyVersion>
+    <FileVersion>$(HiveMotionAssemblyVersion)</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,5 +22,23 @@
     <Using Remove="System.Drawing" />
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
+
+  <!--
+    app.manifest is a template: @HiveMotionAssemblyVersion@ is replaced with the
+    version from Directory.Build.props and the result is generated into the
+    intermediate output directory. ApplicationManifest is pointed at the
+    generated file so the compiler never sees the raw template.
+  -->
+  <Target Name="GenerateAppManifest" BeforeTargets="_SetEmbeddedWin32ManifestProperties">
+    <PropertyGroup>
+      <_AppManifestTemplate>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\app.manifest'))</_AppManifestTemplate>
+      <_AppManifestContent>$(_AppManifestTemplate.Replace('@HiveMotionAssemblyVersion@', '$(HiveMotionAssemblyVersion)'))</_AppManifestContent>
+      <ApplicationManifest>$(IntermediateOutputPath)app.manifest</ApplicationManifest>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(ApplicationManifest)"
+                      Lines="$(_AppManifestContent)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+  </Target>
 
 </Project>
