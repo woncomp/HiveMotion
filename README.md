@@ -1,3 +1,5 @@
+![HiveMotion banner](docs/images/HiveMotion-banner-strip-1600x360.png)
+
 # HiveMotion
 
 A modal window manager for Windows. Press `Win+Tab` to bring up an overlay, then press a single letter key to launch or switch to an app. For example: `Win+Tab` → `N` opens or focuses Notepad.
