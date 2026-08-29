@@ -66,3 +66,6 @@ TestResults/
 # Others
 *.swp
 *~
+
+# Agents
+.zcode/
