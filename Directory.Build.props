@@ -12,13 +12,10 @@
     Consumers (do not hardcode version numbers in these files):
       - HiveMotion/HiveMotion.csproj        (Version, AssemblyVersion, FileVersion)
       - HiveMotion/app.manifest             (template, generated at build time)
-      - Installer/HiveMotion.Setup          (MSI ProductVersion)
-      - Installer/HiveMotion.Bootstrapper   (bundle version)
-      Both WiX projects pass it to the .wxs sources as $(var.HiveMotionVersion).
 
-    The CI / Inno Setup path does not read these properties; it receives the
-    version from the git tag via /DMyAppVersion (see
-    .github/workflows/build-and-release.yml).
+    Installer builds read these properties via build-publish.bat, which
+    forwards HiveMotionVersion to Inno Setup (/DMyAppVersion). Releases must
+    keep the git tag in sync with HiveMotionVersion.
   -->
   <PropertyGroup>
     <HiveMotionVersion>0.1.3</HiveMotionVersion>

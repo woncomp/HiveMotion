@@ -29,23 +29,22 @@ Core capabilities:
 - **UI framework:** WPF (`UseWPF=true`) with Windows Forms used only for the system tray icon (`NotifyIcon`).
 - **Project language:** C# with `Nullable` enabled and `ImplicitUsings` enabled. WinForms global usings are explicitly removed in `HiveMotion.csproj` to avoid namespace clashes with WPF.
 - **Interop:** Heavy use of P/Invoke (`user32.dll`, `kernel32.dll`, `dwmapi.dll`, `ntdll.dll`, `shell32.dll`, `gdi32.dll`).
-- **Installer (local):** WiX Toolset v5 (`Installer/HiveMotion.Setup`, `Installer/HiveMotion.Bootstrapper`), framework-dependent publish, bootstrapper downloads the .NET 8 Desktop Runtime if missing.
-- **Installer (CI / release):** Inno Setup (`Installer/HiveMotion.iss`), framework-dependent multi-file publish. The Inno script detects the .NET 8 Desktop Runtime and downloads/installs it from Microsoft at install time when missing.
+- **Installer:** Inno Setup (`Installer/HiveMotion.iss`), framework-dependent multi-file publish. The Inno script detects the .NET 8 Desktop Runtime and downloads/installs it from Microsoft at install time when missing.
 - **CI/CD:** GitHub Actions (`.github/workflows/build-and-release.yml`).
 
 ## Solution Layout
 
 The repository is organized into areas: root solution files, the main WPF project, the installer projects, and documentation.
 
-- **Root** — `HiveMotion.sln` (main app) and `HiveMotion.Installer.sln` (WiX installer).
+- **Root** — `HiveMotion.sln` (main app) and `build-publish.bat` (builds the app and the installer).
 - **`HiveMotion/`** — Main WPF application.
   - **Root files** — application entry point (`App.xaml`), overlay window and hex-grid UI, background window-scanning services, motion/history/settings stores, P/Invoke helpers, and logging.
   - **`Localization/`** — resource manager, XAML markup extension, and bilingual string resources (`Strings.resx`, `Strings.en.resx`).
   - **`ManageCenter/`** — management center UI for editing pins, priorities, hotkeys, language, diagnostics, and backup/restore.
   - **`Motions/`** — motion kind implementations and their catalog/trigger logic (`ApplicationMotion`, `FolderMotion`, `SystemActionMotion`).
-  - **`Properties/`** — assembly info and publish profiles (`FrameworkDependent.pubxml`).
+  - **`Properties/`** — assembly info.
   - **`Resources/`** — application icon and embedded assets.
-- **`Installer/`** — WiX v5 MSI and bootstrapper projects, plus the Inno Setup script used by CI.
+- **`Installer/`** — the Inno Setup script used for all installer builds.
 - **`docs/`** — Feature documentation, roadmap notes, and end-user guidance.
 
 ## Build and Test Commands
@@ -58,33 +57,12 @@ dotnet restore HiveMotion.sln
 dotnet build HiveMotion.sln -c Release
 ```
 
-Publish for the CI / Inno Setup path (framework-dependent, multi-file, `win-x64`):
+Build the app (requires the .NET SDK; add `installer` to also build the installer, which requires Inno Setup 6):
 ```powershell
-dotnet publish HiveMotion/HiveMotion.csproj `
-  --configuration Release `
-  --runtime win-x64 `
-  --self-contained false `
-  --output installer/publish `
-  /p:DebugType=None `
-  /p:DebugSymbols=false `
-  /p:Version=0.1.2
+.\build-publish.bat            # app only: publish\HiveMotion.exe
+.\build-publish.bat installer  # also builds Installer\HiveMotion-Setup-{version}.exe
 ```
-
-Build the local WiX installer (requires WiX Toolset v5 and the .NET SDK):
-```powershell
-.\Installer\build-installer.ps1
-```
-This script uses the framework-dependent publish profile (`HiveMotion/Properties/PublishProfiles/FrameworkDependent.pubxml`), harvests the published files, builds the WiX MSI and bootstrapper, and copies outputs to `Installer/artifacts/`.
-
-Build the Inno Setup installer locally (requires Inno Setup 6):
-```powershell
-$iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-& $iscc "/DMyAppVersion=0.1.2" 'installer\HiveMotion.iss'
-```
-
-Outputs:
-- CI: `installer/dist/HiveMotion-Setup-{version}.exe`
-- WiX: `Installer/artifacts/HiveMotion-Setup.exe` and `Installer/artifacts/HiveMotion-Setup.msi`
+The script reads the version from `HiveMotionVersion` in `Directory.Build.props`, publishes the framework-dependent multi-file app (`win-x64`) flat into `publish\`, and compiles the Inno Setup installer into `Installer\`. It contains the canonical publish flags; CI invokes this same script, so local and CI builds are identical.
 
 ## Versioning
 
@@ -103,9 +81,8 @@ The single source of truth is `Directory.Build.props` at the repository root:
 These properties flow automatically into all consumers; do not hardcode version numbers in these files:
 - `HiveMotion/HiveMotion.csproj` (`Version`, `AssemblyVersion`, `FileVersion` reference the properties).
 - `HiveMotion/app.manifest` (a template; the `GenerateAppManifest` target in the csproj replaces `@HiveMotionAssemblyVersion@` and writes the real manifest to the intermediate output directory).
-- `Installer/HiveMotion.Setup` and `Installer/HiveMotion.Bootstrapper` (each wixproj passes `HiveMotionAssemblyVersion` to the WiX preprocessor via `DefineConstants`, so `Package.wxs` and `Bundle.wxs` reference it as `$(var.HiveMotionVersion)`; `ProductVersion` in the Setup wixproj references it directly).
 
-For CI/Inno builds, the version is passed as `/DMyAppVersion={version}` to `ISCC.exe`; the Inno script itself defaults to `0.0.0` if the define is absent. Do not change the `UpgradeCode` GUIDs in the WiX files unless you are creating a new installer product family.
+For installer builds, `build-publish.bat` reads `HiveMotionVersion` from `Directory.Build.props` and forwards it to `ISCC.exe` (`/DMyAppVersion`); the Inno script itself defaults to `0.0.0` if the define is absent. Do not change the Inno `AppId` GUID unless you are creating a new installer product family.
 
 ### Version Advancing During Daily Development
 
@@ -223,20 +200,15 @@ You may have access to a Computer Use facility in the development environment. D
 ## CI/CD Notes
 
 `.github/workflows/build-and-release.yml` runs on every push and on pull requests to `main`:
-- Determines the version (`vX.Y.Z` from a tag, otherwise `0.0.0-ci.{run_number}`).
-- Restores and publishes the app as a framework-dependent, multi-file `win-x64` output to `installer/publish`.
-- Installs Inno Setup via Chocolatey and builds `Installer/HiveMotion.iss` with the version define.
-- Uploads the installer as a GitHub artifact.
-- For tags starting with `v`, the release job downloads the artifact and creates a GitHub Release.
-
-Note: The local installer path uses WiX v5, while the CI/release path uses Inno Setup. Both are valid but not interchangeable; update the appropriate files when changing installer behavior, runtime bundling, or output naming.
+- Installs Inno Setup via Chocolatey, then runs `build-publish.bat installer`, which reads the version from `Directory.Build.props`, publishes the app (framework-dependent, multi-file `win-x64`) and compiles the installer.
+- Uploads `Installer/HiveMotion-Setup-{version}.exe` as a GitHub artifact named `HiveMotion-Setup`.
+- For tags starting with `v`, the release job downloads the artifact and creates a GitHub Release. The tag version must match `Directory.Build.props` (see Release Workflow).
 
 ## Useful References
 
 - `docs/pinned-cells-ui.md` — detailed behavior of the pin-management UI, the `Ctrl+P` overlay flow, matching rules, and data model.
 - `docs/roadmap/draft.md` — brief backlog notes.
 - `README.md` — end-user feature overview and usage scenarios.
-- `Installer/README.md` — local WiX installer instructions and offline-runtime bundling steps.
 - Runtime data locations:
   - `%AppData%\HiveMotion\motions.json`
   - `%AppData%\HiveMotion\pins.json` (legacy; migrated into motions.json on first run)
