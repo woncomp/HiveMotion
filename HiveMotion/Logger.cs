@@ -21,7 +21,7 @@ public enum LogChannel
 
 public sealed record LogEntry(DateTime Timestamp, LogLevel Level, LogChannel Channel, string Message, string? CorrelationId)
 {
-    public string DisplayText => $"{Timestamp:MMdd HH:mm:ss} {LevelToLetter(Level)} [{Channel.ToString().ToUpperInvariant()}] {Message}";
+    public string DisplayText => $"{Timestamp:MMdd HH:mm:ss.fff} {LevelToLetter(Level)} [{Channel.ToString().ToUpperInvariant()}] {Message}";
 
     private static char LevelToLetter(LogLevel level) => level switch
     {
@@ -68,7 +68,10 @@ internal static class Logger
     public static string LogDirectoryPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HiveMotion", "Logs");
 
-    public static string ActiveLogPath => Path.Combine(LogDirectoryPath, $"hivemotion-{DateTime.Now:yyyy-MM-dd}.log");
+    public static string ActiveLogPath => GetLogPath(DateTime.Now);
+
+    private static string GetLogPath(DateTime timestamp) =>
+        Path.Combine(LogDirectoryPath, $"hivemotion-{timestamp:yyyy-MM-dd}.log");
 
     public static string NewCorrelationId() => $"HK-{Interlocked.Increment(ref _nextCorrelationId):D5}";
 
@@ -135,7 +138,8 @@ internal static class Logger
         if (Volatile.Read(ref _completed) != 0)
             return;
 
-        var entry = new PendingEntry(level, channel, message, correlationId);
+        // Capture event time before queue contention or background writer delays.
+        var entry = new PendingEntry(DateTime.Now, level, channel, message, correlationId);
         lock (QueueLock)
         {
             if (_completed != 0)
@@ -178,11 +182,11 @@ internal static class Logger
         try
         {
             Directory.CreateDirectory(LogDirectoryPath);
-            var entry = new LogEntry(DateTime.Now, pending.Level, pending.Channel, pending.Message, pending.CorrelationId);
+            var entry = new LogEntry(pending.Timestamp, pending.Level, pending.Channel, pending.Message, pending.CorrelationId);
 
             lock (FileLock)
             {
-                File.AppendAllText(ActiveLogPath, entry.DisplayText + Environment.NewLine);
+                File.AppendAllText(GetLogPath(entry.Timestamp), entry.DisplayText + Environment.NewLine);
                 TrimOldLogs();
             }
 
@@ -230,5 +234,5 @@ internal static class Logger
         }
     }
 
-    private sealed record PendingEntry(LogLevel Level, LogChannel Channel, string Message, string? CorrelationId);
+    private sealed record PendingEntry(DateTime Timestamp, LogLevel Level, LogChannel Channel, string Message, string? CorrelationId);
 }
