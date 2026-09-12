@@ -31,15 +31,17 @@ public static class IconHelper
 
     private const int SIIGBF_BIGGERSIZEOK = 0x01;
     private const int SIIGBF_ICONONLY = 0x04;
-    private const int IconSize = 256;
+    // Match the largest overlay presentation size. Some Shell providers place a
+    // native-size glyph in a larger transparent canvas instead of scaling it.
+    private const int IconSize = 48;
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(string pszPath, IntPtr pbc, ref Guid riid, out IShellItemImageFactory ppv);
 
     public static ImageSource? ForWindow(IntPtr hWnd, Process process)
     {
-        // Prefer the full-resolution icon group from the app's image (what Explorer shows),
-        // rendered at 256px and downscaled by WPF — always crisp.
+        // Request the overlay presentation size so Shell providers scale smaller
+        // icon resources instead of returning them in a large transparent canvas.
         string? path = TryGetModulePath(process);
         if (path != null)
         {
