@@ -31,7 +31,6 @@ public partial class App : System.Windows.Application
     private HistoryStore? _historyStore;
     private SettingsStore? _settingsStore;
     private ManageWindow? _manageWindow;
-    private LogWindow? _logWindow;
     private string _activeHotkeyJson = string.Empty;
 
     private OverlayState _state = OverlayState.Hidden;
@@ -113,7 +112,6 @@ public partial class App : System.Windows.Application
         _trayIconManager = new TrayIconManager();
         _trayIconManager.ExitRequested += (_, _) => Shutdown();
         _trayIconManager.ManageRequested += (_, _) => Dispatcher.BeginInvoke(ShowManageWindow);
-        _trayIconManager.LogRequested += (_, _) => Dispatcher.BeginInvoke(ShowLogWindow);
         _trayIconManager.ShowRequested += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             if (_state == OverlayState.Hidden)
@@ -198,7 +196,6 @@ public partial class App : System.Windows.Application
         _keyboardHook?.Dispose();
         _trayIconManager?.Dispose();
         _manageWindow?.Close();
-        _logWindow?.Close();
         _overlayWindow?.Close();
         if (_ownsMutex)
         {
@@ -423,25 +420,6 @@ public partial class App : System.Windows.Application
             if (_manageWindow.WindowState == WindowState.Minimized)
                 _manageWindow.WindowState = WindowState.Normal;
             _manageWindow.Activate();
-        }
-    }
-
-    /// <summary>Log viewer is a singleton normal window; reopening restores and focuses it.</summary>
-    private void ShowLogWindow()
-    {
-        _foregroundHandoff?.Cancel("log-opened");
-        if (_logWindow == null)
-        {
-            _logWindow = new LogWindow();
-            _logWindow.Closed += (_, _) => _logWindow = null;
-            _logWindow.Show();
-            Logger.Info("Opened live log window.");
-        }
-        else
-        {
-            if (_logWindow.WindowState == WindowState.Minimized)
-                _logWindow.WindowState = WindowState.Normal;
-            _logWindow.Activate();
         }
     }
 

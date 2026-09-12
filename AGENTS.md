@@ -21,7 +21,7 @@ Core capabilities:
 - System tray icon (`TrayIconManager`) and startup registration (`AutoStartManager`).
 - Manage center (`ManageWindow` in `ManageCenter/`) for editing pins, priorities, hotkeys, language, diagnostics, and backup/restore.
 - Bilingual UI (`Localization/LocalizationManager`, `LocExtension`, `Strings.resx`, `Strings.en.resx`); default is Chinese (`zh-CN`), with English fallback and system-language auto-detection.
-- Async bounded logger (`Logger`) writing to `%LOCALAPPDATA%\HiveMotion\Logs`.
+- Async bounded logger (`Logger`) writing to `%LOCALAPPDATA%\HiveMotion\Logs`: producers capture a `Stopwatch` timestamp and push to a lock-free queue; a dedicated writer thread formats and flushes in batches. No built-in viewer — see `docs/logging.md` for external monitoring.
 
 ## Technology Stack
 
@@ -131,9 +131,9 @@ There is no automated test project. Verify changes manually:
 - Run `HiveMotion.exe` and test the overlay open/close flow (`Win+Tab` by default).
 - Test letter selection, multi-window numeric selection, search (`Space`), and `Esc` cancel.
 - Test pinning (`Ctrl+P`), unpinning, and moving pins via the overlay and manage center.
-- Test tray icon menu entries (open, manage, log, auto-start, exit).
+- Test tray icon menu entries (open, manage, exit).
 - Test language switching between system/Chinese/English.
-- For any animation or input-path change, exercise the transition at both 60 Hz and high refresh rates and on multi-DPI displays if possible. Use the live log viewer with verbose logging enabled to inspect activation timing checkpoints.
+- For any animation or input-path change, exercise the transition at both 60 Hz and high refresh rates and on multi-DPI displays if possible. Enable verbose logging and tail the log file with an external tool (`Get-Content -Wait` or klogg; see `docs/logging.md`) to inspect activation timing checkpoints.
 - Do not mark performance-related work complete until the affected transition builds cleanly and has been manually exercised.
 
 ## Security Considerations
@@ -207,6 +207,7 @@ You may have access to a Computer Use facility in the development environment. D
 ## Useful References
 
 - `docs/pinned-cells-ui.md` — detailed behavior of the pin-management UI, the `Ctrl+P` overlay flow, matching rules, and data model.
+- `docs/logging.md` — log file format and how to monitor logs with external tools (PowerShell `Get-Content -Wait`, klogg).
 - `docs/roadmap/draft.md` — brief backlog notes.
 - `README.md` — end-user feature overview and usage scenarios.
 - Runtime data locations:

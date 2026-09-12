@@ -1,7 +1,9 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 
 namespace HiveMotion;
@@ -19,51 +21,50 @@ public enum LogChannel
     Activation
 }
 
-public sealed record LogEntry(DateTime Timestamp, LogLevel Level, LogChannel Channel, string Message, string? CorrelationId)
-{
-    public string DisplayText => $"{Timestamp:MMdd HH:mm:ss.fff} {LevelToLetter(Level)} [{Channel.ToString().ToUpperInvariant()}] {Message}";
-
-    private static char LevelToLetter(LogLevel level) => level switch
-    {
-        LogLevel.Info => 'I',
-        LogLevel.Warning => 'W',
-        LogLevel.Error => 'E',
-        _ => '?'
-    };
-}
-
 /// <summary>
 /// Bounded asynchronous diagnostics log at %LOCALAPPDATA%\HiveMotion\Logs.
-/// Verbose diagnostics (Info/Warning) are gated by <see cref="IsVerboseEnabled"/>
-/// so the hot activation path stays cheap when logging is off. Errors always log.
+/// Producers only stamp a high-resolution <see cref="Stopwatch"/> tick and push a struct
+/// onto a lock-free queue; all formatting, wall-clock conversion, and file I/O happen in
+/// batches on a dedicated writer thread. Verbose diagnostics (Info/Warning) are gated by
+/// <see cref="IsVerboseEnabled"/> so the hot activation path stays cheap when logging is
+/// off. Errors always log.
 /// </summary>
 internal static class Logger
 {
     private const int Capacity = 256;
     private const int RetainedLogFiles = 7;
 
-    private static readonly object QueueLock = new();
-    private static readonly object FileLock = new();
-    private static readonly AutoResetEvent WakeWriter = new(false);
-    private static readonly Queue<PendingEntry> Queue = new(Capacity);
-    private static readonly List<LogEntry> SessionEntries = new();
-    private static readonly object SessionLock = new();
+    private static readonly ConcurrentQueue<PendingEntry> Queue = new();
+    private static readonly ManualResetEventSlim WakeWriter = new(false);
     private static readonly Thread Writer = new(WriteLoop)
     {
         IsBackground = true,
         Name = "HiveMotionLogWriter"
     };
 
-    private static long _nextCorrelationId;
-    private static int _completed;
+    // Wall-clock anchor: producers capture Stopwatch ticks; the writer converts them to
+    // local wall time, so producers never pay for DateTime work and timestamps are not
+    // skewed by queue delays.
+    private static readonly long BaseTimestamp = Stopwatch.GetTimestamp();
+    private static readonly DateTime BaseUtc = DateTime.UtcNow;
+    private static readonly double TicksToMilliseconds = 1000d / Stopwatch.Frequency;
 
-    public static event EventHandler<LogEntry>? EntryWritten;
+    private static readonly UTF8Encoding FileEncoding = new(encoderShouldEmitUTF8Identifier: false);
+
+    private static long _nextCorrelationId;
+    private static int _approximateDepth;
+    private static int _completed;
+    private static volatile bool _isVerboseEnabled;
 
     /// <summary>
     /// Runtime switch controlling verbose diagnostics. When false, Info/Warning/Activation*
     /// calls return immediately without allocating or enqueuing. Errors always log.
     /// </summary>
-    public static bool IsVerboseEnabled { get; set; }
+    public static bool IsVerboseEnabled
+    {
+        get => _isVerboseEnabled;
+        set => _isVerboseEnabled = value;
+    }
 
     public static string LogDirectoryPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HiveMotion", "Logs");
@@ -80,28 +81,28 @@ internal static class Logger
     /// <summary>Bounded and nonblocking; safe to call from the low-level keyboard hook.</summary>
     public static void Info(string message, string? correlationId = null, LogChannel channel = LogChannel.Default)
     {
-        if (!IsVerboseEnabled)
+        if (!_isVerboseEnabled)
             return;
         Enqueue(LogLevel.Info, channel, message, correlationId, preserve: false);
     }
 
     public static void ActivationInfo(string message, string? correlationId = null)
     {
-        if (!IsVerboseEnabled)
+        if (!_isVerboseEnabled)
             return;
         Enqueue(LogLevel.Info, LogChannel.Activation, message, correlationId, preserve: false);
     }
 
     public static void Warning(string message, string? correlationId = null, LogChannel channel = LogChannel.Default)
     {
-        if (!IsVerboseEnabled)
+        if (!_isVerboseEnabled)
             return;
         Enqueue(LogLevel.Warning, channel, message, correlationId, preserve: false);
     }
 
     public static void ActivationWarning(string message, string? correlationId = null)
     {
-        if (!IsVerboseEnabled)
+        if (!_isVerboseEnabled)
             return;
         Enqueue(LogLevel.Warning, LogChannel.Activation, message, correlationId, preserve: false);
     }
@@ -116,12 +117,6 @@ internal static class Logger
 
     public static void ActivationError(Exception ex, string? context = null, string? correlationId = null) =>
         Error(ex, context, correlationId, LogChannel.Activation);
-
-    public static IReadOnlyList<LogEntry> GetSessionEntries()
-    {
-        lock (SessionLock)
-            return SessionEntries.ToArray();
-    }
 
     /// <summary>Stops accepting producers and drains queued diagnostics for a bounded time.</summary>
     public static void Shutdown()
@@ -138,84 +133,149 @@ internal static class Logger
         if (Volatile.Read(ref _completed) != 0)
             return;
 
-        // Capture event time before queue contention or background writer delays.
-        var entry = new PendingEntry(DateTime.Now, level, channel, message, correlationId);
-        lock (QueueLock)
+        // Capture event time before queueing; the writer converts it to wall time.
+        long timestamp = Stopwatch.GetTimestamp();
+
+        int depth = Interlocked.Increment(ref _approximateDepth);
+        if (depth > Capacity)
         {
-            if (_completed != 0)
-                return;
-            if (Queue.Count == Capacity)
+            if (!preserve)
             {
-                if (!preserve)
-                    return;
-                // Prefer the newest error over stale informational traffic. This is bounded,
-                // does no I/O on the producer, and keeps hook callbacks responsive.
-                Queue.Dequeue();
+                Interlocked.Decrement(ref _approximateDepth);
+                return;
             }
-            Queue.Enqueue(entry);
+            // Prefer the newest error over stale informational traffic. The depth counter is
+            // approximate under contention, which only makes the bound approximate too.
+            if (Queue.TryDequeue(out _))
+                Interlocked.Decrement(ref _approximateDepth);
         }
+
+        Queue.Enqueue(new PendingEntry(timestamp, level, channel, message, correlationId));
         WakeWriter.Set();
     }
 
     private static void WriteLoop()
     {
-        while (true)
-        {
-            PendingEntry? item = null;
-            lock (QueueLock)
-            {
-                if (Queue.Count > 0)
-                    item = Queue.Dequeue();
-                else if (_completed != 0)
-                    return;
-            }
-
-            if (item is { } entry)
-                Write(entry);
-            else
-                WakeWriter.WaitOne();
-        }
-    }
-
-    private static void Write(PendingEntry pending)
-    {
+        StreamWriter? stream = null;
+        DateTime streamDate = default;
+        var buffer = new StringBuilder(4096);
         try
         {
-            Directory.CreateDirectory(LogDirectoryPath);
-            var entry = new LogEntry(pending.Timestamp, pending.Level, pending.Channel, pending.Message, pending.CorrelationId);
-
-            lock (FileLock)
+            while (Volatile.Read(ref _completed) == 0 || !Queue.IsEmpty)
             {
-                File.AppendAllText(GetLogPath(entry.Timestamp), entry.DisplayText + Environment.NewLine);
-                TrimOldLogs();
+                try
+                {
+                    bool wroteAny = false;
+                    while (Queue.TryDequeue(out PendingEntry entry))
+                    {
+                        Interlocked.Decrement(ref _approximateDepth);
+                        DateTime wall = ToWallTime(entry.Timestamp);
+                        if (stream == null || wall.Date != streamDate)
+                        {
+                            Flush(stream, buffer);
+                            stream?.Dispose();
+                            stream = OpenStream(wall);
+                            streamDate = wall.Date;
+                        }
+                        AppendLine(buffer, wall, entry);
+                        wroteAny = true;
+                    }
+                    if (wroteAny)
+                        Flush(stream, buffer);
+                }
+                catch
+                {
+                    // Logging must never take the app down; drop the batch and keep going.
+                    buffer.Clear();
+                }
+
+                WakeWriter.Wait();
+                WakeWriter.Reset();
             }
-
-            lock (SessionLock)
-                SessionEntries.Add(entry);
-
-            NotifyListeners(entry);
         }
-        catch
-        {
-            // never let logging take the app down
-        }
-    }
-
-    private static void NotifyListeners(LogEntry entry)
-    {
-        Delegate[] listeners = EntryWritten?.GetInvocationList() ?? Array.Empty<Delegate>();
-        foreach (Delegate candidate in listeners)
+        finally
         {
             try
             {
-                ((EventHandler<LogEntry>)candidate)(null, entry);
+                Flush(stream, buffer);
             }
             catch
             {
-                // A viewer listener must not be able to break the producer thread.
+                // Nothing safe left to do during teardown.
             }
+            stream?.Dispose();
         }
     }
+
+    private static DateTime ToWallTime(long timestamp)
+    {
+        double elapsedMs = (timestamp - BaseTimestamp) * TicksToMilliseconds;
+        return BaseUtc.AddMilliseconds(elapsedMs).ToLocalTime();
+    }
+
+    private static StreamWriter OpenStream(DateTime date)
+    {
+        Directory.CreateDirectory(LogDirectoryPath);
+        TrimOldLogs();
+        // ReadWrite sharing lets external tail tools (klogg, Get-Content -Wait) follow the
+        // file while we hold it open.
+        var fileStream = new FileStream(GetLogPath(date), FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        return new StreamWriter(fileStream, FileEncoding);
+    }
+
+    private static void Flush(StreamWriter? stream, StringBuilder buffer)
+    {
+        if (stream != null && buffer.Length > 0)
+        {
+            stream.Write(buffer);
+            stream.Flush();
+        }
+        buffer.Clear();
+    }
+
+    private static void AppendLine(StringBuilder buffer, DateTime time, PendingEntry entry)
+    {
+        Append2(buffer, time.Month);
+        Append2(buffer, time.Day);
+        buffer.Append(' ');
+        Append2(buffer, time.Hour);
+        buffer.Append(':');
+        Append2(buffer, time.Minute);
+        buffer.Append(':');
+        Append2(buffer, time.Second);
+        buffer.Append('.');
+        Append3(buffer, time.Millisecond);
+        buffer.Append(' ');
+        buffer.Append(LevelLetter(entry.Level));
+        buffer.Append(' ');
+        buffer.Append('[');
+        buffer.Append(entry.Channel == LogChannel.Activation ? "ACTIVATION" : "DEFAULT");
+        buffer.Append(']');
+        buffer.Append(' ');
+        buffer.Append(entry.Message);
+        buffer.Append(Environment.NewLine);
+    }
+
+    private static void Append2(StringBuilder buffer, int value)
+    {
+        buffer.Append((char)('0' + value / 10));
+        buffer.Append((char)('0' + value % 10));
+    }
+
+    private static void Append3(StringBuilder buffer, int value)
+    {
+        buffer.Append((char)('0' + value / 100));
+        buffer.Append((char)('0' + value / 10 % 10));
+        buffer.Append((char)('0' + value % 10));
+    }
+
+    private static char LevelLetter(LogLevel level) => level switch
+    {
+        LogLevel.Info => 'I',
+        LogLevel.Warning => 'W',
+        LogLevel.Error => 'E',
+        _ => '?'
+    };
 
     private static void TrimOldLogs()
     {
@@ -229,10 +289,10 @@ internal static class Logger
             }
             catch
             {
-                // A locked file will be retried on the next write.
+                // A locked file will be retried on the next rollover.
             }
         }
     }
 
-    private sealed record PendingEntry(DateTime Timestamp, LogLevel Level, LogChannel Channel, string Message, string? CorrelationId);
+    private readonly record struct PendingEntry(long Timestamp, LogLevel Level, LogChannel Channel, string Message, string? CorrelationId);
 }
