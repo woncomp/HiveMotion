@@ -237,14 +237,6 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool BringWindowToTop(IntPtr hWnd);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, [MarshalAs(UnmanagedType.Bool)] bool fAttach);
-
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
@@ -257,7 +249,18 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LASTINPUTINFO
+    {
+        public uint cbSize;
+        public uint dwTime;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

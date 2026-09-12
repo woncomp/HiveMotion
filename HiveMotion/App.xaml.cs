@@ -40,7 +40,8 @@ public partial class App : System.Windows.Application
     private Motion? _activeChildLayer;
     private readonly Dictionary<WindowViewMotion, WindowViewProjection> _windowViewProjections = new();
     private WindowViewDefinitionSet _windowViewDefinitions = new(0, Array.Empty<WindowViewDefinition>());
-    private IntPtr _previousForeground;
+    private WindowActivationTarget? _previousForeground;
+    private ForegroundHandoff? _foregroundHandoff;
     private int _overlayGeneration;
 
     private sealed record WindowViewProjection(DateTimeOffset CapturedAt, IReadOnlyList<HiveCell> Cells);
@@ -52,6 +53,8 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        _foregroundHandoff = new ForegroundHandoff(new ForegroundHandoffHost(Dispatcher));
 
         _singleInstanceMutex = new System.Threading.Mutex(true, MutexName, out _ownsMutex);
         if (!_ownsMutex)
@@ -203,6 +206,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _foregroundHandoff?.Cancel("shutdown");
         if (_windowSnapshots != null)
         {
             _windowSnapshots.SnapshotPublished -= OnSnapshotPublished;
@@ -225,12 +229,14 @@ public partial class App : System.Windows.Application
 
     private void OpenTaskGrid(ActivationTiming? timing = null, string? correlationId = null, string source = "tray")
     {
+        _foregroundHandoff?.Cancel("overlay-reopened");
         timing ??= new ActivationTiming();
         LogChannel channel = source == "hotkey" ? LogChannel.Activation : LogChannel.Default;
         Logger.Info($"Overlay open requested from {source}; state={_state}.", correlationId, channel);
         timing.Checkpoint("hotkey-received-ui");
-        _previousForeground = NativeMethods.GetForegroundWindow();
-        Logger.Info($"Captured previous foreground handle={FormatHandle(_previousForeground)}.", correlationId, channel);
+        IntPtr foreground = NativeMethods.GetForegroundWindow();
+        _previousForeground = WindowManager.CaptureTarget(foreground);
+        Logger.Info($"Captured previous foreground handle={FormatHandle(foreground)}; identityAvailable={_previousForeground != null}.", correlationId, channel);
 
         ++_overlayGeneration;
         _activeChildLayer = null;
@@ -376,7 +382,10 @@ public partial class App : System.Windows.Application
         {
             Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
             {
-                if (generation != _overlayGeneration || _state != OverlayState.TaskGrid ||
+                if (generation != _overlayGeneration)
+                    return;
+                _foregroundHandoff?.ObserveForeground();
+                if (_state != OverlayState.TaskGrid ||
                     _overlayWindow == null || !_overlayWindow.HasConfirmedForegroundActivation)
                     return;
 
@@ -417,6 +426,7 @@ public partial class App : System.Windows.Application
     /// <summary>Manage center is a singleton normal window; reopening just brings it forward.</summary>
     private void ShowManageWindow()
     {
+        _foregroundHandoff?.Cancel("manage-opened");
         if (_manageWindow == null)
         {
             // Manage's occasional UI-thread scans use their own cache; the snapshot scanner is single-worker.
@@ -425,18 +435,18 @@ public partial class App : System.Windows.Application
             _manageWindow.Closed += (_, _) => _manageWindow = null;
             _manageWindow.Show();
         }
-        else if (_manageWindow.WindowState == WindowState.Minimized)
+        else
         {
-            _manageWindow.WindowState = WindowState.Normal;
+            if (_manageWindow.WindowState == WindowState.Minimized)
+                _manageWindow.WindowState = WindowState.Normal;
+            _manageWindow.Activate();
         }
-
-        // Plain Activate() is denied for a background process; use the attach-input recipe.
-        WindowManager.ActivateWindow(new System.Windows.Interop.WindowInteropHelper(_manageWindow).Handle);
     }
 
     /// <summary>Log viewer is a singleton normal window; reopening restores and focuses it.</summary>
     private void ShowLogWindow()
     {
+        _foregroundHandoff?.Cancel("log-opened");
         if (_logWindow == null)
         {
             _logWindow = new LogWindow();
@@ -637,29 +647,23 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        // A deliberate switch, not a cancel: focus goes to the chosen window, not back.
-        _previousForeground = IntPtr.Zero;
-        // Mark hidden up front so the Deactivated handler stays a no-op during the switch.
-        _state = OverlayState.Hidden;
-        if (_keyboardHook != null)
-            _keyboardHook.IsOverlayOpen = false;
-
         if (cell.IsRunning)
         {
-            if (IsCurrentWindowInstance(cell))
-            {
-                WindowManager.ActivateWindow(cell.WindowHandle);
-            }
-            else
+            var target = WindowManager.CaptureTarget(cell.WindowHandle);
+            if (target == null || target.Value.ProcessId != cell.ProcessId ||
+                target.Value.ProcessCreationFileTime != cell.ProcessCreationFileTime)
             {
                 // Do not activate an HWND recycled for another process. Keep the launcher usable and refresh it.
-                _state = OverlayState.TaskGrid;
-                _keyboardHook!.IsOverlayOpen = true;
                 _windowSnapshots!.RequestRefresh();
                 return;
             }
+            CloseOverlay(restoreFocus: false, handoffTarget: target);
+            return;
         }
-        else if (cell.Application is { } app)
+
+        // Hide before shell launch or system action work as well as before handoff confirmation.
+        CloseOverlay(restoreFocus: false);
+        if (cell.Application is { } app)
         {
             // Relaunch the pinned program with the exact arguments it was pinned with.
             WindowManager.Launch(app.ExecutablePath, app.Arguments, app.WorkingDirectory);
@@ -669,7 +673,6 @@ public partial class App : System.Windows.Application
             // Real invocation paths only (shell object / URI / LockWorkStation) — no key simulation.
             systemAction.Activate();
         }
-        CloseOverlay(restoreFocus: false);
     }
 
     /// <summary>Folder activation swaps the grid contents in place; the overlay stays open.</summary>
@@ -710,31 +713,32 @@ public partial class App : System.Windows.Application
         RefreshTaskGrid();
     }
 
-    private void CloseOverlay(bool restoreFocus, string? correlationId = null, LogChannel channel = LogChannel.Default)
+    private void CloseOverlay(bool restoreFocus, string? correlationId = null, LogChannel channel = LogChannel.Default,
+        WindowActivationTarget? handoffTarget = null)
     {
         Logger.Info($"Closing overlay; restoreFocus={restoreFocus}; state={_state}.", correlationId, channel);
-        ++_overlayGeneration;
+        _foregroundHandoff?.Cancel("new-exit");
+        var target = handoffTarget ?? (restoreFocus ? _previousForeground : null);
+        _previousForeground = null;
+        int generation = ++_overlayGeneration;
         _state = OverlayState.Hidden;
         _activeChildLayer = null;
         if (_keyboardHook != null)
             _keyboardHook.IsOverlayOpen = false;
-        _overlayWindow!.HideOverlay();
-        _currentCells = new List<HiveCell>();
+        _overlayWindow!.CancelPendingActivation();
+        _currentCells = Array.Empty<HiveCell>();
 
-        if (restoreFocus && _previousForeground != IntPtr.Zero)
+        void HideCurrentOverlay()
         {
-            var target = _previousForeground;
-            _previousForeground = IntPtr.Zero;
-            Dispatcher.BeginInvoke(() =>
-            {
-                Logger.Info($"Restoring foreground handle={FormatHandle(target)}.", correlationId, LogChannel.Activation);
-                WindowManager.ActivateWindow(target);
-            });
+            // A reentrant new open must not be hidden by the older native activation request.
+            if (generation == _overlayGeneration && _state == OverlayState.Hidden)
+                _overlayWindow.HideOverlay();
         }
+
+        if (target is { } destination && destination.Handle != _overlayWindow.WindowHandle && _foregroundHandoff != null)
+            _foregroundHandoff.Begin(destination, HideCurrentOverlay, correlationId);
         else
-        {
-            _previousForeground = IntPtr.Zero;
-        }
+            HideCurrentOverlay();
     }
 
     private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";

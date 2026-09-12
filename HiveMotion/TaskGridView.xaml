@@ -189,9 +189,23 @@
             </Grid>
         </Border>
 
-        <!-- Bottom hints -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+        <!-- Keep hints measured; reveal them only while the overlay can receive keyboard input. -->
+        <StackPanel x:Name="BottomHints" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                     Margin="0,0,0,28" IsHitTestVisible="False">
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Setter Property="Opacity" Value="0" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+                                <Condition Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Opacity" Value="1" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
             <Border Padding="6,2" CornerRadius="4" BorderBrush="#59F5B301" BorderThickness="1" Background="#14F5B301" VerticalAlignment="Center">
                 <TextBlock Text="A" FontSize="11" Foreground="#CCFFD97A" />
             </Border>

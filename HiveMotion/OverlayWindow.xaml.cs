@@ -18,6 +18,8 @@ public partial class OverlayWindow : Window
     private int _activationGeneration;
     private int _activationRetryCount;
     private bool _firstWpfRenderForActivation;
+    private bool _showCompletedForActivation;
+    private bool _postRenderActivationQueued;
     private bool _hasConfirmedForegroundActivation;
     private bool _isHiding;
     private string? _activationCorrelationId;
@@ -48,6 +50,7 @@ public partial class OverlayWindow : Window
         TaskGrid.RevealRequested += (_, cell) => RevealRequested?.Invoke(this, cell);
         TaskGrid.CopyCommandRequested += (_, cell) => CopyCommandRequested?.Invoke(this, cell);
         KeyDown += (_, e) => TaskGrid.HandleWindowKeyDown(e);
+        IsKeyboardFocusWithinChanged += (_, _) => RecordKeyboardReadiness();
     }
 
     public event EventHandler<HiveCell>? CellChosen;
@@ -91,7 +94,7 @@ public partial class OverlayWindow : Window
         base.OnSourceInitialized(e);
         var helper = new WindowInteropHelper(this);
 
-        // Hide from Alt+Tab but take real keyboard focus when shown (IME + default editing work).
+        // Hide from Alt+Tab but allow real keyboard focus after presentation (including IME).
         int exStyle = NativeMethods.GetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE);
         exStyle = (exStyle | NativeMethods.WS_EX_TOOLWINDOW) & ~NativeMethods.WS_EX_APPWINDOW;
         NativeMethods.SetWindowLong(helper.Handle, NativeMethods.GWL_EXSTYLE, exStyle);
@@ -121,6 +124,8 @@ public partial class OverlayWindow : Window
         _activationTiming?.Checkpoint("overlay-ui-start");
         int generation = ++_activationGeneration;
         _firstWpfRenderForActivation = false;
+        _showCompletedForActivation = false;
+        _postRenderActivationQueued = false;
         _hasConfirmedForegroundActivation = false;
         _isHiding = false;
         DisarmFirstRenderNotification();
@@ -147,81 +152,145 @@ public partial class OverlayWindow : Window
         TaskGrid.DisarmMouse();
         ArmFirstRenderNotification(generation);
         Show();
+        if (!IsCurrentActivation(generation))
+            return;
+        _showCompletedForActivation = true;
         _activationTiming?.Checkpoint("overlay-shown");
         Logger.Info("Overlay window Show completed.", correlationId, channel);
         // Re-assert the top of the topmost band: when activation is denied, another
         // always-on-top window would otherwise cover the grid.
         NativeMethods.SetWindowPos(TaskGrid.OverlayHwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
-        if (!ConfirmForegroundActivation(generation, correlationId, channel))
+        QueuePostRenderActivation(generation);
+    }
+
+    private bool IsCurrentActivation(int generation) =>
+        generation == _activationGeneration && IsVisible && !_isHiding;
+
+    private void QueuePostRenderActivation(int generation)
+    {
+        // Rendering can fire inside Show's nested message processing. Wait for both,
+        // then yield below render priority so activation does not run in the frame callback.
+        if (!IsCurrentActivation(generation) || !_firstWpfRenderForActivation ||
+            !_showCompletedForActivation || _postRenderActivationQueued)
+            return;
+
+        _postRenderActivationQueued = true;
+        string? correlationId = _activationCorrelationId;
+        LogChannel channel = _activationChannel;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
-            // One non-sleeping foreground attempt is allowed on the activation path.
-            if (WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd, correlationId))
-                ConfirmForegroundActivation(generation, correlationId, channel);
+            if (!IsCurrentActivation(generation))
+                return;
+
+            // A cross-DPI move may replace our bounds with Windows' suggested rect.
+            // Correct only an actual mismatch, after the initial WPF rendering pass.
+            var bounds = _screen.Bounds;
+            if (NativeMethods.GetWindowRect(TaskGrid.OverlayHwnd, out var rect) &&
+                (rect.Left != bounds.Left || rect.Top != bounds.Top ||
+                 rect.Right != bounds.Right || rect.Bottom != bounds.Bottom))
+            {
+                ApplyScreenBounds();
+                _activationTiming?.Checkpoint("screen-bounds-corrected");
+            }
+
+            if (!IsCurrentActivation(generation))
+                return;
+            if (!TryActivateAfterRender(generation, correlationId, channel) && IsCurrentActivation(generation))
+                ScheduleActivationRetries(generation, correlationId, channel);
+        }));
+    }
+
+    private bool TryActivateAfterRender(int generation, string? correlationId, LogChannel channel)
+    {
+        if (!IsCurrentActivation(generation))
+            return false;
+        if (ConfirmForegroundActivation(generation, correlationId, channel))
+            return true;
+
+        // Never attach the overlay UI thread to a foreign input queue. A hung foreground
+        // application must not be pulled into our synchronous activation processing.
+        if (NativeMethods.GetForegroundWindow() != TaskGrid.OverlayHwnd)
+        {
+            // Activation events can confirm readiness before SetForegroundWindow returns.
+            // Retain this attempt's timing so its return checkpoint is still recorded.
+            var timing = _activationTiming;
+            timing?.Checkpoint("foreground-request-start");
+            bool requested = NativeMethods.SetForegroundWindow(TaskGrid.OverlayHwnd);
+            if (!IsCurrentActivation(generation))
+                return false;
+            timing?.Checkpoint("foreground-request-returned");
+            Logger.Info($"Requested overlay foreground without attaching input queues; result={requested}.", correlationId, channel);
         }
-        // Windows may apply its own DPI-suggested rect on the cross-DPI hop; re-assert ours.
-        Dispatcher.BeginInvoke(() =>
-        {
-            ApplyScreenBounds();
-            Logger.Info($"Re-applied screen bounds; {DescribeGeometry()}.", correlationId, channel);
-        });
-        if (!_hasConfirmedForegroundActivation)
-            ScheduleActivationRetries(generation, correlationId, channel);
+        return ConfirmForegroundActivation(generation, correlationId, channel);
     }
 
     private void ScheduleActivationRetries(int generation, string? correlationId, LogChannel channel)
     {
+        CancelActivationRetries();
         _activationRetryCount = 0;
-        _activationRetryTimer = new DispatcherTimer(DispatcherPriority.Background)
+        var timer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(80)
         };
-        _activationRetryTimer.Tick += (_, _) =>
+        _activationRetryTimer = timer;
+        timer.Tick += (_, _) =>
         {
-            if (generation != _activationGeneration || !IsVisible)
+            if (!IsCurrentActivation(generation))
             {
-                CancelActivationRetries();
+                timer.Stop();
                 return;
             }
-            // Retries begin only after this activation has rendered a frame.
-            if (!_firstWpfRenderForActivation)
+            ++_activationRetryCount;
+            if (TryActivateAfterRender(generation, correlationId, channel) || !IsCurrentActivation(generation))
                 return;
-            if (++_activationRetryCount > 2)
+            if (_activationRetryCount >= 2)
             {
-                Logger.Warning("Overlay foreground activation retries were exhausted; leaving the visible overlay available for mouse or hotkey interaction.",
+                Logger.Warning("Overlay keyboard readiness retries were exhausted; leaving the visible overlay available for mouse or hotkey interaction.",
                     correlationId, channel);
+                _activationTiming?.Checkpoint("keyboard-ready-timeout");
                 CancelActivationRetries();
-                return;
             }
-            if (ConfirmForegroundActivation(generation, correlationId, channel))
-            {
-                return;
-            }
-            // Exactly one non-sleeping foreground attempt per dispatcher tick.
-            if (WindowManager.ActivateWindowOnce(TaskGrid.OverlayHwnd, correlationId))
-                ConfirmForegroundActivation(generation, correlationId, channel);
-            NativeMethods.SetWindowPos(TaskGrid.OverlayHwnd, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
-                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
         };
-        _activationRetryTimer.Start();
+        timer.Start();
     }
 
     /// <summary>Arms click-away dismissal only after the native foreground window is the overlay.</summary>
     private bool ConfirmForegroundActivation(int generation, string? correlationId, LogChannel channel)
     {
-        if (generation != _activationGeneration || !IsVisible ||
+        if (!IsCurrentActivation(generation) || !_firstWpfRenderForActivation || !_showCompletedForActivation ||
             NativeMethods.GetForegroundWindow() != TaskGrid.OverlayHwnd)
             return false;
 
-        if (_hasConfirmedForegroundActivation)
-            return true;
+        if (!_hasConfirmedForegroundActivation)
+        {
+            _hasConfirmedForegroundActivation = true;
+            _activationTiming?.Checkpoint("foreground-confirmed");
+            Logger.Info($"Overlay foreground ownership confirmed; handle={FormatHandle(TaskGrid.OverlayHwnd)}.", correlationId, channel);
+        }
 
-        _hasConfirmedForegroundActivation = true;
-        CancelActivationRetries();
-        Logger.Info($"Overlay foreground ownership confirmed; handle={FormatHandle(TaskGrid.OverlayHwnd)}.", correlationId, channel);
-        bool focused = Focus();
-        Logger.Info($"Overlay focus requested after foreground confirmation; result={focused}.", correlationId, channel);
-        return true;
+        // Preserve focus in search or another child control when activation arrived by mouse.
+        if (!IsKeyboardFocusWithin)
+        {
+            bool focused = Focus();
+            Logger.Info($"Overlay focus requested after foreground confirmation; result={focused}.", correlationId, channel);
+        }
+        if (!IsCurrentActivation(generation))
+            return false;
+        RecordKeyboardReadiness();
+        return IsCurrentActivation(generation) && IsActive && IsKeyboardFocusWithin &&
+            NativeMethods.GetForegroundWindow() == TaskGrid.OverlayHwnd;
+    }
+
+    private void RecordKeyboardReadiness()
+    {
+        if (!_isHiding && IsVisible && IsActive && IsKeyboardFocusWithin &&
+            _hasConfirmedForegroundActivation && NativeMethods.GetForegroundWindow() == TaskGrid.OverlayHwnd)
+        {
+            CancelActivationRetries();
+            _activationTiming?.Checkpoint("keyboard-ready");
+            _activationTiming = null;
+        }
     }
 
     private void CancelActivationRetries()
@@ -234,14 +303,14 @@ public partial class OverlayWindow : Window
     {
         _firstRenderHandler = (_, _) =>
         {
-            if (generation != _activationGeneration || !IsVisible)
+            if (!IsCurrentActivation(generation))
                 return;
 
             DisarmFirstRenderNotification();
             _firstWpfRenderForActivation = true;
             _activationTiming?.Checkpoint("first-wpf-render (not hardware presentation)");
-            _activationTiming = null;
             FirstWpfRender?.Invoke(this, EventArgs.Empty);
+            QueuePostRenderActivation(generation);
         };
         CompositionTarget.Rendering += _firstRenderHandler;
     }
@@ -252,6 +321,12 @@ public partial class OverlayWindow : Window
             return;
         CompositionTarget.Rendering -= _firstRenderHandler;
         _firstRenderHandler = null;
+    }
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        ConfirmForegroundActivation(_activationGeneration, _activationCorrelationId, _activationChannel);
     }
 
     protected override void OnDeactivated(EventArgs e)
@@ -464,19 +539,33 @@ public partial class OverlayWindow : Window
         });
     }
 
-    public void HideOverlay()
+    /// <summary>Disarms opening work before an outgoing native foreground request can raise events.</summary>
+    internal void CancelPendingActivation()
     {
+        Dispatcher.VerifyAccess();
+        ++_activationGeneration;
         _hasConfirmedForegroundActivation = false;
         _isHiding = true;
-        Dispatcher.BeginInvoke(() =>
+        _activationTiming = null;
+        DisarmFirstRenderNotification();
+        CancelActivationRetries();
+    }
+
+    public void HideOverlay()
+    {
+        if (!Dispatcher.CheckAccess())
         {
-            ++_activationGeneration;
-            DisarmFirstRenderNotification();
-            CancelActivationRetries();
-            TaskGrid.ResetForOverlayClose();
-            TaskGrid.ArmMouse();
-            Hide();
-            Dispatcher.BeginInvoke(new Action(WarmBackdropForCursorMonitor), DispatcherPriority.ApplicationIdle);
-        });
+            Dispatcher.BeginInvoke(HideOverlay);
+            return;
+        }
+        CancelPendingActivation();
+        int generation = _activationGeneration;
+        // Execute the hide now; outgoing activation confirmation must never keep this window visible.
+        Hide();
+        if (generation != _activationGeneration || !_isHiding)
+            return;
+        TaskGrid.ResetForOverlayClose();
+        TaskGrid.ArmMouse();
+        Dispatcher.BeginInvoke(new Action(WarmBackdropForCursorMonitor), DispatcherPriority.ApplicationIdle);
     }
 }
