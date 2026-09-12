@@ -473,7 +473,7 @@ public partial class OverlayWindow : Window
             ++_activationGeneration;
             DisarmFirstRenderNotification();
             CancelActivationRetries();
-            TaskGrid.ResetPreview();
+            TaskGrid.ResetForOverlayClose();
             TaskGrid.ArmMouse();
             Hide();
             Dispatcher.BeginInvoke(new Action(WarmBackdropForCursorMonitor), DispatcherPriority.ApplicationIdle);

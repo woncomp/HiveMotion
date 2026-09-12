@@ -119,6 +119,15 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     public bool Searching => _searching;
 
+    /// <summary>Clears transient UI state while the overlay is hidden so every open starts in overview.</summary>
+    public void ResetForOverlayClose()
+    {
+        _pendingCells = null;
+        HideConfirm();
+        ResetPreview();
+        ExitSearchImmediate();
+    }
+
     /// <summary>
     /// Called each time the overlay appears: hides the cursor and suspends hover and
     /// clicks until the user physically moves the mouse past MouseWakeThreshold.
