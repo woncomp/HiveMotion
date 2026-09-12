@@ -70,6 +70,7 @@ public partial class App : System.Windows.Application
         Logger.IsVerboseEnabled = _settingsStore.Settings.VerboseLogging;
         LocalizationManager.Instance.ApplyLanguageSetting(_settingsStore.Settings.Language);
         Logger.Info("Application startup completed single-instance check.");
+        IconService.Shared.PrepareGlyphs();
         _windowScanner = new WindowScanner(_settingsStore.Settings.PriorityProcessNames);
         _windowSnapshots = new WindowSnapshotService(_windowScanner);
         _windowSnapshots.SnapshotPublished += OnSnapshotPublished;
@@ -121,40 +122,21 @@ public partial class App : System.Windows.Application
                 CloseOverlay(restoreFocus: true);
         });
 
-        // Draft glyphs are built synchronously on the UI thread before the hook can
-        // expose them. They are frozen and cached, so overlay activation only reads.
-        var motionsToPrewarm = new List<Motion>();
-        foreach (var motion in _motionStore.Home)
-        {
-            motionsToPrewarm.Add(motion);
-            IconHelper.PrewarmUnconfiguredFallback(motion);
-            if (motion is FolderMotion folder)
-            {
-                foreach (var item in folder.Items)
-                {
-                    motionsToPrewarm.Add(item);
-                    IconHelper.PrewarmUnconfiguredFallback(item);
-                }
-            }
-        }
-
+        PrewarmMotionIcons();
         _keyboardHook = BuildKeyboardHook();
         _keyboardHook.Start();
         Logger.Info("Application startup initialized tray icon and global keyboard hook.");
-
-        // Decode every custom motion icon off the keyboard path. Folder children are
-        // included because entering a folder must not pay an image-decoding cost.
-        _ = System.Threading.Tasks.Task.Run(() =>
-        {
-            foreach (var motion in motionsToPrewarm)
-                PrewarmMotionIcon(motion);
-        });
     }
 
-    private static void PrewarmMotionIcon(Motion motion)
+    private void PrewarmMotionIcons(bool invalidate = false)
     {
-        if (!string.IsNullOrWhiteSpace(motion.IconPath))
-            IconHelper.ForImageFile(motion.IconPath);
+        foreach (var motion in _motionStore!.Home.Concat(
+                     _motionStore.Home.OfType<FolderMotion>().SelectMany(folder => folder.Items)))
+        {
+            var request = IconRequest.ForMotion(motion);
+            if (invalidate) IconService.Shared.Invalidate(request);
+            IconService.Shared.Request(request, visible: false);
+        }
     }
 
     private GlobalKeyboardHook BuildKeyboardHook()
@@ -223,6 +205,7 @@ public partial class App : System.Windows.Application
             _singleInstanceMutex?.ReleaseMutex();
         }
         _singleInstanceMutex?.Dispose();
+        IconService.Shared.Dispose();
         Logger.Shutdown();
         base.OnExit(e);
     }
@@ -356,6 +339,7 @@ public partial class App : System.Windows.Application
 
     private void OnMotionStoreChanged(object? sender, EventArgs e)
     {
+        PrewarmMotionIcons(invalidate: true);
         RefreshWindowViewDefinitions();
         _windowViewProjections.Clear();
         var snapshot = _windowSnapshots?.Latest;
@@ -429,9 +413,8 @@ public partial class App : System.Windows.Application
         _foregroundHandoff?.Cancel("manage-opened");
         if (_manageWindow == null)
         {
-            // Manage's occasional UI-thread scans use their own cache; the snapshot scanner is single-worker.
             _manageWindow = new ManageWindow(_motionStore!, _historyStore!, _settingsStore!,
-                _autoStartManager!, new WindowScanner(_settingsStore!.Settings.PriorityProcessNames), ApplyHotkeySettings);
+                _autoStartManager!, ApplyHotkeySettings);
             _manageWindow.Closed += (_, _) => _manageWindow = null;
             _manageWindow.Show();
         }

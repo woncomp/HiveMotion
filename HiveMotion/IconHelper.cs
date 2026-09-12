@@ -12,12 +12,6 @@ namespace HiveMotion;
 
 public static class IconHelper
 {
-    private const string ApplicationFallbackGlyph = "\uE71D";
-    private const string SystemActionFallbackGlyph = "\uE713";
-    private const string WindowViewFallbackGlyph = "\uE7C4";
-    private static readonly Dictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly object CacheGate = new();
-
     private static readonly Guid IID_IShellItemImageFactory = new("bcc18b79-ba16-442f-80c4-8a59c30c463b");
 
     [ComImport]
@@ -39,39 +33,6 @@ public static class IconHelper
     private const int SIIGBF_ICONONLY = 0x04;
     private const int IconSize = 256;
 
-    /// <summary>
-    /// Resolves the icon for a configured motion. A valid custom image always wins;
-    /// otherwise each motion kind falls back to its normal runtime or catalog icon.
-    /// </summary>
-    public static ImageSource? ForMotion(Motion motion, ImageSource? applicationRuntimeIcon = null)
-    {
-        if (!string.IsNullOrWhiteSpace(motion.IconPath) && ForImageFile(motion.IconPath) is { } customIcon)
-            return customIcon;
-
-        return motion switch
-        {
-            ApplicationMotion app => !app.IsConfigured
-                ? GlyphIcon.ForGlyph(ApplicationFallbackGlyph)
-                : applicationRuntimeIcon ?? ForExecutable(app.ExecutablePath),
-            SystemActionMotion systemAction => systemAction.IsConfigured
-                ? GlyphIcon.ForAction(systemAction.ActionId)
-                : GlyphIcon.ForGlyph(SystemActionFallbackGlyph),
-            WindowViewMotion => GlyphIcon.ForGlyph(WindowViewFallbackGlyph),
-            _ => null
-        };
-    }
-
-    /// <summary>Builds and freezes the generic draft glyph without resolving custom files.</summary>
-    public static void PrewarmUnconfiguredFallback(Motion motion)
-    {
-        if (motion is ApplicationMotion { IsConfigured: false })
-            GlyphIcon.ForGlyph(ApplicationFallbackGlyph);
-        else if (motion is SystemActionMotion { IsConfigured: false })
-            GlyphIcon.ForGlyph(SystemActionFallbackGlyph);
-        else if (motion is WindowViewMotion)
-            GlyphIcon.ForGlyph(WindowViewFallbackGlyph);
-    }
-
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(string pszPath, IntPtr pbc, ref Guid riid, out IShellItemImageFactory ppv);
 
@@ -82,7 +43,7 @@ public static class IconHelper
         string? path = TryGetModulePath(process);
         if (path != null)
         {
-            var shellIcon = FromShellImageFactory(path);
+            var shellIcon = ForExecutable(path);
             if (shellIcon != null)
                 return shellIcon;
         }
@@ -107,108 +68,54 @@ public static class IconHelper
         return path == null ? null : ForExecutable(path);
     }
 
+    /// <summary>Scanner callers share the asynchronous cache; they never extract an exe inline.</summary>
     public static ImageSource? ForExecutable(string executablePath)
     {
-        lock (CacheGate)
-        {
-            if (Cache.TryGetValue(executablePath, out var cached))
-                return cached;
-        }
-
-        ImageSource? result = FromShellImageFactory(executablePath);
-
-        if (result == null)
-        {
-            try
-            {
-                string path = executablePath;
-                if (!Path.IsPathRooted(path))
-                {
-                    string systemPath = Path.Combine(Environment.SystemDirectory, path);
-                    if (File.Exists(systemPath))
-                        path = systemPath;
-                }
-
-                using (var icon = System.Drawing.Icon.ExtractAssociatedIcon(path))
-                {
-                    if (icon != null)
-                        result = FromHIcon(icon.Handle);
-                }
-            }
-            catch
-            {
-                // no icon available
-            }
-        }
-
-        lock (CacheGate)
-            Cache[executablePath] = result;
-        return result;
+        var request = new IconRequest(ExecutablePath: executablePath);
+        var image = IconService.Shared.TryGetCached(request);
+        IconService.Shared.Request(request, visible: false);
+        return image;
     }
 
-    private static readonly Dictionary<string, (DateTime Stamp, ImageSource? Image)> ImageFileCache =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Decodes a custom motion icon (png/ico/jpg/jpeg/bmp; exe/dll falls back to the
-    /// associated icon) at a bounded size. Results are frozen and cached by path plus
-    /// last-write time, so the keyboard transition path never decodes.
-    /// </summary>
-    public static ImageSource? ForImageFile(string path)
+    /// <summary>Worker-only extraction. Versioning and caching belong to IconService.</summary>
+    internal static ImageSource? LoadFile(string path)
     {
-        string extension = Path.GetExtension(path);
-        if (!extension.Equals(".png", StringComparison.OrdinalIgnoreCase) &&
-            !extension.Equals(".ico", StringComparison.OrdinalIgnoreCase) &&
-            !extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) &&
-            !extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) &&
-            !extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase) &&
-            !extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) &&
-            !extension.Equals(".dll", StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        DateTime stamp;
+        if (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true)
+            throw new InvalidOperationException("Icon extraction cannot execute on the UI thread.");
+        string extension = Path.GetExtension(path).ToLowerInvariant();
+        if (extension is not (".exe" or ".dll"))
+            return extension is ".png" or ".ico" or ".jpg" or ".jpeg" or ".bmp"
+                ? DecodeImageFile(path) : null;
+        var result = FromShellImageFactory(path);
+        if (result != null) return result;
+        long start = Stopwatch.GetTimestamp();
         try
         {
-            if (!File.Exists(path))
-                return null;
-            stamp = File.GetLastWriteTime(path);
+            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+            return icon == null ? null : FromHIcon(icon.Handle);
         }
-        catch
+        catch { return null; }
+        finally
         {
-            return null;
+            if (Logger.IsVerboseEnabled)
+                Logger.Info($"icon-fallback-extraction {Stopwatch.GetElapsedTime(start).TotalMilliseconds:F1}ms thread={Environment.CurrentManagedThreadId}");
         }
-
-        lock (CacheGate)
-        {
-            if (ImageFileCache.TryGetValue(path, out var cached) && cached.Stamp == stamp)
-                return cached.Image;
-        }
-
-        ImageSource? result;
-        if (path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
-            path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-        {
-            result = ForExecutable(path);
-        }
-        else
-        {
-            result = DecodeImageFile(path);
-        }
-
-        lock (CacheGate)
-            ImageFileCache[path] = (stamp, result);
-        return result;
     }
 
     private static ImageSource? DecodeImageFile(string path)
     {
         try
         {
-            // 96px keeps the 48px cell icon crisp on 200% DPI displays.
+            // Probe dimensions on the worker; constrain the longer axis to 96 pixels.
+            using var stream = File.OpenRead(path);
+            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+            var frame = decoder.Frames[0];
+            bool landscape = frame.PixelWidth >= frame.PixelHeight;
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.UriSource = new Uri(path, UriKind.Absolute);
-            bitmap.DecodePixelWidth = 96;
+            if (landscape) bitmap.DecodePixelWidth = 96;
+            else bitmap.DecodePixelHeight = 96;
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
             bitmap.EndInit();
@@ -242,12 +149,7 @@ public static class IconHelper
 
     private static ImageSource? FromShellImageFactory(string path)
     {
-        lock (CacheGate)
-        {
-            if (Cache.TryGetValue(path, out var cached))
-                return cached;
-        }
-
+        long start = Stopwatch.GetTimestamp();
         IShellItemImageFactory? factory = null;
         IntPtr hBitmap = IntPtr.Zero;
         try
@@ -270,8 +172,6 @@ public static class IconHelper
             var source = Imaging.CreateBitmapSourceFromHBitmap(
                 hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
             source.Freeze();
-            lock (CacheGate)
-                Cache[path] = source;
             return source;
         }
         catch
@@ -284,6 +184,8 @@ public static class IconHelper
                 NativeMethods.DeleteObject(hBitmap);
             if (factory != null)
                 Marshal.ReleaseComObject(factory);
+            if (Logger.IsVerboseEnabled)
+                Logger.Info($"icon-shell-extraction {Stopwatch.GetElapsedTime(start).TotalMilliseconds:F1}ms thread={Environment.CurrentManagedThreadId}");
         }
     }
 

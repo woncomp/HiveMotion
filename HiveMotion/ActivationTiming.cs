@@ -15,6 +15,6 @@ internal sealed class ActivationTiming
     public void Checkpoint(string name)
     {
         double elapsedMs = (Stopwatch.GetTimestamp() - _start) * 1000d / Stopwatch.Frequency;
-        Logger.Info($"activation {name} +{elapsedMs:F1}ms");
+        Logger.Info($"activation {name} +{elapsedMs:F1}ms thread={Environment.CurrentManagedThreadId}");
     }
 }

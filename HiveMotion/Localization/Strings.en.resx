@@ -267,12 +267,6 @@ Working directory: {1}</value>
   <data name="Pins_Launch" xml:space="preserve">
     <value>Launch now</value>
   </data>
-  <data name="Pins_StatusRunning" xml:space="preserve">
-    <value>● Running (a window matches this command line)</value>
-  </data>
-  <data name="Pins_StatusNotRunning" xml:space="preserve">
-    <value>○ Not running</value>
-  </data>
   <data name="Pins_PinToLetter" xml:space="preserve">
     <value>Pin to {0}</value>
   </data>
@@ -389,9 +383,6 @@ Working directory: {1}</value>
   </data>
   <data name="Picker_FileMissing" xml:space="preserve">
     <value>  (file missing)</value>
-  </data>
-  <data name="Picker_RunningPrefix" xml:space="preserve">
-    <value>Running · </value>
   </data>
   <data name="Picker_LaunchMeta" xml:space="preserve">
     <value>Launched {0} times · {1}</value>

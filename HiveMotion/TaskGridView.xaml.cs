@@ -44,6 +44,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private NativeMethods.POINT _mouseAnchor;
     private readonly DwmThumbnailPreview _dwmPreview = new();
 
+    private readonly IconService _icons;
+    private readonly IconPresentationState _iconPresentation = new();
+    private readonly Dictionary<char, HiveCell> _displayedCells = new();
     private IReadOnlyList<HiveCell>? _pendingCells;
     private System.Windows.Threading.DispatcherTimer? _transitionTimer;
     private int _transitionGeneration;
@@ -96,8 +99,11 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     /// <summary>Ctrl+S on the search-list highlight: copy the full command line.</summary>
     public event EventHandler<HiveCell>? CopyCommandRequested;
 
-    public TaskGridView()
+    public TaskGridView() : this(IconService.Shared) { }
+
+    internal TaskGridView(IconService icons)
     {
+        _icons = icons;
         InitializeComponent();
         // Search typing keeps full IME support even though the overlay window
         // disables it; this local value wins over the inherited one.
@@ -117,11 +123,48 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         CreateResultPool();
     }
 
+    internal void BeginIconPresentation()
+    {
+        _icons.Changed -= OnIconChanged;
+        _iconPresentation.Begin();
+        _icons.Changed += OnIconChanged;
+    }
+
+    internal void EnableIconUpdates()
+    {
+        int generation = _iconPresentation.Generation;
+        _iconPresentation.Shown(generation);
+        _iconPresentation.Rendered(generation);
+        IconRefreshQueue.Enqueue(Dispatcher, RefreshIcons);
+    }
+
+    private void OnIconChanged(string key) => IconRefreshQueue.Enqueue(Dispatcher, RefreshIcons);
+
+    private ImageSource? ResolveIcon(HiveCell cell) =>
+        _icons.TryGetCached(cell.IconRequest, cell.Icon);
+
+    private void RefreshIcons()
+    {
+        _iconPresentation.Transitioning = _transitionState is SearchTransitionState.Entering or SearchTransitionState.Exiting;
+        if (!_iconPresentation.CanApply) return;
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        foreach (var view in _cellViews)
+            if (_displayedCells.TryGetValue(view.PoolLetter, out var cell))
+                view.UpdateIcon(ResolveIcon(cell));
+        foreach (var visual in _itemVisuals)
+            if (visual.Cell is { } cell) UpdateResultIcon(visual, cell);
+        if (Logger.IsVerboseEnabled)
+            Logger.Info($"icon-view-update {System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds:F1}ms thread={Environment.CurrentManagedThreadId}");
+    }
+
     public bool Searching => _searching;
 
     /// <summary>Clears transient UI state while the overlay is hidden so every open starts in overview.</summary>
     public void ResetForOverlayClose()
     {
+        _iconPresentation.Close();
+        _icons.Changed -= OnIconChanged;
+        _displayedCells.Clear();
         _pendingCells = null;
         HideConfirm();
         ResetPreview();
@@ -217,6 +260,13 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private void ApplyCells(IReadOnlyList<HiveCell> cells, bool resetSearch)
     {
         _cells = cells;
+        _iconPresentation.ReplaceContent();
+        _displayedCells.Clear();
+        foreach (var cell in cells)
+        {
+            _displayedCells[cell.Letter] = cell;
+            _icons.Request(cell.IconRequest);
+        }
         UpdateOverviewEmptyState();
         _hoveredCell = null;
         HideConfirm();
@@ -226,7 +276,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             char letter = view.PoolLetter;
             if (byLetter.TryGetValue(letter, out var cell))
             {
-                view.SetCell(cell);
+                view.SetCell(cell, ResolveIcon(cell));
                 view.Visibility = Visibility.Visible;
             }
             else
@@ -396,6 +446,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             bool searchIsReady = completedState == SearchTransitionState.Search;
             ResultPanel.IsHitTestVisible = searchIsReady;
             ApplyPendingCells(resetSearch: !searchIsReady);
+            RefreshIcons();
         };
         timer.Start();
     }
@@ -954,17 +1005,11 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         };
     }
 
-    private static void UpdateResultItem(SearchResultVisual visual, HiveCell cell)
+    private void UpdateResultItem(SearchResultVisual visual, HiveCell cell)
     {
         visual.Cell = cell;
         visual.Root.Visibility = Visibility.Visible;
-        visual.IconImage.Source = cell.Icon;
-        visual.IconImage.Opacity = cell.IsRunning ? 1 : 0.55;
-        visual.IconImage.Visibility = cell.Icon != null ? Visibility.Visible : Visibility.Collapsed;
-        visual.FallbackIcon.Text = string.IsNullOrEmpty(cell.AppName)
-            ? "?"
-            : cell.AppName.Substring(0, 1).ToUpperInvariant();
-        visual.FallbackIcon.Visibility = cell.Icon == null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateResultIcon(visual, cell);
         visual.Title.Text = cell.Title;
         visual.Subtitle.Text = cell.AppName;
 
@@ -975,6 +1020,16 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         visual.StatusText.Foreground = cell.SystemAction != null || cell.IsRunning
             ? ActiveStatusBrush
             : InactiveStatusBrush;
+    }
+
+    private void UpdateResultIcon(SearchResultVisual visual, HiveCell cell)
+    {
+        var icon = ResolveIcon(cell);
+        if (!ReferenceEquals(visual.IconImage.Source, icon)) visual.IconImage.Source = icon;
+        visual.IconImage.Opacity = cell.IsRunning ? 1 : 0.55;
+        visual.IconImage.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
+        visual.FallbackIcon.Text = string.IsNullOrEmpty(cell.AppName) ? "?" : cell.AppName[..1].ToUpperInvariant();
+        visual.FallbackIcon.Visibility = icon == null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static SolidColorBrush FrozenBrush(string value)

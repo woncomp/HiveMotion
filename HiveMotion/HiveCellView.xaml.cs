@@ -43,7 +43,7 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         };
     }
 
-    public void SetCell(HiveCell cell)
+    public void SetCell(HiveCell cell, ImageSource? icon)
     {
         _cell = cell;
         KeyText.Text = cell.Letter.ToString();
@@ -71,19 +71,18 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         PinBadge.Visibility = cell.IsPinned ? Visibility.Visible : Visibility.Collapsed;
         FolderBadge.Visibility = isFolder ? Visibility.Visible : Visibility.Collapsed;
 
-        if (cell.Icon != null)
-        {
-            AppIcon.Source = cell.Icon;
-            AppIcon.Opacity = 0.9;
-            AppIcon.Visibility = Visibility.Visible;
-            FallbackGlyph.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            AppIcon.Visibility = Visibility.Collapsed;
-            FallbackGlyph.Text = string.IsNullOrEmpty(cell.AppName) ? "?" : cell.AppName.Substring(0, 1).ToUpperInvariant();
-            FallbackGlyph.Visibility = Visibility.Visible;
-        }
+        UpdateIcon(icon);
+    }
+
+    internal void UpdateIcon(ImageSource? icon)
+    {
+        if (_cell == null) return;
+        if (!ReferenceEquals(AppIcon.Source, icon)) AppIcon.Source = icon;
+        AppIcon.Opacity = 0.9;
+        AppIcon.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
+        FallbackGlyph.Visibility = icon == null ? Visibility.Visible : Visibility.Collapsed;
+        if (icon == null)
+            FallbackGlyph.Text = string.IsNullOrEmpty(_cell.AppName) ? "?" : _cell.AppName[..1].ToUpperInvariant();
     }
 
     private void SetHover(bool hover)

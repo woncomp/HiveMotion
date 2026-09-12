@@ -264,12 +264,6 @@
   <data name="Pins_Launch" xml:space="preserve">
     <value>立 即 启 动</value>
   </data>
-  <data name="Pins_StatusRunning" xml:space="preserve">
-    <value>● 运行中(有窗口匹配该命令行)</value>
-  </data>
-  <data name="Pins_StatusNotRunning" xml:space="preserve">
-    <value>○ 未运行</value>
-  </data>
   <data name="Pins_PinToLetter" xml:space="preserve">
     <value>固定到 {0}</value>
   </data>
@@ -383,9 +377,6 @@
   </data>
   <data name="Picker_FileMissing" xml:space="preserve">
     <value>  (文件缺失)</value>
-  </data>
-  <data name="Picker_RunningPrefix" xml:space="preserve">
-    <value>运行中 · </value>
   </data>
   <data name="Picker_LaunchMeta" xml:space="preserve">
     <value>启动 {0} 次 · {1}</value>

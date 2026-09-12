@@ -36,12 +36,15 @@ internal static class GlyphIcon
         if (Cache.TryGetValue(glyph, out var cached))
             return cached;
 
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
         // Geometry (not a bitmap): the image stays crisp at any DPI and render scale.
         var text = new FormattedText(glyph, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             IconTypeface, EmSize, GlyphBrush, pixelsPerDip: 1.0);
         var image = new DrawingImage(new GeometryDrawing(GlyphBrush, null, text.BuildGeometry(new Point(0, 0))));
         image.Freeze();
         Cache[glyph] = image;
+        if (Logger.IsVerboseEnabled)
+            Logger.Info($"icon-glyph-prewarm {System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds:F1}ms thread={System.Environment.CurrentManagedThreadId}");
         return image;
     }
 }

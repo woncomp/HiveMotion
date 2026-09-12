@@ -146,6 +146,7 @@ public partial class OverlayWindow : Window
             Logger.Info("No cached blurred backdrop available.", correlationId, channel);
             TaskGrid.SetBackdrop(null);
         }
+        TaskGrid.BeginIconPresentation();
         TaskGrid.SetCells(cells);
         Logger.Info($"Updated overlay grid with {cells.Count} cells.", correlationId, channel);
         // Hide the cursor and suspend hover/clicks until the user actually moves the mouse.
@@ -198,6 +199,7 @@ public partial class OverlayWindow : Window
                 return;
             if (!TryActivateAfterRender(generation, correlationId, channel) && IsCurrentActivation(generation))
                 ScheduleActivationRetries(generation, correlationId, channel);
+            if (IsCurrentActivation(generation)) TaskGrid.EnableIconUpdates();
         }));
     }
 
@@ -345,6 +347,7 @@ public partial class OverlayWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        TaskGrid.ResetForOverlayClose();
         DisarmFirstRenderNotification();
         CancelActivationRetries();
         base.OnClosed(e);

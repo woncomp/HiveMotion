@@ -30,6 +30,15 @@ public partial class ManageWindow : Window
     private const string CellDragFormat = "HiveMotion.CellMotion";
     private const string MotionTemplateDragFormat = "HiveMotion.MotionTemplate";
     private static readonly TimeSpan HoverNavigationDelay = TimeSpan.FromMilliseconds(500);
+    private static readonly Brush IconFallbackBrush = FrozenBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush UnconfiguredBrush = FrozenBrush(Color.FromArgb(0x99, 0xFF, 0xD9, 0x7A));
+
+    private static Brush FrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
 
     private enum MotionTemplate
     {
@@ -52,13 +61,9 @@ public partial class ManageWindow : Window
     private readonly HistoryStore _historyStore;
     private readonly SettingsStore _settingsStore;
     private readonly AutoStartManager _autoStartManager;
-    private readonly WindowScanner _windowScanner;
     private readonly Action _applyHotkeys;
-    private readonly System.Windows.Threading.DispatcherTimer _statusTimer;
     private readonly System.Windows.Threading.DispatcherTimer _hoverNavigationTimer;
-    private readonly List<(Ellipse Dot, ApplicationMotion App)> _tileDots = new();
 
-    private IReadOnlyList<RunningWindow> _windows = Array.Empty<RunningWindow>();
     private ApplicationMotion? _selectedApp;
     private FolderMotion? _selectedFolder;
     private WindowViewMotion? _selectedWindowView;
@@ -86,14 +91,13 @@ public partial class ManageWindow : Window
     private bool _capturingHotkey;
 
     public ManageWindow(MotionStore motionStore, HistoryStore historyStore, SettingsStore settingsStore,
-        AutoStartManager autoStartManager, WindowScanner windowScanner, Action applyHotkeys)
+        AutoStartManager autoStartManager, Action applyHotkeys)
     {
         InitializeComponent();
         _motionStore = motionStore;
         _historyStore = historyStore;
         _settingsStore = settingsStore;
         _autoStartManager = autoStartManager;
-        _windowScanner = windowScanner;
         _applyHotkeys = applyHotkeys;
 
         _hoverNavigationTimer = new System.Windows.Threading.DispatcherTimer
@@ -102,7 +106,6 @@ public partial class ManageWindow : Window
         };
         _hoverNavigationTimer.Tick += OnHoverNavigationTick;
 
-        Rescan();
         BuildLetterTiles();
         ShowEditor(null);
         SetNav(0);
@@ -115,14 +118,10 @@ public partial class ManageWindow : Window
         ConfigPathText.Text = MotionStore.StoreDirectoryPath;
         UpdateHistoryCount();
 
-        _statusTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _statusTimer.Tick += (_, _) => Rescan();
-        _statusTimer.Start();
         UpdateLanguageButtons();
         LocalizationManager.Instance.CultureChanged += OnCultureChanged;
         Closed += (_, _) =>
         {
-            _statusTimer.Stop();
             _hoverNavigationTimer.Stop();
             LocalizationManager.Instance.CultureChanged -= OnCultureChanged;
         };
@@ -134,7 +133,7 @@ public partial class ManageWindow : Window
     private void ApplyLocalizedStrings()
     {
         BuildLetterTiles();
-        UpdateEditorStatus();
+        UpdateEditorConfigurationStatus();
         UpdateFolderStatus();
         if (_selectedSystemAction != null)
             UpdateSystemActionEditor();
@@ -155,24 +154,6 @@ public partial class ManageWindow : Window
         }
         UpdateLanguageButtons();
     }
-
-    // ---------- status ----------
-
-    private void Rescan()
-    {
-        try
-        {
-            _windows = _windowScanner.Scan();
-        }
-        catch
-        {
-            _windows = Array.Empty<RunningWindow>();
-        }
-        UpdateTileStatus();
-        UpdateEditorStatus();
-    }
-
-    private bool IsIdentityRunning(ApplicationMotion app) => _windows.Any(app.Matches);
 
     // ---------- navigation ----------
 
@@ -202,7 +183,6 @@ public partial class ManageWindow : Window
     private void BuildLetterTiles()
     {
         LetterRows.Children.Clear();
-        _tileDots.Clear();
         UpdateLayerChrome();
 
         foreach (var row in KeyGrid.Rows)
@@ -218,7 +198,6 @@ public partial class ManageWindow : Window
             LetterRows.Children.Add(panel);
         }
 
-        UpdateTileStatus();
     }
 
     private Border BuildTile(char letter)
@@ -243,42 +222,8 @@ public partial class ManageWindow : Window
         var content = new Grid();
         if (motion is ApplicationMotion app)
         {
-            var icon = IconHelper.ForMotion(app);
-            var image = new Image
-            {
-                Width = 28,
-                Height = 28,
-                Source = icon,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
-            content.Children.Add(image);
-            if (icon == null)
-            {
-                content.Children.Add(new TextBlock
-                {
-                    Text = app.DisplayName.Length > 0 ? app.DisplayName.Substring(0, 1) : "?",
-                    FontSize = 18,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFFFFF")),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-            }
-
+            content.Children.Add(CreateMotionIcon(app));
             content.Children.Add(BuildTileLetterBadge(letter));
-
-            var dot = new Ellipse
-            {
-                Width = 8,
-                Height = 8,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(0, 0, 6, 5)
-            };
-            content.Children.Add(dot);
-            _tileDots.Add((dot, app));
 
             tile.Cursor = Cursors.Hand;
             tile.PreviewMouseLeftButtonDown += OnTileDragStart;
@@ -287,27 +232,10 @@ public partial class ManageWindow : Window
         }
         else if (motion is FolderMotion folder)
         {
-            var icon = IconHelper.ForMotion(folder);
-            if (icon != null)
-            {
-                var image = new Image
-                {
-                    Width = 28,
-                    Height = 28,
-                    Source = icon,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
-                content.Children.Add(image);
-            }
-            else
-            {
-                content.Children.Add(BuildFolderGlyph(26));
-            }
+            content.Children.Add(CreateMotionIcon(folder));
 
             content.Children.Add(BuildTileLetterBadge(letter));
-            // Folders have no running state; a small folder glyph takes the dot's place.
+            // Keep the folder type badge independent of the customizable main icon.
             var badge = BuildFolderGlyph(10);
             badge.HorizontalAlignment = HorizontalAlignment.Right;
             badge.VerticalAlignment = VerticalAlignment.Bottom;
@@ -322,14 +250,7 @@ public partial class ManageWindow : Window
         }
         else if (motion is WindowViewMotion windowView)
         {
-            content.Children.Add(new Image
-            {
-                Width = 28,
-                Height = 28,
-                Source = IconHelper.ForMotion(windowView),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            });
+            content.Children.Add(CreateMotionIcon(windowView));
             content.Children.Add(BuildTileLetterBadge(letter));
             content.Children.Add(new TextBlock
             {
@@ -349,21 +270,8 @@ public partial class ManageWindow : Window
         }
         else if (motion is SystemActionMotion systemAction)
         {
-            var icon = IconHelper.ForMotion(systemAction);
-            if (icon != null)
-            {
-                content.Children.Add(new Image
-                {
-                    Width = 28,
-                    Height = 28,
-                    Source = icon,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-            }
-
+            content.Children.Add(CreateMotionIcon(systemAction));
             content.Children.Add(BuildTileLetterBadge(letter));
-            // System actions are never running; no status dot.
 
             tile.Cursor = Cursors.Hand;
             tile.PreviewMouseLeftButtonDown += OnTileDragStart;
@@ -429,11 +337,23 @@ public partial class ManageWindow : Window
         };
     }
 
-    private void UpdateTileStatus()
+    private static Grid CreateMotionIcon(Motion motion)
     {
-        foreach (var (dot, app) in _tileDots)
-            dot.Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-                IsIdentityRunning(app) ? "#CC7CFC00" : "#59FFFFFF"));
+        var host = new Grid();
+        var image = new Image { Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        FrameworkElement fallback = motion is FolderMotion ? BuildFolderGlyph(26) : new TextBlock
+        {
+            Text = motion.DisplayName.Length > 0 ? motion.DisplayName[..1] : "?",
+            FontSize = 18, FontWeight = FontWeights.Bold, Foreground = IconFallbackBrush,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+        };
+        host.Children.Add(fallback);
+        host.Children.Add(image);
+        IconBinding.Set(image, IconRequest.ForMotion(motion), missing =>
+            fallback.Visibility = missing ? Visibility.Visible : Visibility.Collapsed);
+        return host;
     }
 
     private Motion? FindMotion(FolderMotion? folder, char letter) =>
@@ -863,7 +783,7 @@ public partial class ManageWindow : Window
             EditorPath.Text = app.ExecutablePath;
             EditorArgs.Text = app.Arguments;
             EditorCwd.Text = app.WorkingDirectory;
-            UpdateEditorStatus();
+            UpdateEditorConfigurationStatus();
             UpdatePreview();
             ValidatePath();
             ApplicationSetupPanel.Visibility = app.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
@@ -897,20 +817,13 @@ public partial class ManageWindow : Window
         BuildLetterTiles();
     }
 
-    private void UpdateEditorStatus()
+    private void UpdateEditorConfigurationStatus()
     {
         if (_selectedApp == null)
             return;
-        if (!_selectedApp.IsConfigured)
-        {
-            EditorStatus.Text = Loc.Get("Motion_NotConfigured");
-            EditorStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#99FFD97A"));
-            return;
-        }
-        bool running = IsIdentityRunning(_selectedApp);
-        EditorStatus.Text = Loc.Get(running ? "Pins_StatusRunning" : "Pins_StatusNotRunning");
-        EditorStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-            running ? "#CC7CFC00" : "#66FFFFFF"));
+        EditorStatus.Text = Loc.Get("Motion_NotConfigured");
+        EditorStatus.Foreground = UnconfiguredBrush;
+        EditorStatus.Visibility = _selectedApp.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void UpdatePreview()
@@ -952,7 +865,7 @@ public partial class ManageWindow : Window
             _motionStore.Set(_selectedApp);
             BuildLetterTiles();
         }
-        UpdateEditorStatus();
+        UpdateEditorConfigurationStatus();
         UpdateApplicationEditorIcon();
         if (!_selectedApp.IsConfigured)
             ShowEditor(_selectedApp, _selectedAppFolder);
@@ -965,7 +878,8 @@ public partial class ManageWindow : Window
         if (_selectedApp == null)
             return;
 
-        EditorIcon.Source = IconHelper.ForMotion(_selectedApp);
+        IconBinding.Set(EditorIcon, IconRequest.ForMotion(_selectedApp), fallback:
+            IconService.Shared.TryGetCached(new IconRequest(Glyph: "\uE71D")));
         EditorIconClearButton.Visibility = HasCustomIcon(_selectedApp)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1118,10 +1032,8 @@ public partial class ManageWindow : Window
 
     private void UpdateFolderHeaderIcon()
     {
-        var icon = _selectedFolder != null ? IconHelper.ForMotion(_selectedFolder) : null;
-        FolderEditorIcon.Source = icon;
-        FolderEditorIcon.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
-        FolderEditorGlyph.Visibility = icon != null ? Visibility.Collapsed : Visibility.Visible;
+        IconBinding.Set(FolderEditorIcon, _selectedFolder != null ? IconRequest.ForMotion(_selectedFolder) : IconRequest.Empty,
+            missing => FolderEditorGlyph.Visibility = missing ? Visibility.Visible : Visibility.Collapsed);
         FolderIconClearButton.Visibility = HasCustomIcon(_selectedFolder)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1178,7 +1090,7 @@ public partial class ManageWindow : Window
         if (_selectedWindowView == null)
             return;
 
-        WindowViewEditorIcon.Source = IconHelper.ForMotion(_selectedWindowView);
+        IconBinding.Set(WindowViewEditorIcon, IconRequest.ForMotion(_selectedWindowView));
         WindowViewIconClearButton.Visibility = HasCustomIcon(_selectedWindowView)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1343,7 +1255,7 @@ public partial class ManageWindow : Window
     {
         if (_selectedSystemAction == null)
             return;
-        SystemActionEditorIcon.Source = IconHelper.ForMotion(_selectedSystemAction);
+        IconBinding.Set(SystemActionEditorIcon, IconRequest.ForMotion(_selectedSystemAction));
         SystemActionIconClearButton.Visibility = HasCustomIcon(_selectedSystemAction)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1417,7 +1329,7 @@ public partial class ManageWindow : Window
         {
             Width = 22,
             Height = 22,
-            Source = GlyphIcon.ForGlyph(action.IconGlyph),
+            Source = IconService.Shared.TryGetCached(new IconRequest(Glyph: action.IconGlyph)),
             VerticalAlignment = VerticalAlignment.Center
         };
 
@@ -1480,13 +1392,6 @@ public partial class ManageWindow : Window
         ApplicationHistoryList.Children.Clear();
 
         string query = ApplicationHistorySearch.Text.Trim();
-        var runningKeys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var window in _windows)
-        {
-            if (window.ExecutablePath != null)
-                runningKeys.Add(HistoryEntry.Key(window.ExecutablePath, window.CommandLineArguments));
-        }
-
         var entries = _historyStore.SortedForPicker()
             .Where(entry => query.Length == 0
                 || entry.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
@@ -1508,11 +1413,10 @@ public partial class ManageWindow : Window
         }
 
         foreach (var entry in entries)
-            ApplicationHistoryList.Children.Add(BuildApplicationHistoryItem(entry,
-                runningKeys.Contains(entry.IdentityKey)));
+            ApplicationHistoryList.Children.Add(BuildApplicationHistoryItem(entry));
     }
 
-    private Border BuildApplicationHistoryItem(HistoryEntry entry, bool isRunning)
+    private Border BuildApplicationHistoryItem(HistoryEntry entry)
     {
         bool missing = !File.Exists(entry.ExecutablePath);
 
@@ -1520,9 +1424,10 @@ public partial class ManageWindow : Window
         {
             Width = 28,
             Height = 28,
-            Source = IconHelper.ForExecutable(entry.ExecutablePath),
             VerticalAlignment = VerticalAlignment.Center
         };
+        IconBinding.Set(image, new IconRequest(ExecutablePath: entry.ExecutablePath), fallback:
+            IconService.Shared.TryGetCached(new IconRequest(Glyph: "\uE71D")));
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
 
         var texts = new StackPanel { Margin = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -1547,16 +1452,6 @@ public partial class ManageWindow : Window
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center
         };
-        if (isRunning)
-        {
-            meta.Children.Add(new TextBlock
-            {
-                Text = Loc.Get("Picker_RunningPrefix"),
-                FontSize = 10,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CC7CFC00")),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-        }
         meta.Children.Add(new TextBlock
         {
             Text = Loc.Plural("Picker_LaunchMeta", entry.LaunchCount, entry.LaunchCount, RelativeTime(entry.LastSeen)),

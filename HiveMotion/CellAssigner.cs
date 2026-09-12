@@ -142,6 +142,7 @@ public sealed class CellAssigner
         {
             Letter = app.Key,
             Motion = app,
+            IconRequest = IconRequest.ForMotion(app),
             AppName = displayName,
             Title = displayName
         };
@@ -155,14 +156,10 @@ public sealed class CellAssigner
             cell.ProcessCreationFileTime = match.ProcessCreationFileTime;
             cell.ProcessName = match.ProcessName;
             cell.Title = match.Title;
-            cell.Icon = IconHelper.ForMotion(app, match.Icon);
+            cell.Icon = match.Icon;
             cell.ExecutablePath = match.ExecutablePath;
             cell.CommandLineArguments = match.CommandLineArguments;
             placed.Add(match);
-        }
-        else
-        {
-            cell.Icon = IconHelper.ForMotion(app);
         }
 
         return cell;
@@ -174,7 +171,7 @@ public sealed class CellAssigner
         Motion = folder,
         AppName = folder.DisplayName,
         Title = folder.DisplayName,
-        Icon = IconHelper.ForMotion(folder)
+        IconRequest = IconRequest.ForMotion(folder)
     };
 
     private static HiveCell WindowViewCell(WindowViewMotion view) => new()
@@ -183,7 +180,7 @@ public sealed class CellAssigner
         Motion = view,
         AppName = view.DisplayName,
         Title = view.DisplayName,
-        Icon = IconHelper.ForMotion(view)
+        IconRequest = IconRequest.ForMotion(view)
     };
 
     /// <summary>System actions never bind a window: name and glyph icon come from the catalog.</summary>
@@ -198,7 +195,7 @@ public sealed class CellAssigner
             Motion = motion,
             AppName = displayName,
             Title = displayName,
-            Icon = IconHelper.ForMotion(motion)
+            IconRequest = IconRequest.ForMotion(motion)
         };
     }
 }

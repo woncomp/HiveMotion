@@ -95,8 +95,7 @@ public sealed class WindowScanner
                         arguments = ProcessIdentity.ExtractArguments(commandLine);
                         workingDirectory = currentDirectory;
                     }
-                    metadata = new ProcessMetadata(discoveredProcessName, executablePath, arguments, workingDirectory,
-                        executablePath == null ? null : IconHelper.ForExecutable(executablePath));
+                    metadata = new ProcessMetadata(discoveredProcessName, executablePath, arguments, workingDirectory);
                     _processMetadata[key] = metadata;
                 }
                 catch
@@ -111,6 +110,8 @@ public sealed class WindowScanner
                 continue;
 
             string appName = ResolveAppName(processName, title);
+            // Image versions belong to the shared resource cache, not process-lifetime metadata.
+            var executableIcon = metadata.ExecutablePath == null ? null : IconHelper.ForExecutable(metadata.ExecutablePath);
 
             result.Add(new RunningWindow
             {
@@ -120,7 +121,7 @@ public sealed class WindowScanner
                 ProcessName = processName,
                 AppName = appName,
                 Title = title,
-                Icon = metadata.Icon ?? IconHelper.ForWindow(handle, process),
+                Icon = executableIcon ?? IconHelper.ForWindow(handle, process),
                 Priority = PriorityOf(processName),
                 ZOrder = zOrder,
                 PreferredLetter = PreferredLetter(appName, processName),
@@ -151,7 +152,7 @@ public sealed class WindowScanner
     }
 
     private sealed record ProcessMetadata(string ProcessName, string? ExecutablePath, string? Arguments,
-        string? WorkingDirectory, System.Windows.Media.ImageSource? Icon);
+        string? WorkingDirectory);
 
     private static bool IsCandidate(IntPtr hWnd, out string? title)
     {

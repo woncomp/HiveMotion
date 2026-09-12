@@ -10,6 +10,7 @@ public sealed class HiveCell
     public string AppName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public ImageSource? Icon { get; set; }
+    public IconRequest IconRequest { get; init; } = IconRequest.Empty;
     public IntPtr WindowHandle { get; set; }
     public uint ProcessId { get; set; }
     public long ProcessCreationFileTime { get; set; }
@@ -35,6 +36,7 @@ public sealed class HiveCell
         AppName = window.AppName,
         Title = window.Title,
         Icon = window.Icon,
+        IconRequest = new IconRequest(ExecutablePath: window.ExecutablePath ?? string.Empty),
         WindowHandle = window.Handle,
         ProcessId = window.ProcessId,
         ProcessCreationFileTime = window.ProcessCreationFileTime,
