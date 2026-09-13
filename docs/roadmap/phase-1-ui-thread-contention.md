@@ -9,6 +9,8 @@ Status: Complete (2026-09-12; verified with the release build via Computer Use, 
 - **Hook logging is lazy** (`GlobalKeyboardHook`): `DescribeForeground()` now runs only when `Logger.IsVerboseEnabled` is true; the remaining hook-path interpolations are cheap value formatting. The audited benign-chord log needed no change.
 - New checks: `tests/HiveMotion.HistoryChecks` (4 checks: write coalescing, snapshot isolation during in-flight saves, failed-save memory integrity, existence-cache picker ordering). 14 icon + 17 handoff + 4 history checks all pass; Release build is warning-free.
 
+> Phase 6 measurement: with history writes, hook logging, and scanning off the hot path, no activation in the real-input sample attributed delay to secondary UI-thread work.
+
 ## Original Analysis (kept for the record)
 
 ## Evidence

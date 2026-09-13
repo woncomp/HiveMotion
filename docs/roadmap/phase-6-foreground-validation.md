@@ -1,10 +1,33 @@
 # Phase 6 — Foreground Activation Validation and Overall Sign-Off
 
-Status: Planned
+Status: Complete (2026-09-12; verdict recorded from analyzed real-input logs, committed)
 
-## Objective
+## Verdict
 
-Answer with evidence whether the multi-second activation stalls are gone, and complete the interactive validation accumulated by the earlier phases. This phase is intentionally last: it depends on the Phase 5 tooling, requires real usage logs, and needs manual interaction from the user.
+**Problem 1 (multi-second activation stalls) is refuted for real user input.** With verbose logging enabled, 10 physical-keyboard activations were collected across cold-start, post-typing, post-idle, and rapid-reopen scenarios (2026-09-12, 16:55–16:56). Every activation confirmed foreground within 6–14 ms of the request and reached `keyboard-ready` in **28–108 ms**, except the first-ever open of a fresh process at **365 ms** — under the 500 ms threshold, dominated by a 201 ms cold first-render inside native `Show()` (backdrop-cache miss, first DWM composition), not by a stall. No `keyboard-ready-timeout`, no denied `SetForegroundWindow`.
+
+The 13–18 s `keyboard-ready-timeout → foreground-confirmed` gaps seen in earlier samples (Phase 5 analysis) occurred **only under synthetic input**: `keybd_event`-injected hotkeys do not carry Windows' foreground grant, so `SetForegroundWindow` is denied until unrelated physical input re-arms it. They are an artifact of automation, not a user-facing defect. Practical consequence: activation-latency verification must use real key presses; CU/synthetic driving is fine for functional checks but will falsely reproduce "stalls."
+
+## Checklist Results
+
+| Item | Result | Notes |
+|---|---|---|
+| Cold-cache / immediate-after-startup opens | Pass | First open 365 ms (cold first-render 201 ms); subsequent opens ≤ 110 ms |
+| Letter selection + outgoing handoff | Pass | Handoff confirmed 46 ms (16:56:28) |
+| Opens while typing / after idle / rapid reopens | Pass | 10/10 activations 28–365 ms, zero timeouts |
+| Search entry/exit, live filtering, Esc | Pass | Verified in Phases 2–3 CU runs; first Space press always shows rows |
+| Opens during window churn; Space during scanner refresh | Pass | Phase 3: gated snapshot applied once post-readiness; transition unaffected |
+| Pinned-with-arguments / exe-only matching | Pass (partial) | Cached-normalization path verified by checks + running pinned cell; exe-only elevated-target case covered by unit checks only |
+| Folder layer enter/exit | Not exercised | Overlay layer code untouched by Phases 1–5; deferred to normal use |
+| Multi-window numeric sub-menu | Not reproduced | Two same-app windows received distinct letters; sub-menu path unchanged by these phases |
+| Ctrl+P pinning flow | Not exercised live | Code path untouched by Phases 1–5 |
+| Multi-DPI / high-refresh / 4K spread | Environment unavailable | Single 96-DPI display; tier logic unit-tested (`SizeTiers`), manual cross-monitor check deferred |
+| history.json correctness | Pass | Phase 1 run: background writer persisted entries with correct timestamps |
+| Log viewer | N/A | Removed in 270b2d0; external tail tools per docs/logging.md |
+
+Failures: none. Deferred items (folder/numeric/Ctrl+P/multi-DPI) sit on code paths these phases did not modify; they carry forward as normal-use watch items, not tracked issues.
+
+## Original Analysis (kept for the record)
 
 ## Evidence
 

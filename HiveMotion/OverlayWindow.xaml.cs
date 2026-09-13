@@ -318,6 +318,8 @@ public partial class OverlayWindow : Window
         if (_keyboardReadySignalled)
             return;
         _keyboardReadySignalled = true;
+        // Later snapshot refreshes must not keep logging against this activation's clock.
+        TaskGrid.ActivationTiming = null;
         KeyboardReady?.Invoke(this, EventArgs.Empty);
     }
 

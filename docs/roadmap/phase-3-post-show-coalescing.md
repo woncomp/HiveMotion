@@ -8,6 +8,8 @@ Status: Complete (2026-09-12; verified with the release build via Computer Use, 
 - **Deprioritized.** Snapshot publish and projection-batch callbacks dispatch at `DispatcherPriority.Background` (below `Render`), down from `Normal`.
 - **Verification.** The verbose log confirms the ordering on a churned opening: `keyboard-ready-timeout +609ms` immediately followed by `Opening gate released; applying retained snapshot …` (exactly one coalesced application), while clean openings show `keyboard-ready` with no gate activity. A console check covers the gate contract (retain newest only, release once, reopen discards residue). 14 icon + 17 handoff + 4 history + 6 opening checks all pass; Release build is warning-free.
 
+> Phase 6 measurement: churned opens applied exactly one retained snapshot after readiness; no opening-frame interruption attributable to snapshot application in any sample.
+
 ## Original Analysis (kept for the record)
 
 ## Evidence

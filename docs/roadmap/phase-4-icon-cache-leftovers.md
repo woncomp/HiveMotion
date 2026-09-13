@@ -8,6 +8,8 @@ Status: Complete (2026-09-12; verified with the release build via Computer Use, 
 - **DPI-tiered icon cache.** Cache keys gain a quantized tier suffix (`{32, 48, 96}`); `TryGetCached`/`Request` take a pixel size resolved at the call site (overlay cells 48 DIP, search rows 24, manage tiles/editors from their rendered widths) × `VisualTreeHelper.GetDpi`, gated on `IsLoaded`; scanner/startup callers use `SystemFallbackPixels` (system DPI via `GetDpiForSystem`). The worker extracts shell icons and decodes images at the tier size; `Invalidate` evicts every tier; glyph cache stays size-independent. `IconBinding` re-requests on `DpiChanged`. Phase 0 guarantees hold: no I/O on the synchronous path, fallbacks immediate, progressive fill.
 - New checks: HistoryChecks normalization check (cache invalidation, cross-product parity with uncached matching, exe-only fallback, key symmetry) and IconChecks `SizeTiers`/`TierInvalidation`/`GlyphTiers`. 17 icon + 17 handoff + 5 history + 6 opening checks all pass; Release build is warning-free. On the 96-DPI test machine the overlay uses tier 48 (identical cost to before); cross-monitor crispness on a real multi-DPI setup remains a manual follow-up.
 
+> Phase 6 measurement: worker extraction at the tier size confirmed in verbose logs (size=48 at 96 DPI); icons rendered crisply with no fallback regressions in any verification run.
+
 ## Original Analysis (kept for the record)
 
 ## Evidence

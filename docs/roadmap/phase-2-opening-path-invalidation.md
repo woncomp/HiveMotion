@@ -10,6 +10,8 @@ Status: Complete (2026-09-12; verified with the release build via Computer Use, 
 - **Allocation audit.** Caption brushes (`HiveCellView`), the highlight-row brush, and the space-bar border colors are frozen statics; no per-update `ColorConverter` or brush allocation remains on per-cell paths.
 - New checks: `tests/HiveMotion.OpeningChecks` (5 checks: same-cells no-rerender, partial update re-renders only the changed letter, handle change re-renders, clean reopen touches no search state, first search entry builds rows). 14 icon + 17 handoff + 4 history + 5 opening checks all pass; Release build is warning-free.
 
+> Phase 6 measurement: `grid-apply-start -> grid-apply-pool-complete` was 12 ms on the cold open and 0.1-1 ms on warm reopens; the search rebuild never appeared on the opening path.
+
 ## Original Analysis (kept for the record)
 
 ## Evidence
