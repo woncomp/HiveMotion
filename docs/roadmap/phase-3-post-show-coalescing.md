@@ -1,10 +1,14 @@
 # Phase 3 — Post-Show Update Coalescing and Dispatcher Priorities
 
-Status: Planned
+Status: Complete (2026-09-12; verified with the release build via Computer Use, committed)
 
-## Objective
+## Outcome
 
-Prevent background snapshot work from competing with the opening transition's first frames. During opening, retain only the newest pending update and apply it once the overlay is keyboard-ready; lower snapshot-driven UI work below render priority.
+- **Opening gate.** New `OpeningUpdateGate` opens when an activation generation starts and closes on keyboard readiness (`OverlayWindow` now signals a once-per-activation `KeyboardReady` event, also fired when readiness retries are exhausted) or when the overlay closes. While open, snapshot-driven updates — Window View projection batch applications and `RefreshTaskGrid` — retain only the newest snapshot and apply nothing; the release rebuilds the projection batch and applies it once at `Background` priority, bound to the existing generation checks. The refresh requested at the end of `OpenTaskGrid` now lands through this gate instead of inline.
+- **Deprioritized.** Snapshot publish and projection-batch callbacks dispatch at `DispatcherPriority.Background` (below `Render`), down from `Normal`.
+- **Verification.** The verbose log confirms the ordering on a churned opening: `keyboard-ready-timeout +609ms` immediately followed by `Opening gate released; applying retained snapshot …` (exactly one coalesced application), while clean openings show `keyboard-ready` with no gate activity. A console check covers the gate contract (retain newest only, release once, reopen discards residue). 14 icon + 17 handoff + 4 history + 6 opening checks all pass; Release build is warning-free.
+
+## Original Analysis (kept for the record)
 
 ## Evidence
 

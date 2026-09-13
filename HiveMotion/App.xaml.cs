@@ -42,6 +42,7 @@ public partial class App : System.Windows.Application
     private WindowActivationTarget? _previousForeground;
     private ForegroundHandoff? _foregroundHandoff;
     private int _overlayGeneration;
+    private readonly OpeningUpdateGate _openingUpdateGate = new();
 
     private sealed record WindowViewProjection(DateTimeOffset CapturedAt, IReadOnlyList<HiveCell> Cells);
     private sealed record WindowViewDefinition(WindowViewMotion Motion, string[] ExecutableNames);
@@ -78,6 +79,7 @@ public partial class App : System.Windows.Application
         RefreshWindowViewDefinitions();
         _windowSnapshots.Start();
         _overlayWindow = new OverlayWindow();
+        _overlayWindow.KeyboardReady += (_, _) => ApplyRetainedSnapshotAfterOpening();
         _overlayWindow.CellChosen += (_, cell) => ActivateCell(cell);
         _overlayWindow.CloseRequested += (_, _) =>
         {
@@ -220,6 +222,8 @@ public partial class App : System.Windows.Application
         Logger.Info($"Captured previous foreground handle={FormatHandle(foreground)}; identityAvailable={_previousForeground != null}.", correlationId, channel);
 
         ++_overlayGeneration;
+        // Snapshot-driven updates arriving before keyboard readiness are retained, not applied.
+        _openingUpdateGate.Open();
         _activeChildLayer = null;
         var snapshot = _windowSnapshots!.Latest;
         Logger.Info($"Snapshot state: {(snapshot == null ? "empty" : $"ready with {snapshot.Windows.Count} windows")}.", correlationId, channel);
@@ -238,6 +242,19 @@ public partial class App : System.Windows.Application
         _windowSnapshots.RequestRefresh();
     }
 
+    /// <summary>
+    /// Keyboard readiness ends the opening gate: the newest retained snapshot is applied
+    /// once (superseded publishes were never applied), below render priority.
+    /// </summary>
+    private void ApplyRetainedSnapshotAfterOpening()
+    {
+        WindowSnapshot? retained = _openingUpdateGate.Close();
+        if (retained == null || _state != OverlayState.TaskGrid)
+            return;
+        Logger.Info($"Opening gate released; applying retained snapshot capturedAt={retained.CapturedAt:O}.");
+        QueueWindowViewProjectionBuild(retained);
+    }
+
     /// <summary>Re-scans and rebuilds the current layer in place, keeping the overlay open.</summary>
     private void RefreshTaskGrid()
     {
@@ -251,6 +268,8 @@ public partial class App : System.Windows.Application
             }
             var cells = AssignCurrentLayer(snapshot);
             _currentCells = cells;
+            if (_openingUpdateGate.TryRetain(snapshot))
+                return; // Opening: folded into the single post-readiness application.
             _overlayWindow!.UpdateCells(cells);
         }
         catch (Exception ex)
@@ -309,6 +328,10 @@ public partial class App : System.Windows.Application
 
         if (_state != OverlayState.TaskGrid)
             return;
+        // During opening the projections above stay cached but the UI application is
+        // deferred: only the newest snapshot applies, once keyboard readiness fires.
+        if (_openingUpdateGate.TryRetain(snapshot))
+            return;
         int generation = _overlayGeneration;
         var cells = AssignCurrentLayer(snapshot);
         if (_state == OverlayState.TaskGrid && generation == _overlayGeneration)
@@ -331,7 +354,9 @@ public partial class App : System.Windows.Application
                 }
                 if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
                     return;
-                Dispatcher.BeginInvoke(() => ApplyWindowViewProjectionBatch(task.Result, snapshot));
+                // Below render priority so the application never competes with opening frames.
+                Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                    () => ApplyWindowViewProjectionBatch(task.Result, snapshot));
             }, System.Threading.Tasks.TaskScheduler.Default);
     }
 
@@ -351,7 +376,11 @@ public partial class App : System.Windows.Application
         // Build dynamic-view projections on the snapshot worker; marshal only bounded cells to WPF.
         var definitions = System.Threading.Volatile.Read(ref _windowViewDefinitions);
         var batch = BuildWindowViewProjectionBatch(snapshot, definitions);
-        Dispatcher.BeginInvoke(() => ApplyWindowViewProjectionBatch(batch, snapshot));
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+        // Below render priority; while the overlay is opening the gate retains only the
+        // newest snapshot instead of applying every publish inline.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () => ApplyWindowViewProjectionBatch(batch, snapshot));
     }
 
     private void OnForegroundWindowChanged(object? sender, ForegroundWindowChangedEventArgs change)
@@ -684,6 +713,7 @@ public partial class App : System.Windows.Application
         _previousForeground = null;
         int generation = ++_overlayGeneration;
         _state = OverlayState.Hidden;
+        _openingUpdateGate.Close(); // Discard any snapshot retained during the aborted opening.
         _activeChildLayer = null;
         if (_keyboardHook != null)
             _keyboardHook.IsOverlayOpen = false;

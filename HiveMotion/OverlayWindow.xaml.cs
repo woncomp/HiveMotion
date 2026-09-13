@@ -21,6 +21,7 @@ public partial class OverlayWindow : Window
     private bool _showCompletedForActivation;
     private bool _postRenderActivationQueued;
     private bool _hasConfirmedForegroundActivation;
+    private bool _keyboardReadySignalled;
     private bool _isHiding;
     private string? _activationCorrelationId;
     private LogChannel _activationChannel;
@@ -61,6 +62,8 @@ public partial class OverlayWindow : Window
     public event EventHandler<HiveCell>? RevealRequested;
     public event EventHandler<HiveCell>? CopyCommandRequested;
     public event EventHandler? FirstWpfRender;
+    /// <summary>Fired once per activation when keyboard readiness is recorded or its retries are exhausted.</summary>
+    internal event EventHandler? KeyboardReady;
 
     /// <summary>True after this presentation has owned the Win32 foreground at least once.</summary>
     internal bool HasConfirmedForegroundActivation => _hasConfirmedForegroundActivation;
@@ -127,6 +130,7 @@ public partial class OverlayWindow : Window
         _showCompletedForActivation = false;
         _postRenderActivationQueued = false;
         _hasConfirmedForegroundActivation = false;
+        _keyboardReadySignalled = false;
         _isHiding = false;
         DisarmFirstRenderNotification();
         CancelActivationRetries();
@@ -252,6 +256,7 @@ public partial class OverlayWindow : Window
                     correlationId, channel);
                 _activationTiming?.Checkpoint("keyboard-ready-timeout");
                 CancelActivationRetries();
+                SignalKeyboardReady();
             }
         };
         timer.Start();
@@ -292,7 +297,16 @@ public partial class OverlayWindow : Window
             CancelActivationRetries();
             _activationTiming?.Checkpoint("keyboard-ready");
             _activationTiming = null;
+            SignalKeyboardReady();
         }
+    }
+
+    private void SignalKeyboardReady()
+    {
+        if (_keyboardReadySignalled)
+            return;
+        _keyboardReadySignalled = true;
+        KeyboardReady?.Invoke(this, EventArgs.Empty);
     }
 
     private void CancelActivationRetries()

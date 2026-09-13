@@ -21,6 +21,8 @@ internal static class Program
         };
         try
         {
+            RunGateChecks();
+            Console.WriteLine("PASS The opening gate retains only the newest snapshot and releases it once");
             foreach (var test in tests)
             {
                 var grid = new TaskGridView();
@@ -111,6 +113,32 @@ internal static class Program
 
         Assert(grid.RebuildResultsCount == 1, "entering search must build the rows synchronously");
         Assert(chosen != null, "submitting the search must choose the highlighted row");
+    }
+
+    private static void RunGateChecks()
+    {
+        static WindowSnapshot Snapshot(int tick) =>
+            new(Array.Empty<RunningWindow>(), new DateTimeOffset(2026, 9, 12, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(tick));
+
+        var gate = new OpeningUpdateGate();
+        Assert(!gate.IsOpen, "a new gate starts closed");
+        var first = Snapshot(1);
+        Assert(!gate.TryRetain(first), "a closed gate passes snapshots straight through");
+
+        gate.Open();
+        Assert(gate.IsOpen, "the gate reports open");
+        Assert(gate.TryRetain(first), "an open gate retains the first snapshot");
+        var newest = Snapshot(2);
+        Assert(gate.TryRetain(newest), "an open gate retains the superseding snapshot");
+        Assert(ReferenceEquals(gate.Close(), newest),
+            "release surfaces only the newest snapshot; the superseded one is never applied");
+        Assert(!gate.IsOpen, "release closes the gate");
+        Assert(gate.Close() == null, "a second release returns nothing");
+
+        gate.Open();
+        Assert(gate.TryRetain(Snapshot(3)), "reopen retains again");
+        gate.Open(); // a fast close/reopen discards the previous opening's residue
+        Assert(gate.Close() == null, "reopening the gate discards the stale retained snapshot");
     }
 
     private static HiveCell Cell(char letter, string name, IntPtr handle = default) => new()
