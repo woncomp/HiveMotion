@@ -18,8 +18,8 @@
     keep the git tag in sync with HiveMotionVersion.
   -->
   <PropertyGroup>
-    <HiveMotionVersion>0.1.4</HiveMotionVersion>
-    <HiveMotionAssemblyVersion>0.1.4.0</HiveMotionAssemblyVersion>
+    <HiveMotionVersion>0.1.5</HiveMotionVersion>
+    <HiveMotionAssemblyVersion>0.1.5.0</HiveMotionAssemblyVersion>
   </PropertyGroup>
 
 </Project>
