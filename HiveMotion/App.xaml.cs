@@ -203,6 +203,7 @@ public partial class App : System.Windows.Application
         }
         _singleInstanceMutex?.Dispose();
         IconService.Shared.Dispose();
+        _historyStore?.Flush();
         Logger.Shutdown();
         base.OnExit(e);
     }

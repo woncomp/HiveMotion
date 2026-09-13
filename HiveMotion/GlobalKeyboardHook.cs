@@ -154,7 +154,10 @@ public sealed class GlobalKeyboardHook : IDisposable
 
             long receiptTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             string correlationId = Logger.NewCorrelationId();
-            Logger.ActivationInfo($"Recognized hotkey {rule.Name}; overlayOpen={IsOverlayOpen}; foreground={DescribeForeground()}.", correlationId);
+            // DescribeForeground performs several P/Invoke calls; evaluate it only when the
+            // log entry can actually be emitted (the callback must stay cheap when verbose is off).
+            if (Logger.IsVerboseEnabled)
+                Logger.ActivationInfo($"Recognized hotkey {rule.Name}; overlayOpen={IsOverlayOpen}; foreground={DescribeForeground()}.", correlationId);
             var request = new HotkeyEventArgs(rule, receiptTimestamp, correlationId);
 
             if (IsOverlayOpen)
