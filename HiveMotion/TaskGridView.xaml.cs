@@ -96,6 +96,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     /// <summary>HWND of the owning overlay window; the DWM thumbnail draws into it.</summary>
     public IntPtr OverlayHwnd { get; set; }
 
+    /// <summary>Activation clock for verbose checkpoints; null off the opening path.</summary>
+    internal ActivationTiming? ActivationTiming { get; set; }
+
     public event EventHandler<HiveCell>? CellChosen;
     public event EventHandler? CloseRequested;
     /// <summary>Backspace on the grid: pop one layer (folder → home).</summary>
@@ -280,6 +283,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void ApplyCells(IReadOnlyList<HiveCell> cells, bool resetSearch)
     {
+        ActivationTiming?.Checkpoint("grid-apply-start");
         _cells = cells;
         _cellsVersion++;
         _resultsVersion = -1;
@@ -315,6 +319,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             if (view.Visibility != Visibility.Visible)
                 view.Visibility = Visibility.Visible;
         }
+        ActivationTiming?.Checkpoint("grid-apply-pool-complete");
 
         // The reset is skipped only when it is a verified no-op (pristine overview re-entry);
         // any live transient state takes the full path so behavior stays identical.
@@ -334,10 +339,14 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         // hotkey receipt and Show(); EnterSearch forces a build, so the first Space press
         // always sees rows even if the deferred callback has not run yet.
         int generation = _cellsVersion;
+        var timing = ActivationTiming;
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
         {
             if (generation == _cellsVersion && !_searching && IsVisible)
+            {
                 EnsureResultsBuilt();
+                timing?.Checkpoint("grid-search-rebuild-complete");
+            }
         }));
     }
 

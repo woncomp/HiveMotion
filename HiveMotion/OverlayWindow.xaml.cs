@@ -151,12 +151,17 @@ public partial class OverlayWindow : Window
             TaskGrid.SetBackdrop(null);
         }
         TaskGrid.BeginIconPresentation();
+        TaskGrid.ActivationTiming = _activationTiming;
         TaskGrid.SetCells(cells);
         Logger.Info($"Updated overlay grid with {cells.Count} cells.", correlationId, channel);
         // Hide the cursor and suspend hover/clicks until the user actually moves the mouse.
         TaskGrid.DisarmMouse();
         ArmFirstRenderNotification(generation);
+        _activationTiming?.Checkpoint("native-show-start");
         Show();
+        if (!IsCurrentActivation(generation))
+            return;
+        _activationTiming?.Checkpoint("native-show-complete");
         if (!IsCurrentActivation(generation))
             return;
         _showCompletedForActivation = true;
@@ -191,13 +196,20 @@ public partial class OverlayWindow : Window
             // A cross-DPI move may replace our bounds with Windows' suggested rect.
             // Correct only an actual mismatch, after the initial WPF rendering pass.
             var bounds = _screen.Bounds;
-            if (NativeMethods.GetWindowRect(TaskGrid.OverlayHwnd, out var rect) &&
+            bool obtained = NativeMethods.GetWindowRect(TaskGrid.OverlayHwnd, out var rect);
+            bool mismatch = obtained &&
                 (rect.Left != bounds.Left || rect.Top != bounds.Top ||
-                 rect.Right != bounds.Right || rect.Bottom != bounds.Bottom))
+                 rect.Right != bounds.Right || rect.Bottom != bounds.Bottom);
+            if (Logger.IsVerboseEnabled)
+                Logger.Info($"bounds-check obtained={obtained} mismatch={mismatch} " +
+                    $"rect={rect.Left},{rect.Top},{rect.Right},{rect.Bottom} expected={bounds.Left},{bounds.Top},{bounds.Right},{bounds.Bottom}.");
+            if (mismatch)
             {
                 ApplyScreenBounds();
                 _activationTiming?.Checkpoint("screen-bounds-corrected");
             }
+            else if (Logger.IsVerboseEnabled)
+                Logger.Info("bounds-check no correction applied.");
 
             if (!IsCurrentActivation(generation))
                 return;

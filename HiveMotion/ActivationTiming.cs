@@ -14,6 +14,9 @@ internal sealed class ActivationTiming
 
     public void Checkpoint(string name)
     {
+        // Guard before any interpolation so the disabled path allocates nothing.
+        if (!Logger.IsVerboseEnabled)
+            return;
         double elapsedMs = (Stopwatch.GetTimestamp() - _start) * 1000d / Stopwatch.Frequency;
         Logger.Info($"activation {name} +{elapsedMs:F1}ms thread={Environment.CurrentManagedThreadId}");
     }

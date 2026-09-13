@@ -1,0 +1,33 @@
+0912 12:03:34.097 I [DEFAULT] activation hotkey-received-ui +0.5ms thread=1
+0912 12:03:34.097 I [DEFAULT] activation snapshot-ready +0.6ms thread=1
+0912 12:03:34.098 I [DEFAULT] activation cell-assignment-complete +0.6ms thread=1
+0912 12:03:34.098 I [DEFAULT] activation overlay-ui-start +0.7ms thread=1
+0912 12:03:34.100 I [DEFAULT] activation backdrop-cache-miss +3.2ms thread=1
+0912 12:03:34.109 I [DEFAULT] activation grid-apply-start +12.0ms thread=1
+0912 12:03:34.109 I [DEFAULT] activation grid-apply-pool-complete +12.3ms thread=1
+0912 12:03:34.110 I [DEFAULT] activation native-show-start +12.9ms thread=1
+0912 12:03:34.117 I [DEFAULT] activation native-show-complete +19.5ms thread=1
+0912 12:03:34.117 I [DEFAULT] activation overlay-shown +19.7ms thread=1
+0912 12:03:34.117 I [DEFAULT] activation first-wpf-render (not hardware presentation) +19.7ms thread=1
+0912 12:03:34.117 I [DEFAULT] bounds-check obtained=true mismatch=false rect=0,0,3840,2400 expected=0,0,3840,2400.
+0912 12:03:34.130 I [DEFAULT] activation foreground-request-start +32.8ms thread=1
+0912 12:03:34.134 I [DEFAULT] activation foreground-request-returned +37.3ms thread=1
+0912 12:03:34.134 I [DEFAULT] activation foreground-confirmed +37.3ms thread=1
+0912 12:03:34.138 I [DEFAULT] activation keyboard-ready +40.6ms thread=1
+0912 12:03:34.140 I [DEFAULT] activation grid-search-rebuild-complete +42.1ms thread=1
+0912 12:03:34.141 I [DEFAULT] projection-batch applied cells=7 duration=0.8ms thread=1
+0912 12:05:55.425 I [DEFAULT] activation hotkey-received-ui +0.4ms thread=1
+0912 12:05:55.425 I [DEFAULT] activation snapshot-ready +0.4ms thread=1
+0912 12:05:55.425 I [DEFAULT] activation cell-assignment-complete +0.4ms thread=1
+0912 12:05:55.425 I [DEFAULT] activation overlay-ui-start +0.5ms thread=1
+0912 12:05:55.426 I [DEFAULT] activation backdrop-cache-hit +1.7ms thread=1
+0912 12:05:55.427 I [DEFAULT] activation grid-apply-start +2.1ms thread=1
+0912 12:05:55.428 I [DEFAULT] activation grid-apply-pool-complete +2.4ms thread=1
+0912 12:05:55.429 I [DEFAULT] activation native-show-start +2.9ms thread=1
+0912 12:05:55.434 I [DEFAULT] activation native-show-complete +10.3ms thread=1
+0912 12:05:55.434 I [DEFAULT] activation overlay-shown +10.3ms thread=1
+0912 12:05:55.438 I [DEFAULT] activation first-wpf-render (not hardware presentation) +13.5ms thread=1
+0912 12:05:55.441 I [DEFAULT] activation foreground-request-start +16.4ms thread=1
+0912 12:05:55.447 I [DEFAULT] activation foreground-confirmed +22.7ms thread=1
+0912 12:05:55.448 I [DEFAULT] activation keyboard-ready +23.7ms thread=1
+0912 12:05:55.455 I [DEFAULT] activation foreground-request-returned +30.6ms thread=1

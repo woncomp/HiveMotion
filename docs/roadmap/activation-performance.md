@@ -17,7 +17,7 @@ The icon work is complete ([Phase 0](phase-0-async-icon-loading.md)). The remain
 | [2 — Opening-path invalidation](phase-2-opening-path-invalidation.md) | `ApplyCells` updates only what changed; search rebuild leaves the opening path | Complete (diff-based cells, reset fast path, deferred search build, OpeningChecks) |
 | [3 — Post-Show coalescing](phase-3-post-show-coalescing.md) | Snapshot/projection updates coalesced and deprioritized during opening | Complete (OpeningUpdateGate, Background priority, KeyboardReady signal) |
 | [4 — Icon cache leftovers](phase-4-icon-cache-leftovers.md) | Argument-normalization caching; DPI-tiered icon cache | Complete (cached normalization, tier {32,48,96} cache with DPI-aware sizes) |
-| [5 — Activation instrumentation](phase-5-activation-instrumentation.md) | Finer checkpoints plus a log-analysis script; measures Phases 1–4 | Planned |
+| [5 — Activation instrumentation](phase-5-activation-instrumentation.md) | Finer checkpoints plus a log-analysis script; measures Phases 1–4 | Complete (grid/native-show/bounds/batch checkpoints; tools/analyze-activation-logs.ps1) |
 | [6 — Foreground validation](phase-6-foreground-validation.md) | Confirm multi-second activation stalls are gone; holistic interactive sign-off | Planned |
 
 ## Ordering Principle

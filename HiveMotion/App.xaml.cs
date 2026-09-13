@@ -333,13 +333,23 @@ public partial class App : System.Windows.Application
         // During opening the projections above stay cached but the UI application is
         // deferred: only the newest snapshot applies, once keyboard readiness fires.
         if (_openingUpdateGate.TryRetain(snapshot))
+        {
+            if (Logger.IsVerboseEnabled)
+                Logger.Info($"projection-batch retained capturedAt={snapshot.CapturedAt:O} " +
+                    $"projections={batch.Projections.Count} thread={Environment.CurrentManagedThreadId}");
             return;
+        }
         int generation = _overlayGeneration;
         var cells = AssignCurrentLayer(snapshot);
         if (_state == OverlayState.TaskGrid && generation == _overlayGeneration)
         {
+            long start = Logger.IsVerboseEnabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             _currentCells = cells;
             _overlayWindow!.UpdateCells(cells);
+            if (Logger.IsVerboseEnabled)
+                Logger.Info($"projection-batch applied cells={cells.Count} " +
+                    $"duration={System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds:F1}ms " +
+                    $"thread={Environment.CurrentManagedThreadId}");
         }
     }
 
