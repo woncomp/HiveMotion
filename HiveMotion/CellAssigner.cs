@@ -135,9 +135,7 @@ public sealed class CellAssigner
     private static HiveCell AssignApplication(ApplicationMotion app, IReadOnlyList<RunningWindow> windows,
         HashSet<RunningWindow> placed)
     {
-        string displayName = app.DisplayName.Length > 0
-            ? app.DisplayName
-            : Loc.Get("Motion_ApplicationName");
+        string displayName = app.EffectiveName;
         var cell = new HiveCell
         {
             Letter = app.Key,
@@ -169,8 +167,8 @@ public sealed class CellAssigner
     {
         Letter = folder.Key,
         Motion = folder,
-        AppName = folder.DisplayName,
-        Title = folder.DisplayName,
+        AppName = folder.EffectiveName,
+        Title = folder.EffectiveName,
         IconRequest = IconRequest.ForMotion(folder)
     };
 
@@ -178,17 +176,16 @@ public sealed class CellAssigner
     {
         Letter = view.Key,
         Motion = view,
-        AppName = view.DisplayName,
-        Title = view.DisplayName,
+        AppName = view.EffectiveName,
+        Title = view.EffectiveName,
         IconRequest = IconRequest.ForMotion(view)
     };
 
-    /// <summary>System actions never bind a window: name and glyph icon come from the catalog.</summary>
+    /// <summary>System actions never bind a window: the glyph comes from the catalog and the
+    /// name falls back to the localized catalog name when the cell has no custom name.</summary>
     private static HiveCell SystemActionCell(SystemActionMotion motion)
     {
-        string displayName = motion.IsConfigured
-            ? SystemActions.DisplayNameOf(motion.ActionId)
-            : Loc.Get("Motion_SystemActionName");
+        string displayName = motion.EffectiveName;
         return new HiveCell
         {
             Letter = motion.Key,

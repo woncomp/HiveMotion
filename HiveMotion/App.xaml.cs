@@ -478,7 +478,7 @@ public partial class App : System.Windows.Application
         if (cell.Application is { } app)
         {
             _overlayWindow!.ShowConfirm(
-                Loc.Format("App_UnpinMessage", app.Key, app.DisplayName, app.CommandLine),
+                Loc.Format("App_UnpinMessage", app.Key, app.EffectiveName, app.CommandLine),
                 Loc.Get("App_UnpinConfirm"),
                 () =>
                 {
@@ -525,7 +525,7 @@ public partial class App : System.Windows.Application
         if (existing != null && existing.Key != cell.Letter)
         {
             _overlayWindow!.ShowConfirm(
-                Loc.Format("App_MovePinMessage", existing.DisplayName, existing.Key, cell.Letter),
+                Loc.Format("App_MovePinMessage", existing.EffectiveName, existing.Key, cell.Letter),
                 Loc.Get("App_MovePinConfirm"),
                 () =>
                 {
@@ -682,7 +682,7 @@ public partial class App : System.Windows.Application
     private void EnterFolder(FolderMotion folder)
     {
         _activeChildLayer = folder;
-        _overlayWindow!.SetActiveLayer(GridLayerKind.Folder, folder.DisplayName);
+        _overlayWindow!.SetActiveLayer(GridLayerKind.Folder, folder.EffectiveName);
         RefreshTaskGrid();
         _windowSnapshots!.RequestRefresh();
     }
@@ -690,7 +690,7 @@ public partial class App : System.Windows.Application
     private void EnterWindowView(WindowViewMotion view)
     {
         _activeChildLayer = view;
-        _overlayWindow!.SetActiveLayer(GridLayerKind.WindowView, view.DisplayName);
+        _overlayWindow!.SetActiveLayer(GridLayerKind.WindowView, view.EffectiveName);
         var snapshot = _windowSnapshots!.Latest;
         if (snapshot != null && _windowViewProjections.TryGetValue(view, out var projection) &&
             projection.CapturedAt == snapshot.CapturedAt)

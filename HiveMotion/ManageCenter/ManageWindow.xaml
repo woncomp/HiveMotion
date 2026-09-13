@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:HiveMotion.Localization"
+        xmlns:mc="clr-namespace:HiveMotion.ManageCenter"
         Title="{l:Loc Manage_Title}" Width="1600" Height="900" MinWidth="780" MinHeight="540"
         Background="#F214161D" Foreground="#E6FFFFFF"
         FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei"
@@ -125,13 +126,23 @@
                 <!-- Editor -->
                 <Border Style="{StaticResource CardStyle}" Grid.Row="1" Margin="0,12,0,0">
                     <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
                         <TextBlock x:Name="EditorEmpty" Text="{l:Loc Pins_EditorEmpty}"
-                                   FontSize="13" Foreground="#40FFFFFF"
+                                   FontSize="13" Foreground="#40FFFFFF" Grid.RowSpan="2"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                        <!-- Shared header: identical for every motion kind -->
+                        <mc:MotionEditorHeader x:Name="EditorHeader" Visibility="Collapsed" />
+
+                        <!-- Kind-specific bodies; at most one is visible at a time -->
+                        <Grid x:Name="EditorBodies" Grid.Row="1" Margin="0,14,0,0" Visibility="Collapsed">
 
                         <Grid x:Name="EditorPanel" Visibility="Collapsed">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -140,50 +151,7 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <!-- Header: icon + name + status -->
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
-                                        BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top"
-                                        Cursor="Hand" ToolTip="{l:Loc Dialog_SelectCellIcon}"
-                                        MouseLeftButtonUp="OnBrowseApplicationIconClick">
-                                    <Grid>
-                                        <Image x:Name="EditorIcon" Width="32" Height="32"
-                                               RenderOptions.BitmapScalingMode="HighQuality" />
-                                        <Border x:Name="EditorIconClearButton" Width="15" Height="15"
-                                                CornerRadius="8" Background="#E5484D" BorderBrush="#FFFF8A8E"
-                                                BorderThickness="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                Visibility="Collapsed"
-                                                ToolTip="{l:Loc Motion_ClearIcon}"
-                                                MouseLeftButtonUp="OnClearApplicationIconClick">
-                                            <TextBlock Text="×" FontSize="12" FontWeight="Bold" Foreground="White"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       Margin="0,-2,0,0" />
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
-                                                BorderBrush="#80F5B301" BorderThickness="1"
-                                                VerticalAlignment="Center" Margin="0,0,8,0">
-                                            <TextBlock x:Name="EditorLetterBadge" Text="N" FontSize="12"
-                                                       FontWeight="Bold" Foreground="#FFFFD97A" />
-                                        </Border>
-                                        <TextBox x:Name="EditorName" Style="{StaticResource FieldStyle}"
-                                                 FontSize="15" FontWeight="SemiBold" MinWidth="240"
-                                                 LostFocus="OnEditorFieldLostFocus" />
-                                    </StackPanel>
-                                    <TextBlock x:Name="EditorStatus" Text="" FontSize="11"
-                                               Foreground="#66FFFFFF" Margin="2,6,0,0" />
-                                </StackPanel>
-                            </Grid>
-
-                            <Grid Grid.Row="1" Margin="0,10,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="*" />
@@ -197,10 +165,10 @@
                                     <TextBlock Text="{l:Loc Common_Browse}" FontSize="12" Foreground="#BFFFFFFF" />
                                 </Border>
                             </Grid>
-                            <TextBlock x:Name="PathWarning" Grid.Row="2" Text="{l:Loc Pins_PathWarning}"
+                            <TextBlock x:Name="PathWarning" Grid.Row="1" Text="{l:Loc Pins_PathWarning}"
                                        FontSize="10" Foreground="#E5484D" Visibility="Collapsed" Margin="64,4,0,0" />
 
-                            <Grid Grid.Row="3" Margin="0,10,0,0">
+                            <Grid Grid.Row="2" Margin="0,10,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="*" />
@@ -210,7 +178,7 @@
                                          TextChanged="OnEditorArgsChanged" LostFocus="OnEditorFieldLostFocus" />
                             </Grid>
 
-                            <Grid Grid.Row="4" Margin="0,10,0,0">
+                            <Grid Grid.Row="3" Margin="0,10,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="*" />
@@ -225,13 +193,13 @@
                                 </Border>
                             </Grid>
 
-                            <StackPanel Grid.Row="5" Margin="0,12,0,0">
+                            <StackPanel Grid.Row="4" Margin="0,12,0,0">
                                 <TextBlock Text="{l:Loc Pins_CommandLine}" Style="{StaticResource LabelStyle}" />
                                 <TextBlock x:Name="EditorPreview" FontSize="12" Foreground="#99FFFFFF"
                                            TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
 
-                            <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,12,0,0">
+                            <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,12,0,0">
                                 <Border x:Name="LaunchButton" Style="{StaticResource ButtonStyle}"
                                         Background="#26F5B301" BorderBrush="#80F5B301"
                                         MouseLeftButtonUp="OnLaunchClick">
@@ -239,7 +207,7 @@
                                 </Border>
                             </StackPanel>
 
-                            <Grid x:Name="ApplicationSetupPanel" Grid.Row="1" Grid.RowSpan="6"
+                            <Grid x:Name="ApplicationSetupPanel" Grid.Row="0" Grid.RowSpan="6"
                                   Background="#FF171920" Visibility="Collapsed" Panel.ZIndex="5"
                                   Margin="0,10,0,0">
                                 <Grid.RowDefinitions>
@@ -265,99 +233,11 @@
                             </Grid>
                         </Grid>
 
-                        <!-- Folder editor -->
-                        <Grid x:Name="FolderEditorPanel" Visibility="Collapsed">
-                            <!-- Header: icon + name + item count -->
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
-                                        BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top"
-                                        Cursor="Hand" ToolTip="{l:Loc Dialog_SelectCellIcon}"
-                                        MouseLeftButtonUp="OnBrowseFolderIconClick">
-                                    <Grid>
-                                        <Image x:Name="FolderEditorIcon" Width="32" Height="32"
-                                               RenderOptions.BitmapScalingMode="HighQuality" />
-                                        <Path x:Name="FolderEditorGlyph" Width="26" Height="20" Stretch="Uniform"
-                                              Fill="#E6FFD97A" Data="M 0.5,2.5 H 5 L 6.5,4 H 13.5 V 11 H 0.5 Z"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        <Border x:Name="FolderIconClearButton" Width="15" Height="15"
-                                                CornerRadius="8" Background="#E5484D" BorderBrush="#FFFF8A8E"
-                                                BorderThickness="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                Visibility="Collapsed"
-                                                ToolTip="{l:Loc Motion_ClearIcon}"
-                                                MouseLeftButtonUp="OnClearFolderIconClick">
-                                            <TextBlock Text="×" FontSize="12" FontWeight="Bold" Foreground="White"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       Margin="0,-2,0,0" />
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
-                                                BorderBrush="#80F5B301" BorderThickness="1"
-                                                VerticalAlignment="Center" Margin="0,0,8,0">
-                                            <TextBlock x:Name="FolderLetterBadge" Text="N" FontSize="12"
-                                                       FontWeight="Bold" Foreground="#FFFFD97A" />
-                                        </Border>
-                                        <TextBox x:Name="FolderName" Style="{StaticResource FieldStyle}"
-                                                 FontSize="15" FontWeight="SemiBold" MinWidth="240"
-                                                 LostFocus="OnFolderFieldLostFocus" />
-                                    </StackPanel>
-                                    <TextBlock x:Name="FolderStatus" Text="" FontSize="11"
-                                               Foreground="#66FFFFFF" Margin="2,6,0,0" />
-                                </StackPanel>
-                            </Grid>
-                        </Grid>
-
-                        <!-- Window view editor -->
+                        <!-- Window view body -->
                         <Grid x:Name="WindowViewEditorPanel" Visibility="Collapsed">
                             <StackPanel>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
-                                            BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top"
-                                            Cursor="Hand" ToolTip="{l:Loc Dialog_SelectCellIcon}"
-                                            MouseLeftButtonUp="OnBrowseWindowViewIconClick">
-                                        <Grid>
-                                            <Image x:Name="WindowViewEditorIcon" Width="30" Height="30"
-                                                   RenderOptions.BitmapScalingMode="HighQuality" />
-                                            <Border x:Name="WindowViewIconClearButton" Width="15" Height="15"
-                                                    CornerRadius="8" Background="#E5484D" BorderBrush="#FFFF8A8E"
-                                                    BorderThickness="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                    Visibility="Collapsed" ToolTip="{l:Loc Motion_ClearIcon}"
-                                                    MouseLeftButtonUp="OnClearWindowViewIconClick">
-                                                <TextBlock Text="×" FontSize="12" FontWeight="Bold" Foreground="White"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                           Margin="0,-2,0,0" />
-                                            </Border>
-                                        </Grid>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal">
-                                            <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
-                                                    BorderBrush="#80F5B301" BorderThickness="1"
-                                                    VerticalAlignment="Center" Margin="0,0,8,0">
-                                                <TextBlock x:Name="WindowViewLetterBadge" Text="N" FontSize="12"
-                                                           FontWeight="Bold" Foreground="#FFFFD97A" />
-                                            </Border>
-                                            <TextBox x:Name="WindowViewName" Style="{StaticResource FieldStyle}"
-                                                     FontSize="15" FontWeight="SemiBold" MinWidth="240"
-                                                     LostFocus="OnWindowViewNameLostFocus" />
-                                        </StackPanel>
-                                        <TextBlock x:Name="WindowViewStatus" FontSize="11"
-                                                   Foreground="#66FFFFFF" Margin="2,6,0,0" />
-                                    </StackPanel>
-                                </Grid>
-
                                 <TextBlock Text="{l:Loc WindowView_FilterHint}" FontSize="11"
-                                           Foreground="#66FFFFFF" Margin="2,16,0,6" TextWrapping="Wrap" />
+                                           Foreground="#66FFFFFF" Margin="2,0,0,6" TextWrapping="Wrap" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -382,60 +262,15 @@
                             </StackPanel>
                         </Grid>
 
-                        <!-- System action editor -->
+                        <!-- System action body -->
                         <Grid x:Name="SystemActionEditorPanel" Visibility="Collapsed">
                             <StackPanel>
-                                <!-- Header: glyph + letter badge + action name -->
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="48" Height="48" CornerRadius="10" Background="#14FFFFFF"
-                                            BorderBrush="#26FFFFFF" BorderThickness="1" VerticalAlignment="Top"
-                                            Cursor="Hand" ToolTip="{l:Loc Dialog_SelectCellIcon}"
-                                            MouseLeftButtonUp="OnBrowseSystemActionIconClick">
-                                        <Grid>
-                                            <Image x:Name="SystemActionEditorIcon" Width="28" Height="28" />
-                                            <Border x:Name="SystemActionIconClearButton" Width="15" Height="15"
-                                                    CornerRadius="8" Background="#E5484D" BorderBrush="#FFFF8A8E"
-                                                    BorderThickness="1" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                    Visibility="Collapsed"
-                                                    ToolTip="{l:Loc Motion_ClearIcon}"
-                                                    MouseLeftButtonUp="OnClearSystemActionIconClick">
-                                                <TextBlock Text="×" FontSize="12" FontWeight="Bold" Foreground="White"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                           Margin="0,-2,0,0" />
-                                            </Border>
-                                        </Grid>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal">
-                                            <Border Padding="5,1" CornerRadius="5" Background="#26F5B301"
-                                                    BorderBrush="#80F5B301" BorderThickness="1"
-                                                    VerticalAlignment="Center" Margin="0,0,8,0">
-                                                <TextBlock x:Name="SystemActionLetterBadge" Text="N" FontSize="12"
-                                                           FontWeight="Bold" Foreground="#FFFFD97A" />
-                                            </Border>
-                                            <TextBlock x:Name="SystemActionName" FontSize="15" FontWeight="SemiBold"
-                                                       Foreground="#F2FFFFFF" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                        <TextBlock x:Name="SystemActionStatus" FontSize="11"
-                                                   Foreground="#66FFFFFF" Margin="2,6,0,0" />
-                                    </StackPanel>
-                                </Grid>
-
                                 <TextBlock Text="{l:Loc SystemAction_ActionsHeader}" FontSize="11"
-                                           Foreground="#59FFFFFF" Margin="2,14,0,6" />
+                                           Foreground="#59FFFFFF" Margin="2,0,0,6" />
                                 <StackPanel x:Name="SystemActionList" />
                             </StackPanel>
                         </Grid>
-                        <Border x:Name="DeleteMotionButton" Style="{StaticResource ButtonStyle}"
-                                Padding="10,5" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                BorderBrush="#80E5484D" Visibility="Collapsed" Panel.ZIndex="20"
-                                MouseLeftButtonUp="OnDeleteSelectedMotionClick">
-                            <TextBlock Text="{l:Loc Motion_Delete}" FontSize="11" Foreground="#FFE5484D" />
-                        </Border>
+                        </Grid>
                     </Grid>
                 </Border>
                     </Grid>

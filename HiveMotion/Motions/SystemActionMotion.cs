@@ -38,8 +38,9 @@ public sealed class SystemAction
 
 /// <summary>
 /// Static catalog of assignable system actions. A <see cref="SystemActionMotion"/> only
-/// stores an action id; execution logic, icon, and name all resolve through this catalog
-/// (the Stream Deck model: the per-cell choice is which action, nothing else).
+/// stores an action id; execution logic, default icon, and default name all resolve through
+/// this catalog (the Stream Deck model: the per-cell choice is which action), while the
+/// shared <see cref="Motion.DisplayName"/>/<see cref="Motion.IconPath"/> can override them.
 /// </summary>
 public static class SystemActions
 {
@@ -120,9 +121,9 @@ public static class SystemActions
 /// <summary>
 /// A cell bound to one built-in system action (Task View, Game Bar, Settings, Explorer,
 /// Project, Lock). The action is chosen at configuration time — the Stream Deck model:
-/// execution logic, icon, and name all come from the <see cref="SystemActions"/> catalog,
-/// so the only persisted choice is <see cref="ActionId"/>. It never matches windows and
-/// is never "running"; activation fires the action immediately.
+/// execution logic and the default icon and name come from the <see cref="SystemActions"/>
+/// catalog, so the only kind-specific persisted choice is <see cref="ActionId"/>. It never
+/// matches windows and is never "running"; activation fires the action immediately.
 /// </summary>
 public sealed class SystemActionMotion : Motion
 {
@@ -132,9 +133,22 @@ public sealed class SystemActionMotion : Motion
     [JsonIgnore]
     public override bool IsConfigured => SystemActions.Find(ActionId) != null;
 
-    public override MotionHoverPreview DescribeHover(HiveCell cell) => IsConfigured
-        ? MotionHoverPreview.Info(SystemActions.DisplayNameOf(ActionId), SystemActions.DescriptionOf(ActionId))
-        : MotionHoverPreview.Info(Loc.Get("Motion_SystemActionName"), Loc.Get("Motion_NotConfigured"));
+    [JsonIgnore]
+    public override string TypeLabel => Loc.Get("Motion_SystemActionName");
+
+    /// <summary>The catalog's localized action name; a custom <see cref="Motion.DisplayName"/> wins.</summary>
+    [JsonIgnore]
+    public override string DefaultName => IsConfigured
+        ? SystemActions.DisplayNameOf(ActionId)
+        : Loc.Get("Motion_SystemActionName");
+
+    [JsonIgnore]
+    public override string StatusText => IsConfigured
+        ? SystemActions.DescriptionOf(ActionId)
+        : Loc.Get("Motion_NotConfigured");
+
+    public override MotionHoverPreview DescribeHover(HiveCell cell) =>
+        MotionHoverPreview.Info(EffectiveName, StatusText);
 
     /// <summary>
     /// Fires the configured action through its real invocation path — a shell object

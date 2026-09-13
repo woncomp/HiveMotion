@@ -42,6 +42,7 @@ public abstract class Motion
 {
     /// <summary>Letter (A-Z) this motion occupies on its layer (home, or inside a folder).</summary>
     public char Key { get; set; }
+    /// <summary>User-assigned custom name; empty resolves to the kind's <see cref="DefaultName"/>.</summary>
     public string DisplayName { get; set; } = string.Empty;
     /// <summary>Optional custom icon path; empty uses the motion kind's default icon.</summary>
     public string IconPath { get; set; } = string.Empty;
@@ -49,6 +50,22 @@ public abstract class Motion
     /// <summary>Whether activation has enough configuration to perform the motion.</summary>
     [JsonIgnore]
     public virtual bool IsConfigured => true;
+
+    /// <summary>Localized human-readable label for the motion kind (the palette name).</summary>
+    [JsonIgnore]
+    public abstract string TypeLabel { get; }
+
+    /// <summary>Kind-specific fallback name used while <see cref="DisplayName"/> is empty.</summary>
+    [JsonIgnore]
+    public abstract string DefaultName { get; }
+
+    /// <summary>The name shown for this motion: the custom name when set, else the kind default.</summary>
+    [JsonIgnore]
+    public string EffectiveName => string.IsNullOrWhiteSpace(DisplayName) ? DefaultName : DisplayName;
+
+    /// <summary>Optional one-line kind status shown after <see cref="TypeLabel"/> in the shared editor header.</summary>
+    [JsonIgnore]
+    public virtual string StatusText => string.Empty;
 
     /// <summary>Declares what the hover preview area shows for the cell holding this motion.</summary>
     public abstract MotionHoverPreview DescribeHover(HiveCell cell);

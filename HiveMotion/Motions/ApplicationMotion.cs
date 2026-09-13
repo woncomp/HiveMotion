@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text.Json.Serialization;
 
 namespace HiveMotion;
@@ -30,6 +31,23 @@ public sealed class ApplicationMotion : Motion
 
     [JsonIgnore]
     public override bool IsConfigured => !string.IsNullOrWhiteSpace(ExecutablePath);
+
+    [JsonIgnore]
+    public override string TypeLabel => Loc.Get("Motion_ApplicationName");
+
+    [JsonIgnore]
+    public override string DefaultName
+    {
+        get
+        {
+            if (IsConfigured && Path.GetFileNameWithoutExtension(ExecutablePath) is { Length: > 0 } fileName)
+                return fileName;
+            return Loc.Get("Motion_ApplicationName");
+        }
+    }
+
+    [JsonIgnore]
+    public override string StatusText => IsConfigured ? string.Empty : Loc.Get("Motion_NotConfigured");
 
     [JsonIgnore]
     public string CommandLine =>
@@ -73,6 +91,6 @@ public sealed class ApplicationMotion : Motion
         string detail = string.IsNullOrEmpty(WorkingDirectory)
             ? CommandLine
             : Loc.Format("Grid_LaunchInfoWithDir", CommandLine, WorkingDirectory);
-        return MotionHoverPreview.Info(DisplayName, detail);
+        return MotionHoverPreview.Info(EffectiveName, detail);
     }
 }

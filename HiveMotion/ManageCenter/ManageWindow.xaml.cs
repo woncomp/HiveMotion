@@ -31,7 +31,6 @@ public partial class ManageWindow : Window
     private const string MotionTemplateDragFormat = "HiveMotion.MotionTemplate";
     private static readonly TimeSpan HoverNavigationDelay = TimeSpan.FromMilliseconds(500);
     private static readonly Brush IconFallbackBrush = FrozenBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
-    private static readonly Brush UnconfiguredBrush = FrozenBrush(Color.FromArgb(0x99, 0xFF, 0xD9, 0x7A));
 
     private static Brush FrozenBrush(Color color)
     {
@@ -106,6 +105,9 @@ public partial class ManageWindow : Window
         };
         _hoverNavigationTimer.Tick += OnHoverNavigationTick;
 
+        EditorHeader.MotionChanged += OnHeaderMotionChanged;
+        EditorHeader.DeleteRequested += OnHeaderDeleteRequested;
+
         BuildLetterTiles();
         ShowEditor(null);
         SetNav(0);
@@ -133,18 +135,16 @@ public partial class ManageWindow : Window
     private void ApplyLocalizedStrings()
     {
         BuildLetterTiles();
-        UpdateEditorConfigurationStatus();
-        UpdateFolderStatus();
+        EditorHeader.Refresh();
+        if (_selectedWindowView != null)
+            UpdateWindowViewEditor();
         if (_selectedSystemAction != null)
             UpdateSystemActionEditor();
         UpdateHistoryCount();
         RefreshHotkeyUi();
         InitAboutPage();
         if (_selectedApp is { IsConfigured: false })
-        {
-            EditorName.Text = Loc.Get("Motion_ApplicationName");
             RebuildApplicationHistoryList();
-        }
         if (_selectedApp == null && _selectedFolder == null && _selectedSystemAction == null)
         {
             if (_selectedChildFolder != null && _selectedChildLetter is { } childLetter)
@@ -216,7 +216,7 @@ public partial class ManageWindow : Window
             Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(motion != null ? "#1AFFFFFF" : "#0AFFFFFF")),
             BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(
                 selected ? "#FFF5B301" : motion != null ? "#80F5B301" : "#26FFFFFF")),
-            ToolTip = motion != null ? $"{letter}: {MotionDisplayName(motion)}" : Loc.Format("Pins_PinToLetter", letter)
+            ToolTip = motion != null ? $"{letter}: {motion.EffectiveName}" : Loc.Format("Pins_PinToLetter", letter)
         };
 
         var content = new Grid();
@@ -310,18 +310,6 @@ public partial class ManageWindow : Window
         Margin = new Thickness(6, 4, 0, 0)
     };
 
-    /// <summary>System actions take their localized catalog name; other kinds store their own.</summary>
-    private static string MotionDisplayName(Motion motion) =>
-        motion switch
-        {
-            ApplicationMotion app when !app.IsConfigured => Loc.Get("Motion_ApplicationName"),
-            SystemActionMotion systemAction when !systemAction.IsConfigured => Loc.Get("Motion_SystemActionName"),
-            SystemActionMotion systemAction => SystemActions.DisplayNameOf(systemAction.ActionId),
-            WindowViewMotion windowView when string.IsNullOrWhiteSpace(windowView.DisplayName) =>
-                Loc.Get("Motion_WindowViewName"),
-            _ => motion.DisplayName
-        };
-
     /// <summary>Shared folder silhouette (overlay badge, tiles, folder editor).</summary>
     private static System.Windows.Shapes.Path BuildFolderGlyph(double width)
     {
@@ -371,7 +359,7 @@ public partial class ManageWindow : Window
     {
         BreadcrumbText.Text = _currentFolder == null
             ? "Hive"
-            : $"Hive > {_currentFolder.DisplayName}";
+            : $"Hive > {_currentFolder.EffectiveName}";
         LayerBackButton.Visibility = _currentFolder == null ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -537,7 +525,6 @@ public partial class ManageWindow : Window
         _selectedHomeLetter = folder.Key;
         _selectedChildLetter = letter;
         _selectedChildFolder = folder;
-        DeleteMotionButton.Visibility = Visibility.Collapsed;
         EditorEmpty.Text = Loc.Format("Motion_EmptyCellHint", letter);
         BuildLetterTiles();
     }
@@ -680,19 +667,13 @@ public partial class ManageWindow : Window
             : folder.Items.FirstOrDefault(item => item.Key == letter);
         void Replace()
         {
+            // Unnamed folder/window-view cells start with no custom name: the default
+            // follows the bound letter and the UI language automatically.
             Motion motion = template switch
             {
                 MotionTemplate.Application => new ApplicationMotion { Key = letter },
-                MotionTemplate.Folder => new FolderMotion
-                {
-                    Key = letter,
-                    DisplayName = Loc.Format("Folder_DefaultNameFormat", letter)
-                },
-                MotionTemplate.WindowView => new WindowViewMotion
-                {
-                    Key = letter,
-                    DisplayName = Loc.Get("Motion_WindowViewName")
-                },
+                MotionTemplate.Folder => new FolderMotion { Key = letter },
+                MotionTemplate.WindowView => new WindowViewMotion { Key = letter },
                 _ => new SystemActionMotion { Key = letter }
             };
 
@@ -717,7 +698,7 @@ public partial class ManageWindow : Window
             return;
         }
 
-        ShowConfirm(Loc.Format("Motion_ReplaceConfirm", letter, MotionDisplayName(existing),
+        ShowConfirm(Loc.Format("Motion_ReplaceConfirm", letter, existing.EffectiveName,
             MotionTemplateName(template)), Replace);
     }
 
@@ -767,23 +748,21 @@ public partial class ManageWindow : Window
         _editorLoading = true;
 
         EditorEmpty.Visibility = motion == null ? Visibility.Visible : Visibility.Collapsed;
+        EditorEmpty.Text = Loc.Get("Pins_EditorEmpty");
         EditorPanel.Visibility = _selectedApp != null ? Visibility.Visible : Visibility.Collapsed;
-        FolderEditorPanel.Visibility = _selectedFolder != null ? Visibility.Visible : Visibility.Collapsed;
         WindowViewEditorPanel.Visibility = _selectedWindowView != null ? Visibility.Visible : Visibility.Collapsed;
         SystemActionEditorPanel.Visibility = _selectedSystemAction != null ? Visibility.Visible : Visibility.Collapsed;
-        DeleteMotionButton.Visibility = motion != null ? Visibility.Visible : Visibility.Collapsed;
-        EditorEmpty.Text = Loc.Get("Pins_EditorEmpty");
+        // A folder has no kind-specific body; the shared header is its whole editor.
+        EditorBodies.Visibility = motion != null && _selectedFolder == null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        EditorHeader.Bind(motion);
 
         if (_selectedApp is { } app)
         {
-            EditorLetterBadge.Text = app.Key.ToString();
-            UpdateApplicationEditorIcon();
-            EditorName.Text = app.IsConfigured ? app.DisplayName : Loc.Get("Motion_ApplicationName");
-            EditorName.IsEnabled = app.IsConfigured;
             EditorPath.Text = app.ExecutablePath;
             EditorArgs.Text = app.Arguments;
             EditorCwd.Text = app.WorkingDirectory;
-            UpdateEditorConfigurationStatus();
             UpdatePreview();
             ValidatePath();
             ApplicationSetupPanel.Visibility = app.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
@@ -793,23 +772,13 @@ public partial class ManageWindow : Window
                 RebuildApplicationHistoryList();
             }
         }
-        else if (_selectedFolder is { } folder)
-        {
-            FolderLetterBadge.Text = folder.Key.ToString();
-            FolderName.Text = folder.DisplayName;
-            UpdateFolderHeaderIcon();
-            UpdateFolderStatus();
-        }
         else if (_selectedWindowView is { } windowView)
         {
-            WindowViewLetterBadge.Text = windowView.Key.ToString();
-            WindowViewName.Text = windowView.DisplayName;
             WindowViewExecutableInput.Text = string.Empty;
             UpdateWindowViewEditor();
         }
-        else if (_selectedSystemAction is { } systemAction)
+        else if (_selectedSystemAction != null)
         {
-            SystemActionLetterBadge.Text = systemAction.Key.ToString();
             UpdateSystemActionEditor();
         }
 
@@ -817,14 +786,22 @@ public partial class ManageWindow : Window
         BuildLetterTiles();
     }
 
-    private void UpdateEditorConfigurationStatus()
+    /// <summary>Home-layer motions persist through Set; folder children ride along with Save.</summary>
+    private void PersistSelectedMotion()
     {
-        if (_selectedApp == null)
+        Motion? motion = _selectedApp ?? (Motion?)_selectedFolder ?? (Motion?)_selectedWindowView ?? _selectedSystemAction;
+        if (motion == null)
             return;
-        EditorStatus.Text = Loc.Get("Motion_NotConfigured");
-        EditorStatus.Foreground = UnconfiguredBrush;
-        EditorStatus.Visibility = _selectedApp.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
+        if (_selectedChildFolder != null)
+            _motionStore.Save();
+        else
+            _motionStore.Set(motion);
+        BuildLetterTiles();
     }
+
+    private void OnHeaderMotionChanged(object? sender, EventArgs e) => PersistSelectedMotion();
+
+    private void OnHeaderDeleteRequested(object? sender, EventArgs e) => DeleteSelectedMotion();
 
     private void UpdatePreview()
     {
@@ -848,13 +825,9 @@ public partial class ManageWindow : Window
         if (_editorLoading || _selectedApp == null)
             return;
 
-        _selectedApp.DisplayName = EditorName.Text.Trim();
         _selectedApp.ExecutablePath = EditorPath.Text.Trim();
         _selectedApp.Arguments = EditorArgs.Text.Trim();
         _selectedApp.WorkingDirectory = EditorCwd.Text.Trim();
-        // An empty display name falls back to the executable's file name.
-        if (_selectedApp.DisplayName.Length == 0 && _selectedApp.ExecutablePath.Length > 0)
-            _selectedApp.DisplayName = Path.GetFileNameWithoutExtension(_selectedApp.ExecutablePath);
         if (_selectedAppFolder != null)
         {
             _motionStore.Save();
@@ -865,25 +838,13 @@ public partial class ManageWindow : Window
             _motionStore.Set(_selectedApp);
             BuildLetterTiles();
         }
-        UpdateEditorConfigurationStatus();
-        UpdateApplicationEditorIcon();
+        // The icon and the name default both follow the executable path.
+        EditorHeader.Refresh();
         if (!_selectedApp.IsConfigured)
             ShowEditor(_selectedApp, _selectedAppFolder);
     }
 
     private void OnEditorFieldLostFocus(object sender, RoutedEventArgs e) => CommitEditor();
-
-    private void UpdateApplicationEditorIcon()
-    {
-        if (_selectedApp == null)
-            return;
-
-        IconBinding.Set(EditorIcon, IconRequest.ForMotion(_selectedApp), fallback:
-            IconService.Shared.TryGetCached(new IconRequest(Glyph: "\uE71D"), IconService.DefaultPixels));
-        EditorIconClearButton.Visibility = HasCustomIcon(_selectedApp)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-    }
 
     private void OnEditorPathChanged(object sender, TextChangedEventArgs e)
     {
@@ -915,44 +876,6 @@ public partial class ManageWindow : Window
         e.Handled = true;
     }
 
-    private void OnBrowseApplicationIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedApp != null && SelectIconFile() is { } path)
-        {
-            _selectedApp.IconPath = path;
-            SaveApplicationIconChange();
-        }
-        e.Handled = true;
-    }
-
-    private void OnClearApplicationIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedApp != null)
-        {
-            _selectedApp.IconPath = string.Empty;
-            SaveApplicationIconChange();
-        }
-        e.Handled = true;
-    }
-
-    private void SaveApplicationIconChange()
-    {
-        if (_selectedApp == null)
-            return;
-
-        if (_selectedAppFolder != null)
-        {
-            _motionStore.Save();
-            BuildLetterTiles();
-        }
-        else
-        {
-            _motionStore.Set(_selectedApp);
-            BuildLetterTiles();
-        }
-        UpdateApplicationEditorIcon();
-    }
-
     private void OnBrowseCwdClick(object sender, MouseButtonEventArgs e)
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
@@ -975,7 +898,7 @@ public partial class ManageWindow : Window
         e.Handled = true;
     }
 
-    private void OnDeleteSelectedMotionClick(object sender, MouseButtonEventArgs e)
+    private void DeleteSelectedMotion()
     {
         Motion? motion = _selectedApp ?? (Motion?)_selectedFolder ?? (Motion?)_selectedWindowView ?? _selectedSystemAction;
         FolderMotion? parent = _selectedApp != null ? _selectedAppFolder : _selectedSystemActionFolder;
@@ -984,12 +907,11 @@ public partial class ManageWindow : Window
 
         string message = motion switch
         {
-            ApplicationMotion app => Loc.Format("Pins_DeleteConfirm", app.Key,
-                app.DisplayName.Length > 0 ? app.DisplayName : Loc.Get("Motion_ApplicationName")),
-            FolderMotion folder => Loc.Format("Folder_DeleteConfirm", folder.DisplayName),
-            WindowViewMotion view => Loc.Format("WindowView_DeleteConfirm", view.DisplayName),
+            ApplicationMotion app => Loc.Format("Pins_DeleteConfirm", app.Key, app.EffectiveName),
+            FolderMotion folder => Loc.Format("Folder_DeleteConfirm", folder.EffectiveName),
+            WindowViewMotion view => Loc.Format("WindowView_DeleteConfirm", view.EffectiveName),
             SystemActionMotion action => Loc.Format("App_RemoveSystemActionMessage", action.Key,
-                action.IsConfigured ? SystemActions.DisplayNameOf(action.ActionId) : Loc.Get("Motion_SystemActionName")),
+                action.EffectiveName),
             _ => string.Empty
         };
 
@@ -1009,78 +931,6 @@ public partial class ManageWindow : Window
                 ShowEmptyCell(motion.Key, null);
             }
         });
-        e.Handled = true;
-    }
-
-    // ---------- folder editor ----------
-
-    private void CommitFolderEditor()
-    {
-        if (_editorLoading || _selectedFolder == null)
-            return;
-
-        _selectedFolder.DisplayName = FolderName.Text.Trim();
-        if (_selectedFolder.DisplayName.Length == 0)
-            _selectedFolder.DisplayName = Loc.Format("Folder_DefaultNameFormat", _selectedFolder.Key);
-        _motionStore.Save();
-        UpdateFolderHeaderIcon();
-        UpdateFolderStatus();
-        BuildLetterTiles();
-    }
-
-    private void OnFolderFieldLostFocus(object sender, RoutedEventArgs e) => CommitFolderEditor();
-
-    private void UpdateFolderHeaderIcon()
-    {
-        IconBinding.Set(FolderEditorIcon, _selectedFolder != null ? IconRequest.ForMotion(_selectedFolder) : IconRequest.Empty,
-            missing => FolderEditorGlyph.Visibility = missing ? Visibility.Visible : Visibility.Collapsed);
-        FolderIconClearButton.Visibility = HasCustomIcon(_selectedFolder)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-    }
-
-    private void UpdateFolderStatus()
-    {
-        if (_selectedFolder == null)
-            return;
-        FolderStatus.Text = Loc.Plural("Grid_FolderItemCount", _selectedFolder.Items.Count, _selectedFolder.Items.Count);
-    }
-
-    private void OnBrowseFolderIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedFolder != null && SelectIconFile() is { } path)
-        {
-            _selectedFolder.IconPath = path;
-            SaveFolderIconChange();
-        }
-        e.Handled = true;
-    }
-
-    private string? SelectIconFile()
-    {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = Loc.Get("Dialog_IconFilter"),
-            Title = Loc.Get("Dialog_SelectCellIcon")
-        };
-        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
-    }
-
-    private void OnClearFolderIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedFolder != null)
-        {
-            _selectedFolder.IconPath = string.Empty;
-            SaveFolderIconChange();
-        }
-        e.Handled = true;
-    }
-
-    private void SaveFolderIconChange()
-    {
-        _motionStore.Save();
-        UpdateFolderHeaderIcon();
-        BuildLetterTiles();
     }
 
     // ---------- window view editor ----------
@@ -1089,16 +939,8 @@ public partial class ManageWindow : Window
     {
         if (_selectedWindowView == null)
             return;
-
-        IconBinding.Set(WindowViewEditorIcon, IconRequest.ForMotion(_selectedWindowView));
-        WindowViewIconClearButton.Visibility = HasCustomIcon(_selectedWindowView)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        WindowViewStatus.Text = _selectedWindowView.ExecutableNames.Count == 0
-            ? Loc.Get("WindowView_AllApplications")
-            : Loc.Plural("WindowView_ApplicationCount", _selectedWindowView.ExecutableNames.Count,
-                _selectedWindowView.ExecutableNames.Count);
         BuildWindowViewExecutableList();
+        EditorHeader.Refresh(); // the status line shows the filter summary
     }
 
     private void BuildWindowViewExecutableList()
@@ -1164,16 +1006,6 @@ public partial class ManageWindow : Window
         }
     }
 
-    private void OnWindowViewNameLostFocus(object sender, RoutedEventArgs e)
-    {
-        if (_editorLoading || _selectedWindowView == null)
-            return;
-        _selectedWindowView.DisplayName = WindowViewName.Text.Trim();
-        if (_selectedWindowView.DisplayName.Length == 0)
-            _selectedWindowView.DisplayName = Loc.Get("Motion_WindowViewName");
-        SaveWindowViewChanges();
-    }
-
     private void AddWindowViewExecutable(string value)
     {
         if (_selectedWindowView == null)
@@ -1216,33 +1048,12 @@ public partial class ManageWindow : Window
         e.Handled = true;
     }
 
-    private void OnBrowseWindowViewIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedWindowView != null && SelectIconFile() is { } path)
-        {
-            _selectedWindowView.IconPath = path;
-            SaveWindowViewChanges();
-        }
-        e.Handled = true;
-    }
-
-    private void OnClearWindowViewIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedWindowView != null)
-        {
-            _selectedWindowView.IconPath = string.Empty;
-            SaveWindowViewChanges();
-        }
-        e.Handled = true;
-    }
-
     private void SaveWindowViewChanges()
     {
         if (_selectedWindowView == null)
             return;
         _selectedWindowView.NormalizeExecutableNames();
         _motionStore.Set(_selectedWindowView);
-        WindowViewName.Text = _selectedWindowView.DisplayName;
         WindowViewInputWarning.Visibility = Visibility.Collapsed;
         UpdateWindowViewEditor();
         BuildLetterTiles();
@@ -1250,56 +1061,15 @@ public partial class ManageWindow : Window
 
     // ---------- system action editor ----------
 
-    /// <summary>Fills the header and rebuilds the action list with the current action highlighted.</summary>
+    /// <summary>Rebuilds the action list with the current action highlighted.</summary>
     private void UpdateSystemActionEditor()
     {
         if (_selectedSystemAction == null)
             return;
-        IconBinding.Set(SystemActionEditorIcon, IconRequest.ForMotion(_selectedSystemAction));
-        SystemActionIconClearButton.Visibility = HasCustomIcon(_selectedSystemAction)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        SystemActionName.Text = _selectedSystemAction.IsConfigured
-            ? SystemActions.DisplayNameOf(_selectedSystemAction.ActionId)
-            : Loc.Get("Motion_SystemActionName");
-        SystemActionStatus.Text = _selectedSystemAction.IsConfigured
-            ? SystemActions.DescriptionOf(_selectedSystemAction.ActionId)
-            : Loc.Get("Motion_NotConfigured");
         BuildSystemActionList();
+        // The kind status line shows the action description; the default name follows it.
+        EditorHeader.Refresh();
     }
-
-    private void SaveSystemActionIconChange()
-    {
-        if (_selectedSystemAction == null)
-            return;
-
-        _motionStore.Save();
-        BuildLetterTiles();
-        UpdateSystemActionEditor();
-    }
-
-    private void OnBrowseSystemActionIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedSystemAction != null && SelectIconFile() is { } path)
-        {
-            _selectedSystemAction.IconPath = path;
-            SaveSystemActionIconChange();
-        }
-        e.Handled = true;
-    }
-
-    private void OnClearSystemActionIconClick(object sender, MouseButtonEventArgs e)
-    {
-        if (_selectedSystemAction != null)
-        {
-            _selectedSystemAction.IconPath = string.Empty;
-            SaveSystemActionIconChange();
-        }
-        e.Handled = true;
-    }
-
-    private static bool HasCustomIcon(Motion? motion) =>
-        !string.IsNullOrWhiteSpace(motion?.IconPath);
 
     private void BuildSystemActionList()
     {

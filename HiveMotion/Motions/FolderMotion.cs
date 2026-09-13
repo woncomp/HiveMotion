@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace HiveMotion;
 
@@ -12,6 +13,16 @@ public sealed class FolderMotion : Motion
 {
     public List<Motion> Items { get; set; } = new();
 
+    [JsonIgnore]
+    public override string TypeLabel => Loc.Get("Motion_FolderName");
+
+    /// <summary>Follows the bound letter: an unnamed folder is always "Folder {Key}".</summary>
+    [JsonIgnore]
+    public override string DefaultName => Loc.Format("Folder_DefaultNameFormat", Key);
+
+    [JsonIgnore]
+    public override string StatusText => Loc.Plural("Grid_FolderItemCount", Items.Count, Items.Count);
+
     public override MotionHoverPreview DescribeHover(HiveCell cell) =>
-        MotionHoverPreview.Info(DisplayName, Loc.Plural("Grid_FolderItemCount", Items.Count, Items.Count));
+        MotionHoverPreview.Info(EffectiveName, StatusText);
 }

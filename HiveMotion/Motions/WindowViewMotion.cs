@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace HiveMotion;
 
@@ -62,9 +63,18 @@ public sealed class WindowViewMotion : Motion
         return fileName;
     }
 
+    [JsonIgnore]
+    public override string TypeLabel => Loc.Get("Motion_WindowViewName");
+
+    [JsonIgnore]
+    public override string DefaultName => Loc.Get("Motion_WindowViewName");
+
+    [JsonIgnore]
+    public override string StatusText =>
+        ExecutableNames.Count == 0
+            ? Loc.Get("WindowView_AllApplications")
+            : Loc.Plural("WindowView_ApplicationCount", ExecutableNames.Count, ExecutableNames.Count);
+
     public override MotionHoverPreview DescribeHover(HiveCell cell) =>
-        MotionHoverPreview.Info(DisplayName,
-            ExecutableNames.Count == 0
-                ? Loc.Get("WindowView_AllApplications")
-                : Loc.Plural("WindowView_ApplicationCount", ExecutableNames.Count, ExecutableNames.Count));
+        MotionHoverPreview.Info(EffectiveName, StatusText);
 }
