@@ -47,6 +47,11 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private readonly IconService _icons;
     private readonly IconPresentationState _iconPresentation = new();
     private readonly Dictionary<char, HiveCell> _displayedCells = new();
+    /// <summary>Content last written into each pool view; the diff baseline for skipping no-op updates.</summary>
+    private readonly Dictionary<char, HiveCell> _appliedCells = new();
+    /// <summary>Bumped on every ApplyCells; the result list is stale when its build version lags.</summary>
+    private int _cellsVersion;
+    private int _resultsVersion = -1;
     private IReadOnlyList<HiveCell>? _pendingCells;
     private System.Windows.Threading.DispatcherTimer? _transitionTimer;
     private int _transitionGeneration;
@@ -56,6 +61,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private const int MouseWakeThreshold = 6;
     private static readonly SolidColorBrush ActiveStatusBrush = FrozenBrush("#D9FFD97A");
     private static readonly SolidColorBrush InactiveStatusBrush = FrozenBrush("#4DFFFFFF");
+    private static readonly SolidColorBrush HighlightRowBrush = FrozenBrush("#1FF5B301");
+    private static readonly Color SpaceBarActiveColor = (Color)ColorConverter.ConvertFromString("#A6F5B301");
+    private static readonly Color SpaceBarIdleColor = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
 
     private enum PreviewMode
     {
@@ -165,6 +173,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         _iconPresentation.Close();
         _icons.Changed -= OnIconChanged;
         _displayedCells.Clear();
+        // _appliedCells intentionally survives the close: it is the diff baseline that lets
+        // the next open skip SetCell for cells whose content did not change while hidden.
         _pendingCells = null;
         HideConfirm();
         ResetPreview();
@@ -260,6 +270,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     private void ApplyCells(IReadOnlyList<HiveCell> cells, bool resetSearch)
     {
         _cells = cells;
+        _cellsVersion++;
+        _resultsVersion = -1;
         _iconPresentation.ReplaceContent();
         _displayedCells.Clear();
         foreach (var cell in cells)
@@ -269,23 +281,32 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         }
         UpdateOverviewEmptyState();
         _hoveredCell = null;
-        HideConfirm();
+        if (ConfirmVisible)
+            HideConfirm();
         var byLetter = cells.ToDictionary(cell => cell.Letter);
         foreach (var view in _cellViews)
         {
             char letter = view.PoolLetter;
-            if (byLetter.TryGetValue(letter, out var cell))
+            if (!byLetter.TryGetValue(letter, out var cell))
             {
-                view.SetCell(cell, ResolveIcon(cell));
+                if (view.Visibility != Visibility.Collapsed)
+                    view.Visibility = Visibility.Collapsed;
+                _appliedCells.Remove(letter);
+                continue;
+            }
+            // Unchanged content: skip SetCell entirely so reopening the overlay reuses the
+            // existing visuals instead of invalidating text, badges, and icons per cell.
+            if (_appliedCells.TryGetValue(letter, out var applied) && SameCellContent(applied, cell))
+                continue;
+            view.SetCell(cell, ResolveIcon(cell));
+            _appliedCells[letter] = cell;
+            if (view.Visibility != Visibility.Visible)
                 view.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                view.Visibility = Visibility.Collapsed;
-            }
         }
 
-        if (resetSearch)
+        // The reset is skipped only when it is a verified no-op (pristine overview re-entry);
+        // any live transient state takes the full path so behavior stays identical.
+        if (resetSearch && !IsTransientStateClean())
         {
             _previewVisible = false;
             _previewMode = PreviewMode.None;
@@ -297,10 +318,52 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             ExitSearchImmediate();
         }
 
-        // Build the result tree before Space is pressed. Reopening the panel can now
-        // reuse this layout and cache instead of allocating controls on the hot path.
-        RebuildResults();
+        // The result tree is built at ContextIdle after the opening frames, not between
+        // hotkey receipt and Show(); EnterSearch forces a build, so the first Space press
+        // always sees rows even if the deferred callback has not run yet.
+        int generation = _cellsVersion;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            if (generation == _cellsVersion && !_searching && IsVisible)
+                EnsureResultsBuilt();
+        }));
     }
+
+    /// <summary>Identity-relevant content for diffing; anything the view renders must be compared.</summary>
+    private static bool SameCellContent(HiveCell? applied, HiveCell cell) =>
+        applied != null &&
+        ReferenceEquals(applied.Motion, cell.Motion) &&
+        ReferenceEquals(applied.Icon, cell.Icon) &&
+        applied.IconRequest == cell.IconRequest &&
+        applied.WindowHandle == cell.WindowHandle &&
+        applied.ProcessId == cell.ProcessId &&
+        applied.ProcessCreationFileTime == cell.ProcessCreationFileTime &&
+        applied.IsRunning == cell.IsRunning &&
+        applied.Title == cell.Title &&
+        applied.AppName == cell.AppName &&
+        applied.ProcessName == cell.ProcessName &&
+        applied.ExecutablePath == cell.ExecutablePath &&
+        applied.CommandLineArguments == cell.CommandLineArguments &&
+        applied.Motion?.IsConfigured == cell.Motion?.IsConfigured &&
+        applied.Motion?.DisplayName == cell.Motion?.DisplayName &&
+        applied.Motion?.IconPath == cell.Motion?.IconPath;
+
+    /// <summary>
+    /// True when the ApplyCells reset block would write only values the controls already
+    /// hold — re-entering a pristine overview after the close-time cleanup. Any residue
+    /// (search transition, preview, confirm, toast, running animation) makes this false so
+    /// the full reset runs and behavior is unchanged.
+    /// </summary>
+    private bool IsTransientStateClean() =>
+        !_searching &&
+        _transitionState == SearchTransitionState.Overview &&
+        !_previewVisible &&
+        _previewMode == PreviewMode.None &&
+        !ConfirmVisible &&
+        HoverPreview.Opacity == 0 &&
+        CopyToast.Opacity == 0 &&
+        BarSearch.Visibility == Visibility.Collapsed &&
+        ResultPanel.Opacity == 0;
 
     private void UpdateOverviewEmptyState()
     {
@@ -343,11 +406,12 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         _searching = true;
         UpdateOverviewEmptyState();
         _transitionState = SearchTransitionState.Entering;
+        EnsureResultsBuilt();
         HidePreview();
 
         BarIdle.Visibility = Visibility.Collapsed;
         BarSearch.Visibility = Visibility.Visible;
-        SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#A6F5B301");
+        SpaceBarBorderBrush.Color = SpaceBarActiveColor;
         SpaceBarRidge.Opacity = 1;
         UpdateEscHint();
 
@@ -384,7 +448,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         SearchInput.Text = string.Empty;
         BarSearch.Visibility = Visibility.Collapsed;
         BarIdle.Visibility = Visibility.Visible;
-        SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
+        SpaceBarBorderBrush.Color = SpaceBarIdleColor;
         SpaceBarRidge.Opacity = 0.6;
         UpdateEscHint();
 
@@ -411,7 +475,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         SearchInput.Text = string.Empty;
         BarSearch.Visibility = Visibility.Collapsed;
         BarIdle.Visibility = Visibility.Visible;
-        SpaceBarBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#33FFFFFF");
+        SpaceBarBorderBrush.Color = SpaceBarIdleColor;
         SpaceBarRidge.Opacity = 0.6;
         UpdateEscHint();
         ResultPanel.BeginAnimation(UIElement.OpacityProperty, null);
@@ -842,6 +906,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void RebuildResults()
     {
+        _resultsVersion = _cellsVersion;
+        RebuildResultsCount++;
         _results = _cells
             .Where(MatchesQuery)
             .OrderBy(c => c.IsRunning ? 0 : 1)
@@ -866,6 +932,16 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
         SetHighlight(0);
     }
+
+    /// <summary>Builds the result list only when the cells changed since the last build.</summary>
+    private void EnsureResultsBuilt()
+    {
+        if (_resultsVersion != _cellsVersion)
+            RebuildResults();
+    }
+
+    /// <summary>Number of result rebuilds; test-only instrumentation for the deferred build.</summary>
+    internal int RebuildResultsCount { get; private set; }
 
     private bool MatchesQuery(HiveCell cell)
     {
@@ -1052,9 +1128,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         for (int i = 0; i < _itemVisuals.Count; i++)
         {
             bool active = i == index;
-            _itemVisuals[i].Root.Background = active
-                ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1FF5B301"))
-                : Brushes.Transparent;
+            _itemVisuals[i].Root.Background = active ? HighlightRowBrush : Brushes.Transparent;
             _itemVisuals[i].Bar.Visibility = active ? Visibility.Visible : Visibility.Hidden;
         }
         _itemVisuals[index].Root.BringIntoView();

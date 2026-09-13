@@ -13,6 +13,21 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
 {
     private HiveCell? _cell;
 
+    private static readonly SolidColorBrush CaptionRunningBrush = Frozen("#F2FFFFFF");
+    private static readonly SolidColorBrush CaptionMotionBrush = Frozen("#CCF5C542");
+
+    private static SolidColorBrush Frozen(string value)
+    {
+        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(value));
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>Number of SetCell calls; test-only instrumentation for diff verification.</summary>
+    internal int SetCellCount { get; private set; }
+    /// <summary>Number of ResetSearchTransforms calls; test-only instrumentation.</summary>
+    internal int ResetSearchTransformCount { get; private set; }
+
     /// <summary>Stable physical slot used by the task-grid visual pool.</summary>
     public char PoolLetter { get; set; }
 
@@ -46,13 +61,12 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
     public void SetCell(HiveCell cell, ImageSource? icon)
     {
         _cell = cell;
+        SetCellCount++;
         KeyText.Text = cell.Letter.ToString();
 
         // Below the icon: window title when running, app name otherwise
         CaptionText.Text = cell.IsRunning ? cell.Title : cell.AppName;
-        CaptionText.Foreground = cell.IsRunning
-            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F2FFFFFF"))
-            : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CCF5C542"));
+        CaptionText.Foreground = cell.IsRunning ? CaptionRunningBrush : CaptionMotionBrush;
         CaptionText.FontSize = cell.IsRunning ? 11 : 10;
 
         // Pinned but not running: an extra "click to launch" line under the name;
@@ -121,6 +135,7 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
     /// <summary>Clear search transforms instantly, without scheduling animations.</summary>
     public void ResetSearchTransforms()
     {
+        ResetSearchTransformCount++;
         ShiftTransform.BeginAnimation(TranslateTransform.XProperty, null);
         SearchScaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
         SearchScaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, null);

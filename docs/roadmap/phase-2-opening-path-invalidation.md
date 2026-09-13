@@ -1,10 +1,16 @@
 # Phase 2 — Opening-Path UI Invalidation Reduction
 
-Status: Planned
+Status: Complete (2026-09-12; verified with the release build via Computer Use, committed)
 
-## Objective
+## Outcome
 
-Reduce the redundant work `ApplyCells` performs on every overlay open, so the interval between starting the visual update and `Show()` returning shrinks and becomes more consistent. Reusing pooled controls has not eliminated per-open invalidation: content changes, visibility flips, search resets, and a full search-tree rebuild all run before the first frame.
+- **Diff-based application.** `ApplyCells` keeps a per-letter baseline (`_appliedCells`) of what each pool view currently shows and skips `SetCell` when the identity-relevant content (motion reference and its IsConfigured/DisplayName/IconPath, icon, icon request, window handle, process identity, title, names, command line) is unchanged; `Visibility` is written only on actual occupancy flips. The baseline survives `ResetForOverlayClose`, so reopening the overlay with unchanged windows performs no per-cell updates at all.
+- **No-op reset fast path.** The reset block (preview/toast animation clears plus `ExitSearchImmediate`) runs only when transient state is live — search transitions, visible preview, confirm dialog, toasts, or running animations. A pristine overview re-entry skips it entirely; `IsTransientStateClean()` gates the skip conservatively.
+- **Search rows off the opening path.** `ApplyCells` no longer calls `RebuildResults()`; it invalidates the result version and schedules a build at `ContextIdle` bound to the cells generation (stale builds are dropped; hidden/closed overlays skip). `EnterSearch` forces a synchronous build, so the first Space press always sees rows.
+- **Allocation audit.** Caption brushes (`HiveCellView`), the highlight-row brush, and the space-bar border colors are frozen statics; no per-update `ColorConverter` or brush allocation remains on per-cell paths.
+- New checks: `tests/HiveMotion.OpeningChecks` (5 checks: same-cells no-rerender, partial update re-renders only the changed letter, handle change re-renders, clean reopen touches no search state, first search entry builds rows). 14 icon + 17 handoff + 4 history + 5 opening checks all pass; Release build is warning-free.
+
+## Original Analysis (kept for the record)
 
 ## Evidence
 
