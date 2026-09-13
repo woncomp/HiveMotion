@@ -54,6 +54,12 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // Re-tint the WPF-UI dark theme with the brand honey-gold accent so the
+        // Fluent tray menu hover/selection colors match the rest of the app.
+        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(
+            System.Windows.Media.Color.FromRgb(0xF5, 0xB3, 0x01),
+            Wpf.Ui.Appearance.ApplicationTheme.Dark);
+
         _foregroundHandoff = new ForegroundHandoff(new ForegroundHandoffHost(Dispatcher));
 
         _singleInstanceMutex = new System.Threading.Mutex(true, MutexName, out _ownsMutex);

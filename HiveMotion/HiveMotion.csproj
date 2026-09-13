@@ -15,6 +15,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <PackageReference Include="WPF-UI.Tray" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Tray icon source for the WPF-UI NotifyIcon (ImageSource via pack URI). -->
+    <Resource Include="Resources\hive_icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The .NET 10 SDK turns UseWindowsForms into implicit global usings for
          System.Drawing/System.Windows.Forms, which clash with the WPF namespaces
          imported by the code-behind files (Cursors, DragEventArgs, Binding...).
