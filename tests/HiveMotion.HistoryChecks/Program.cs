@@ -16,7 +16,8 @@ internal static class Program
             ("Repeated scans coalesce into bounded background writes", CoalescedWrites),
             ("A mutation after Save is invisible to the in-flight snapshot", SnapshotIsolation),
             ("A failed save leaves the in-memory history intact", FailedSaveKeepsMemory),
-            ("Picker ordering puts existing executables first once the cache refreshes", ExistenceCacheOrdering)
+            ("Picker ordering puts existing executables first once the cache refreshes", ExistenceCacheOrdering),
+            ("Argument normalization caches invalidate on change and match identically", NormalizationCaching)
         };
         try
         {
@@ -115,6 +116,49 @@ internal static class Program
         }
         Assert(ordered[0].ExecutablePath == existing,
             "after the background refresh, the existing executable must sort first");
+    }
+
+    private static void NormalizationCaching()
+    {
+        var app = new ApplicationMotion { ExecutablePath = @"C:\App\Tool.exe", Arguments = "  --mode   fast  " };
+        Assert(app.NormalizedArguments == "--mode fast",
+            $"setter must cache the normalized form, got '{app.NormalizedArguments}'");
+        app.Arguments = "--mode slow";
+        Assert(app.NormalizedArguments == "--mode slow", "changing Arguments must invalidate the cache");
+
+        // The cached path must agree with a fresh normalization for every representative input.
+        string?[] windowArgs = { null, "", "   ", "alpha beta", " alpha   beta ", "alpha beta gamma" };
+        string?[] motionArgs = { "", "   ", "alpha beta", "alpha  beta", "alpha beta gamma", "other" };
+        foreach (string? rawWindow in windowArgs)
+        foreach (string? rawMotion in motionArgs)
+        {
+            var motion = new ApplicationMotion { ExecutablePath = @"C:\App\Tool.exe", Arguments = rawMotion ?? string.Empty };
+            var window = new RunningWindow
+            {
+                ExecutablePath = @"C:\App\Tool.exe",
+                CommandLineArguments = rawWindow,
+                NormalizedArguments = ApplicationMotion.NormalizeArguments(rawWindow)
+            };
+            bool expected = motion.Arguments.Length == 0 ||
+                string.Equals(ApplicationMotion.NormalizeArguments(rawWindow),
+                    ApplicationMotion.NormalizeArguments(rawMotion), StringComparison.OrdinalIgnoreCase);
+            Assert(motion.Matches(window) == expected,
+                $"mismatch for window='{rawWindow}' motion='{rawMotion}': cached={motion.Matches(window)} expected={expected}");
+        }
+
+        // Exe-only identity (empty motion arguments) matches even unreadable window arguments.
+        var exeOnly = new ApplicationMotion { ExecutablePath = @"C:\App\Tool.exe", Arguments = "" };
+        Assert(exeOnly.Matches(new RunningWindow { ExecutablePath = @"C:\App\Tool.exe", CommandLineArguments = null }),
+            "exe-only identity must match unreadable arguments");
+
+        // History keys built from the scanner-cached form stay symmetric with raw-form keys.
+        foreach (string? raw in windowArgs.Concat(new string?[] { "  spaced   out  arg " }))
+        {
+            string fromRaw = HistoryEntry.Key(@"C:\App\Tool.exe", raw);
+            string fromCached = HistoryEntry.KeyFromNormalized(@"C:\App\Tool.exe",
+                ApplicationMotion.NormalizeArguments(raw));
+            Assert(fromRaw == fromCached, $"history key asymmetry for '{raw}'");
+        }
     }
 
     private static RunningWindow[] Windows(params (string Path, string? Args)[] identities) =>

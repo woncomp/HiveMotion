@@ -68,6 +68,7 @@ internal static class IconBinding
         private Action<bool>? _showFallback;
         private ImageSource? _fallback;
         private volatile bool _active;
+        private Window? _window;
 
         public Binding(Image image, IconService icons)
         {
@@ -78,6 +79,11 @@ internal static class IconBinding
             {
                 _active = false;
                 _icons.Changed -= OnChanged;
+                if (_window != null)
+                {
+                    _window.DpiChanged -= OnDpiChanged;
+                    _window = null;
+                }
             };
         }
 
@@ -90,7 +96,7 @@ internal static class IconBinding
             if (_active || _image.IsLoaded)
             {
                 Activate();
-                _icons.Request(request);
+                _icons.Request(request, Pixels);
             }
         }
 
@@ -99,9 +105,34 @@ internal static class IconBinding
             if (_active) return;
             _active = true;
             _icons.Changed += OnChanged;
+            _window ??= Window.GetWindow(_image);
+            if (_window != null)
+                _window.DpiChanged += OnDpiChanged;
             Apply();
-            _icons.Request(_request);
+            _icons.Request(_request, Pixels);
         }
+
+        // Rendered size × monitor DPI, resolved synchronously on the UI thread.
+        // Unmeasured or not-yet-loaded images fall back to the default size so the
+        // first apply is deterministic; the Loaded activation re-resolves at real DPI.
+        private double Pixels
+        {
+            get
+            {
+                double dip = !double.IsNaN(_image.Width) && _image.Width > 0 ? _image.Width
+                    : _image.ActualWidth > 0 ? _image.ActualWidth
+                    : IconService.DefaultPixels;
+                double scale = _image.IsLoaded ? VisualTreeHelper.GetDpi(_image).DpiScaleX : 1.0;
+                return dip * scale;
+            }
+        }
+
+        private void OnDpiChanged(object sender, DpiChangedEventArgs e) =>
+            IconRefreshQueue.Enqueue(_image.Dispatcher, () =>
+            {
+                _icons.Request(Volatile.Read(ref _request), Pixels);
+                Refresh();
+            });
 
         private void OnChanged(string key)
         {
@@ -116,7 +147,7 @@ internal static class IconBinding
 
         private void Apply()
         {
-            var image = _icons.TryGetCached(_request) ?? _fallback;
+            var image = _icons.TryGetCached(_request, Pixels) ?? _fallback;
             if (!ReferenceEquals(_image.Source, image)) _image.Source = image;
             _showFallback?.Invoke(image == null);
         }

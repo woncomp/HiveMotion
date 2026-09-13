@@ -879,7 +879,7 @@ public partial class ManageWindow : Window
             return;
 
         IconBinding.Set(EditorIcon, IconRequest.ForMotion(_selectedApp), fallback:
-            IconService.Shared.TryGetCached(new IconRequest(Glyph: "\uE71D")));
+            IconService.Shared.TryGetCached(new IconRequest(Glyph: "\uE71D"), IconService.DefaultPixels));
         EditorIconClearButton.Visibility = HasCustomIcon(_selectedApp)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1329,7 +1329,7 @@ public partial class ManageWindow : Window
         {
             Width = 22,
             Height = 22,
-            Source = IconService.Shared.TryGetCached(new IconRequest(Glyph: action.IconGlyph)),
+            Source = IconService.Shared.TryGetCached(new IconRequest(Glyph: action.IconGlyph), IconService.DefaultPixels),
             VerticalAlignment = VerticalAlignment.Center
         };
 
@@ -1427,7 +1427,7 @@ public partial class ManageWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
         IconBinding.Set(image, new IconRequest(ExecutablePath: entry.ExecutablePath), fallback:
-            IconService.Shared.TryGetCached(new IconRequest(Glyph: "\uE71D")));
+            IconService.Shared.TryGetCached(new IconRequest(Glyph: "\uE71D"), IconService.DefaultPixels));
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
 
         var texts = new StackPanel { Margin = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };

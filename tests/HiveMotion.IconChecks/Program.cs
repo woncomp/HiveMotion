@@ -30,7 +30,10 @@ internal static class Program
             ("Runtime icons remain usable while custom icons are loading", Selection),
             ("Editor bindings reject stale selection and unloaded-control completions", EditorBinding),
             ("Initially missing icons retry after the validation interval", InitialFailure),
-            ("Custom and default executable icons share loading and invalidation", SharedExecutableResource)
+            ("Custom and default executable icons share loading and invalidation", SharedExecutableResource),
+            ("Size tiers cache the same file per size without duplicate same-tier loads", SizeTiers),
+            ("Invalidation evicts every size tier of a request", TierInvalidation),
+            ("Glyphs stay size-independent and never start file loads", GlyphTiers)
         };
         try
         {
@@ -53,7 +56,7 @@ internal static class Program
         var image = MakeImage(Colors.Red);
         int uiThread = Environment.CurrentManagedThreadId;
         int loaderThread = uiThread;
-        using var service = new IconService(_ =>
+        using var service = new IconService((_, _) =>
         {
             loaderThread = Environment.CurrentManagedThreadId;
             entered.Set(); Wait(release); return image;
@@ -70,9 +73,9 @@ internal static class Program
             Wait(entered);
             Check(loaderThread != uiThread, "Extraction ran on the UI thread.");
             Check(CellImage(grid, 'A').Source == null, "Initial content waited for extraction.");
-            Check(service.TryGetCached(cells[0].IconRequest) == null, "Cache read fabricated a result.");
+            Check(service.TryGetCached(cells[0].IconRequest, 48) == null, "Cache read fabricated a result.");
             release.Set();
-            Pump(() => ReferenceEquals(service.TryGetCached(cells[0].IconRequest), image));
+            Pump(() => ReferenceEquals(service.TryGetCached(cells[0].IconRequest, 48), image));
             Drain();
             Check(CellImage(grid, 'A').Source == null, "Icon applied before presentation was ready.");
             grid.EnableIconUpdates();
@@ -241,7 +244,7 @@ internal static class Program
         using var release = new ManualResetEventSlim();
         using var entered = new ManualResetEventSlim();
         var oldImage = MakeImage(Colors.Red); var currentImage = MakeImage(Colors.Blue);
-        using var service = new IconService(path =>
+        using var service = new IconService((path, _) =>
         {
             if (path.EndsWith("old.png")) { entered.Set(); Wait(release); return oldImage; }
             return currentImage;
@@ -256,7 +259,7 @@ internal static class Program
             grid.SetCells(new[] { latest }); grid.EnableIconUpdates();
             Pump(() => ReferenceEquals(CellImage(grid, 'A').Source, currentImage));
             release.Set();
-            Pump(() => ReferenceEquals(service.TryGetCached(Cell("old.png").IconRequest), oldImage));
+            Pump(() => ReferenceEquals(service.TryGetCached(Cell("old.png").IconRequest, 48), oldImage));
             Drain();
             Check(ReferenceEquals(CellImage(grid, 'A').Source, currentImage), "Old cell overwrote current icon.");
             Check(latest.Icon == null, "Icon callback mutated a cell model.");
@@ -268,7 +271,7 @@ internal static class Program
     {
         using var release = new ManualResetEventSlim();
         var image = MakeImage(Colors.Green);
-        using var service = new IconService(_ => { Wait(release); return image; });
+        using var service = new IconService((_, _) => { Wait(release); return image; });
         var grid = new TaskGridView(service);
         try
         {
@@ -277,12 +280,15 @@ internal static class Program
             var input = (TextBox)grid.FindName("SearchInput"); input.Text = "Alpha";
             var list = (StackPanel)grid.FindName("ResultList"); var row = list.Children[0];
             release.Set();
-            Pump(() => service.TryGetCached(Cell("search.png").IconRequest) != null);
+            Pump(() => service.TryGetCached(Cell("search.png").IconRequest, 48) != null);
             Drain();
             Check(CellImage(grid, 'A').Source == null, "Moving cells accepted an icon update.");
             Pump(() => ReferenceEquals(CellImage(grid, 'A').Source, image));
             Check(grid.Searching && input.Text == "Alpha" && ReferenceEquals(row, list.Children[0]),
                 "Icon completion reset search or rebuilt its controls.");
+            // Rows render at 24 DIP (tier 32 at 96 DPI); wait for that tier before asserting.
+            Pump(() => service.TryGetCached(Cell("search.png").IconRequest, 24) != null);
+            Drain();
             Check(Descendants<Image>(row).Any(i => ReferenceEquals(i.Source, image)), "Search row icon was not updated.");
         }
         finally { release.Set(); grid.ResetForOverlayClose(); }
@@ -298,15 +304,15 @@ internal static class Program
         {
             WritePng(path, 8, 400, Colors.Red);
             var request = new IconRequest(CustomPath: path);
-            service.Request(request); Pump(() => service.TryGetCached(request) != null);
-            var first = (BitmapSource)service.TryGetCached(request)!;
-            Check(first.IsFrozen && first.PixelWidth <= 96 && first.PixelHeight <= 96, "Image dimensions are unbounded.");
+            service.Request(request, 48); Pump(() => service.TryGetCached(request, 48) != null);
+            var first = (BitmapSource)service.TryGetCached(request, 48)!;
+            Check(first.IsFrozen && first.PixelWidth <= 48 && first.PixelHeight <= 48, "Image dimensions are unbounded.");
             WritePng(path, 400, 8, Colors.Blue);
             File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(3));
-            service.Invalidate(request); service.Request(request);
-            Pump(() => !ReferenceEquals(service.TryGetCached(request), first));
-            var second = (BitmapSource)service.TryGetCached(request)!;
-            Check(second.PixelWidth > second.PixelHeight && second.PixelWidth <= 96, "Replacement returned stale content.");
+            service.Invalidate(request); service.Request(request, 48);
+            Pump(() => !ReferenceEquals(service.TryGetCached(request, 48), first));
+            var second = (BitmapSource)service.TryGetCached(request, 48)!;
+            Check(second.PixelWidth > second.PixelHeight && second.PixelWidth <= 48, "Replacement returned stale content.");
         }
         finally
         {
@@ -319,13 +325,13 @@ internal static class Program
     {
         using var release = new ManualResetEventSlim();
         var runtime = MakeImage(Colors.Blue); var custom = MakeImage(Colors.Red);
-        using var service = new IconService(_ => { Wait(release); return custom; });
+        using var service = new IconService((_, _) => { Wait(release); return custom; });
         var request = new IconRequest(CustomPath: "custom.png");
         try
         {
-            Check(ReferenceEquals(service.TryGetCached(request, runtime), runtime), "Available runtime icon was blanked.");
-            service.Request(request); release.Set();
-            Pump(() => ReferenceEquals(service.TryGetCached(request, runtime), custom));
+            Check(ReferenceEquals(service.TryGetCached(request, 48, runtime), runtime), "Available runtime icon was blanked.");
+            service.Request(request, 48); release.Set();
+            Pump(() => ReferenceEquals(service.TryGetCached(request, 48, runtime), custom));
         }
         finally { release.Set(); }
     }
@@ -337,7 +343,7 @@ internal static class Program
         using var oldEntered = new ManualResetEventSlim();
         using var closingEntered = new ManualResetEventSlim();
         var old = MakeImage(Colors.Red); var current = MakeImage(Colors.Blue);
-        using var service = new IconService(path =>
+        using var service = new IconService((path, _) =>
         {
             if (path.EndsWith("old.png")) { oldEntered.Set(); Wait(releaseOld); return old; }
             if (path.EndsWith("closing.png")) { closingEntered.Set(); Wait(releaseClosing); return old; }
@@ -356,14 +362,14 @@ internal static class Program
             Bind("new.png");
             Pump(() => ReferenceEquals(image.Source, current));
             releaseOld.Set();
-            Pump(() => ReferenceEquals(service.TryGetCached(new(CustomPath: "old.png")), old));
+            Pump(() => ReferenceEquals(service.TryGetCached(new(CustomPath: "old.png"), 48), old));
             Drain();
             Check(ReferenceEquals(image.Source, current) && fallback.Visibility == Visibility.Collapsed,
                 "Old editor selection overwrote the selected image.");
             Bind("closing.png"); Wait(closingEntered);
             image.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
             releaseClosing.Set();
-            Pump(() => ReferenceEquals(service.TryGetCached(new(CustomPath: "closing.png")), old));
+            Pump(() => ReferenceEquals(service.TryGetCached(new(CustomPath: "closing.png"), 48), old));
             Drain();
             Check(image.Source == null, "Unloaded control received a resource update.");
             image.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -401,15 +407,79 @@ internal static class Program
     {
         int calls = 0;
         var first = MakeImage(Colors.Red); var second = MakeImage(Colors.Blue);
-        using var service = new IconService(_ => Interlocked.Increment(ref calls) == 1 ? first : second);
+        using var service = new IconService((_, _) => Interlocked.Increment(ref calls) == 1 ? first : second);
         var custom = new IconRequest(CustomPath: "shared.exe");
         var executable = new IconRequest(ExecutablePath: "SHARED.EXE");
-        service.Request(custom); service.Request(executable);
-        Pump(() => ReferenceEquals(service.TryGetCached(executable), first));
-        Check(calls == 1 && ReferenceEquals(service.TryGetCached(custom), first), "Executable resources used separate caches.");
-        service.Invalidate(custom); service.Request(executable);
-        Pump(() => ReferenceEquals(service.TryGetCached(custom), second));
-        Check(calls == 2 && ReferenceEquals(service.TryGetCached(executable), second), "Executable alias retained stale content.");
+        service.Request(custom, 48); service.Request(executable, 48);
+        Pump(() => ReferenceEquals(service.TryGetCached(executable, 48), first));
+        Check(calls == 1 && ReferenceEquals(service.TryGetCached(custom, 48), first), "Executable resources used separate caches.");
+        service.Invalidate(custom); service.Request(executable, 48);
+        Pump(() => ReferenceEquals(service.TryGetCached(custom, 48), second));
+        Check(calls == 2 && ReferenceEquals(service.TryGetCached(executable, 48), second), "Executable alias retained stale content.");
+    }
+
+    private static void SizeTiers()
+    {
+        var calls = new ConcurrentQueue<int>();
+        var byTier = new Dictionary<int, ImageSource>
+        {
+            [32] = MakeImage(Colors.Red), [48] = MakeImage(Colors.Green), [96] = MakeImage(Colors.Blue)
+        };
+        using var service = new IconService((_, pixels) => { calls.Enqueue(pixels); return byTier[pixels]; });
+        var request = new IconRequest(CustomPath: "tiers.png");
+        Check(IconService.Quantize(24) == 32 && IconService.Quantize(48) == 48 &&
+              IconService.Quantize(96) == 96 && IconService.Quantize(400) == 96,
+              "Tier quantization escaped the bounded set.");
+        service.Request(request, 24); // tier 32
+        service.Request(request, 40); // tier 48
+        service.Request(request, 96); // tier 96
+        Pump(() => calls.Count >= 3);
+        Drain();
+        Check(calls.OrderBy(p => p).SequenceEqual(new[] { 32, 48, 96 }), "Loads did not follow the quantized tiers.");
+        Check(ReferenceEquals(service.TryGetCached(request, 24), byTier[32]) &&
+              ReferenceEquals(service.TryGetCached(request, 40), byTier[48]) &&
+              ReferenceEquals(service.TryGetCached(request, 96), byTier[96]),
+              "Tiers did not resolve to their own assets.");
+        // The same file at already-loaded tiers must not start duplicate loads.
+        service.Request(request, 30); service.Request(request, 33); service.Request(request, 96);
+        Drain();
+        Check(calls.Count == 3, "Repeated same-tier requests started duplicate loads.");
+    }
+
+    private static void TierInvalidation()
+    {
+        int calls = 0;
+        using var service = new IconService((_, _) => { Interlocked.Increment(ref calls); return MakeImage(Colors.Red); });
+        var request = new IconRequest(CustomPath: "invalidate-tiers.png");
+        service.Request(request, 24); service.Request(request, 96);
+        Pump(() => Volatile.Read(ref calls) == 2);
+        // A single Invalidate re-requests every tier that has an entry (32 and 96 here).
+        service.Invalidate(request);
+        Pump(() => Volatile.Read(ref calls) == 4);
+        // The never-loaded middle tier has no entry to evict and must load on request.
+        service.Request(request, 40);
+        Pump(() => service.TryGetCached(request, 40) != null);
+        Drain();
+        Check(Volatile.Read(ref calls) == 5, "Unexpected load count after invalidation.");
+        Check(service.TryGetCached(request, 24) != null &&
+              service.TryGetCached(request, 96) != null,
+              "Invalidation left a tier unloaded.");
+    }
+
+    private static void GlyphTiers()
+    {
+        int calls = 0;
+        using var service = new IconService((_, _) => { Interlocked.Increment(ref calls); return MakeImage(Colors.Red); });
+        service.PrepareGlyphs();
+        var request = new IconRequest(Glyph: "\uE71D");
+        var first = service.TryGetCached(request, 24);
+        Check(first != null, "Glyph lookup returned nothing.");
+        Check(ReferenceEquals(service.TryGetCached(request, 24), first) &&
+              ReferenceEquals(service.TryGetCached(request, 96), first),
+              "Glyph result changed with the requested size.");
+        service.Request(request, 96);
+        Drain();
+        Check(calls == 0, "Glyph request started a file load.");
     }
 
     private static HiveCell Cell(string path) => new()

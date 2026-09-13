@@ -67,7 +67,8 @@ public sealed class HistoryStore
                 continue;
 
             string arguments = window.CommandLineArguments ?? string.Empty;
-            string key = HistoryEntry.Key(window.ExecutablePath, arguments);
+            // The scanner pre-normalizes; identity construction stays symmetric with pin matching.
+            string key = HistoryEntry.KeyFromNormalized(window.ExecutablePath, window.NormalizedArguments);
             if (!currentKeys.Add(key))
                 continue; // several windows of one process share the identity
 

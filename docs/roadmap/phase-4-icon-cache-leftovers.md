@@ -1,10 +1,14 @@
 # Phase 4 — Icon Cache Leftovers
 
-Status: Planned
+Status: Complete (2026-09-12; verified with the release build via Computer Use, committed)
 
-## Objective
+## Outcome
 
-Finish the two items deliberately deferred by [Phase 0](phase-0-async-icon-loading.md): caching argument normalization, and DPI-tiered icon cache sizes.
+- **Argument-normalization caching.** `ApplicationMotion` recomputes its normalized argument form only when `Arguments` is written (internal `NormalizedArguments`); `RunningWindow` carries a scanner-computed `NormalizedArguments` (lazy fallback for windows built elsewhere); `Matches`/`SameIdentityAs` consume the cached forms. `HistoryEntry` gains `KeyFromNormalized` and `HistoryStore.RecordScan` builds keys from the scanner-cached form, keeping identity construction symmetric across `ProcessIdentity`/`Matches`/`HistoryStore` (normalization function unchanged; idempotent).
+- **DPI-tiered icon cache.** Cache keys gain a quantized tier suffix (`{32, 48, 96}`); `TryGetCached`/`Request` take a pixel size resolved at the call site (overlay cells 48 DIP, search rows 24, manage tiles/editors from their rendered widths) × `VisualTreeHelper.GetDpi`, gated on `IsLoaded`; scanner/startup callers use `SystemFallbackPixels` (system DPI via `GetDpiForSystem`). The worker extracts shell icons and decodes images at the tier size; `Invalidate` evicts every tier; glyph cache stays size-independent. `IconBinding` re-requests on `DpiChanged`. Phase 0 guarantees hold: no I/O on the synchronous path, fallbacks immediate, progressive fill.
+- New checks: HistoryChecks normalization check (cache invalidation, cross-product parity with uncached matching, exe-only fallback, key symmetry) and IconChecks `SizeTiers`/`TierInvalidation`/`GlyphTiers`. 17 icon + 17 handoff + 5 history + 6 opening checks all pass; Release build is warning-free. On the 96-DPI test machine the overlay uses tier 48 (identical cost to before); cross-monitor crispness on a real multi-DPI setup remains a manual follow-up.
+
+## Original Analysis (kept for the record)
 
 ## Evidence
 

@@ -26,6 +26,10 @@ public sealed class HistoryEntry
 
     /// <summary>Case/whitespace-insensitive identity, shared by history and pin matching.</summary>
     public static string Key(string executablePath, string? arguments) =>
+        KeyFromNormalized(executablePath, ApplicationMotion.NormalizeArguments(arguments));
+
+    /// <summary>Key from an already-normalized argument tail (scanner-cached), skipping a repeat Split/Join.</summary>
+    public static string KeyFromNormalized(string executablePath, string normalizedArguments) =>
         executablePath.ToLowerInvariant() + "\u0001" +
-        ApplicationMotion.NormalizeArguments(arguments).ToLowerInvariant();
+        normalizedArguments.ToLowerInvariant();
 }

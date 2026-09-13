@@ -135,7 +135,9 @@ public partial class App : System.Windows.Application
         {
             var request = IconRequest.ForMotion(motion);
             if (invalidate) IconService.Shared.Invalidate(request);
-            IconService.Shared.Request(request, visible: false);
+            // Prewarm the overlay cell tier (48 DIP at the system DPI); open-time
+            // requests re-derive exact pixels per monitor.
+            IconService.Shared.Request(request, IconService.SystemFallbackPixels, visible: false);
         }
     }
 

@@ -31,9 +31,6 @@ public static class IconHelper
 
     private const int SIIGBF_BIGGERSIZEOK = 0x01;
     private const int SIIGBF_ICONONLY = 0x04;
-    // Match the largest overlay presentation size. Some Shell providers place a
-    // native-size glyph in a larger transparent canvas instead of scaling it.
-    private const int IconSize = 48;
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(string pszPath, IntPtr pbc, ref Guid riid, out IShellItemImageFactory ppv);
@@ -74,21 +71,23 @@ public static class IconHelper
     public static ImageSource? ForExecutable(string executablePath)
     {
         var request = new IconRequest(ExecutablePath: executablePath);
-        var image = IconService.Shared.TryGetCached(request);
-        IconService.Shared.Request(request, visible: false);
+        // The scan thread has no visual; the system DPI is the best synchronous estimate.
+        double pixels = IconService.SystemFallbackPixels;
+        var image = IconService.Shared.TryGetCached(request, pixels);
+        IconService.Shared.Request(request, pixels, visible: false);
         return image;
     }
 
-    /// <summary>Worker-only extraction. Versioning and caching belong to IconService.</summary>
-    internal static ImageSource? LoadFile(string path)
+    /// <summary>Worker-only extraction at the requested pixel size. Versioning and caching belong to IconService.</summary>
+    internal static ImageSource? LoadFile(string path, int pixels)
     {
         if (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true)
             throw new InvalidOperationException("Icon extraction cannot execute on the UI thread.");
         string extension = Path.GetExtension(path).ToLowerInvariant();
         if (extension is not (".exe" or ".dll"))
             return extension is ".png" or ".ico" or ".jpg" or ".jpeg" or ".bmp"
-                ? DecodeImageFile(path) : null;
-        var result = FromShellImageFactory(path);
+                ? DecodeImageFile(path, pixels) : null;
+        var result = FromShellImageFactory(path, pixels);
         if (result != null) return result;
         long start = Stopwatch.GetTimestamp();
         try
@@ -104,11 +103,11 @@ public static class IconHelper
         }
     }
 
-    private static ImageSource? DecodeImageFile(string path)
+    private static ImageSource? DecodeImageFile(string path, int pixels)
     {
         try
         {
-            // Probe dimensions on the worker; constrain the longer axis to 96 pixels.
+            // Probe dimensions on the worker; constrain the longer axis to the tier size.
             using var stream = File.OpenRead(path);
             var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
             var frame = decoder.Frames[0];
@@ -116,8 +115,8 @@ public static class IconHelper
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.UriSource = new Uri(path, UriKind.Absolute);
-            if (landscape) bitmap.DecodePixelWidth = 96;
-            else bitmap.DecodePixelHeight = 96;
+            if (landscape) bitmap.DecodePixelWidth = pixels;
+            else bitmap.DecodePixelHeight = pixels;
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
             bitmap.EndInit();
@@ -149,7 +148,7 @@ public static class IconHelper
             NativeMethods.SMTO_ABORTIFHUNG, 100, out var icon) != IntPtr.Zero ? icon : IntPtr.Zero;
     }
 
-    private static ImageSource? FromShellImageFactory(string path)
+    private static ImageSource? FromShellImageFactory(string path, int pixels)
     {
         long start = Stopwatch.GetTimestamp();
         IShellItemImageFactory? factory = null;
@@ -167,7 +166,9 @@ public static class IconHelper
             if (SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out factory) != 0 || factory == null)
                 return null;
 
-            factory.GetImage(new SIZE { cx = IconSize, cy = IconSize }, SIIGBF_BIGGERSIZEOK | SIIGBF_ICONONLY, out hBitmap);
+            // Request the tier size so Shell providers scale to it instead of placing a
+            // native-size glyph in a larger transparent canvas; bigger sources are fine.
+            factory.GetImage(new SIZE { cx = pixels, cy = pixels }, SIIGBF_BIGGERSIZEOK | SIIGBF_ICONONLY, out hBitmap);
             if (hBitmap == IntPtr.Zero)
                 return null;
 

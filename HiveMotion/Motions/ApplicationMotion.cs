@@ -13,8 +13,19 @@ public sealed class ApplicationMotion : Motion
 {
     public string ProcessName { get; set; } = string.Empty;
     public string ExecutablePath { get; set; } = string.Empty;
+    private string _arguments = string.Empty;
     /// <summary>Argument tail with original quoting; empty means "match any arguments".</summary>
-    public string Arguments { get; set; } = string.Empty;
+    public string Arguments
+    {
+        get => _arguments;
+        set
+        {
+            _arguments = value;
+            NormalizedArguments = NormalizeArguments(value);
+        }
+    }
+    /// <summary>Cached normalized form of <see cref="Arguments"/>; recomputed on every write.</summary>
+    internal string NormalizedArguments { get; private set; } = string.Empty;
     public string WorkingDirectory { get; set; } = string.Empty;
 
     [JsonIgnore]
@@ -34,15 +45,16 @@ public sealed class ApplicationMotion : Motion
             return false;
         if (Arguments.Length == 0)
             return true; // captured without arguments: exe-only identity
+        // The window's normalized form is computed once on the scanner thread.
         return string.Equals(
-            NormalizeArguments(window.CommandLineArguments),
-            NormalizeArguments(Arguments),
+            window.NormalizedArguments,
+            NormalizedArguments,
             StringComparison.OrdinalIgnoreCase);
     }
 
     public bool SameIdentityAs(string executablePath, string arguments) =>
         string.Equals(executablePath, ExecutablePath, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(NormalizeArguments(arguments), NormalizeArguments(Arguments), StringComparison.OrdinalIgnoreCase);
+        string.Equals(NormalizeArguments(arguments), NormalizedArguments, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whitespace-insensitive form so trailing/duplicate spaces never break equality.</summary>
     public static string NormalizeArguments(string? arguments) =>

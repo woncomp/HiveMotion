@@ -127,6 +127,9 @@ public sealed class WindowScanner
                 PreferredLetter = PreferredLetter(appName, processName),
                 ExecutablePath = metadata.ExecutablePath,
                 CommandLineArguments = metadata.Arguments,
+                // Identity keys are built from the normalized form on every open; compute it
+                // once here on the scanner thread instead of re-splitting per comparison.
+                NormalizedArguments = ApplicationMotion.NormalizeArguments(metadata.Arguments),
                 WorkingDirectory = metadata.WorkingDirectory
             });
         }

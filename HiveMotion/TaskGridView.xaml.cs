@@ -148,19 +148,30 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
     private void OnIconChanged(string key) => IconRefreshQueue.Enqueue(Dispatcher, RefreshIcons);
 
-    private ImageSource? ResolveIcon(HiveCell cell) =>
-        _icons.TryGetCached(cell.IconRequest, cell.Icon);
+    // Rendered icon sizes in DIPs; keep in sync with HiveCellView.xaml (AppIcon) and
+    // CreateResultPool (IconImage). Requested pixels are DIP × monitor DPI.
+    private const double CellIconDip = 48;
+    private const double ResultIconDip = 24;
+
+    // Only a loaded view reports the monitor it actually renders on; before that the
+    // default scale keeps reads deterministic without touching presentation state.
+    private double IconScale => IsLoaded ? VisualTreeHelper.GetDpi(this).DpiScaleX : 1.0;
+
+    private ImageSource? ResolveIcon(HiveCell cell, double pixels) =>
+        _icons.TryGetCached(cell.IconRequest, pixels, cell.Icon);
 
     private void RefreshIcons()
     {
         _iconPresentation.Transitioning = _transitionState is SearchTransitionState.Entering or SearchTransitionState.Exiting;
         if (!_iconPresentation.CanApply) return;
+        double cellPixels = CellIconDip * IconScale;
+        double resultPixels = ResultIconDip * IconScale;
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         foreach (var view in _cellViews)
             if (_displayedCells.TryGetValue(view.PoolLetter, out var cell))
-                view.UpdateIcon(ResolveIcon(cell));
+                view.UpdateIcon(ResolveIcon(cell, cellPixels));
         foreach (var visual in _itemVisuals)
-            if (visual.Cell is { } cell) UpdateResultIcon(visual, cell);
+            if (visual.Cell is { } cell) UpdateResultIcon(visual, cell, resultPixels);
         if (Logger.IsVerboseEnabled)
             Logger.Info($"icon-view-update {System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds:F1}ms thread={Environment.CurrentManagedThreadId}");
     }
@@ -274,10 +285,11 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         _resultsVersion = -1;
         _iconPresentation.ReplaceContent();
         _displayedCells.Clear();
+        double cellPixels = CellIconDip * IconScale;
         foreach (var cell in cells)
         {
             _displayedCells[cell.Letter] = cell;
-            _icons.Request(cell.IconRequest);
+            _icons.Request(cell.IconRequest, cellPixels);
         }
         UpdateOverviewEmptyState();
         _hoveredCell = null;
@@ -298,7 +310,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             // existing visuals instead of invalidating text, badges, and icons per cell.
             if (_appliedCells.TryGetValue(letter, out var applied) && SameCellContent(applied, cell))
                 continue;
-            view.SetCell(cell, ResolveIcon(cell));
+            view.SetCell(cell, ResolveIcon(cell, cellPixels));
             _appliedCells[letter] = cell;
             if (view.Visibility != Visibility.Visible)
                 view.Visibility = Visibility.Visible;
@@ -1085,7 +1097,10 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     {
         visual.Cell = cell;
         visual.Root.Visibility = Visibility.Visible;
-        UpdateResultIcon(visual, cell);
+        // Rows render at their own tier; request it when the row model is bound.
+        double pixels = ResultIconDip * IconScale;
+        _icons.Request(cell.IconRequest, pixels);
+        UpdateResultIcon(visual, cell, pixels);
         visual.Title.Text = cell.Title;
         visual.Subtitle.Text = cell.AppName;
 
@@ -1098,9 +1113,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
             : InactiveStatusBrush;
     }
 
-    private void UpdateResultIcon(SearchResultVisual visual, HiveCell cell)
+    private void UpdateResultIcon(SearchResultVisual visual, HiveCell cell, double pixels)
     {
-        var icon = ResolveIcon(cell);
+        var icon = ResolveIcon(cell, pixels);
         if (!ReferenceEquals(visual.IconImage.Source, icon)) visual.IconImage.Source = icon;
         visual.IconImage.Opacity = cell.IsRunning ? 1 : 0.55;
         visual.IconImage.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
