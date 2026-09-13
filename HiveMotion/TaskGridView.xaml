@@ -167,7 +167,7 @@
 
         <!-- Hover window preview: right above the hive area, shared by all apps (topmost);
              content flush with the edges. Pinned cells that are not running show no thumbnail,
-             just the app name and full command line. -->
+             just the app name and full command line. The window title sits below the thumbnail. -->
         <Border x:Name="HoverPreview" HorizontalAlignment="Center" VerticalAlignment="Top"
                 Margin="0,28,0,0"
                 CornerRadius="6" BorderBrush="#59F5B301" BorderThickness="1"
@@ -176,17 +176,23 @@
             <Border.Effect>
                 <DropShadowEffect Color="Black" Opacity="0.55" BlurRadius="30" ShadowDepth="14" />
             </Border.Effect>
-            <Grid>
-                <Border x:Name="HoverPreviewViewport" CornerRadius="5" Background="Transparent" />
-                <StackPanel x:Name="LaunchInfoPanel" Visibility="Collapsed" Margin="20,14" MaxWidth="560">
-                    <TextBlock x:Name="LaunchInfoName" FontSize="15" FontWeight="SemiBold"
-                               Foreground="#F2FFFFFF" />
-                    <TextBlock x:Name="LaunchInfoCommand" FontSize="12" Foreground="#99FFFFFF"
-                               Margin="0,8,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                               MaxHeight="60" />
-                    <TextBlock x:Name="LaunchInfoHint" Text="{l:Loc Cell_ClickToLaunch}" FontSize="10" Foreground="#CCF5C542" Margin="0,10,0,0" />
-                </StackPanel>
-            </Grid>
+            <StackPanel>
+                <Grid>
+                    <Border x:Name="HoverPreviewViewport" CornerRadius="5" Background="Transparent" />
+                    <StackPanel x:Name="LaunchInfoPanel" Visibility="Collapsed" Margin="20,14" MaxWidth="560">
+                        <TextBlock x:Name="LaunchInfoName" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="#F2FFFFFF" />
+                        <TextBlock x:Name="LaunchInfoCommand" FontSize="12" Foreground="#99FFFFFF"
+                                   Margin="0,8,0,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                   MaxHeight="60" />
+                        <TextBlock x:Name="LaunchInfoHint" Text="{l:Loc Cell_ClickToLaunch}" FontSize="10" Foreground="#CCF5C542" Margin="0,10,0,0" />
+                    </StackPanel>
+                </Grid>
+                <!-- Live window title under the thumbnail; MaxWidth is pinned to the viewport width in code -->
+                <TextBlock x:Name="PreviewCaption" Visibility="Collapsed"
+                           HorizontalAlignment="Center" FontSize="12" Foreground="#F2FFFFFF"
+                           TextTrimming="CharacterEllipsis" Margin="0,8,0,9" />
+            </StackPanel>
         </Border>
 
         <!-- Keep hints measured; reveal them only while the overlay can receive keyboard input. -->

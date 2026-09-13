@@ -64,8 +64,9 @@ public partial class HiveCellView : System.Windows.Controls.UserControl
         SetCellCount++;
         KeyText.Text = cell.Letter.ToString();
 
-        // Below the icon: window title when running, app name otherwise
-        CaptionText.Text = cell.IsRunning ? cell.Title : cell.AppName;
+        // Below the icon: the stable program/motion name. The live window title
+        // moves to the hover preview so cell content does not churn with title changes.
+        CaptionText.Text = cell.AppName;
         CaptionText.Foreground = cell.IsRunning ? CaptionRunningBrush : CaptionMotionBrush;
         CaptionText.FontSize = cell.IsRunning ? 11 : 10;
 

@@ -812,6 +812,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
 
         LaunchInfoPanel.Visibility = Visibility.Collapsed;
         HoverPreviewViewport.Visibility = Visibility.Visible;
+        PreviewCaption.Text = string.IsNullOrEmpty(cell.Title) ? cell.AppName : cell.Title;
+        PreviewCaption.Visibility = Visibility.Visible;
 
         var (contentW, contentH) = GetWindowContentSize(cell.WindowHandle);
         if (!_dwmPreview.TryRegister(OverlayHwnd, cell.WindowHandle, out var sourceSize))
@@ -834,6 +836,9 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         double scale = Math.Min(availW / contentW, availH / contentH);
         HoverPreviewViewport.Width = contentW * scale;
         HoverPreviewViewport.Height = contentH * scale;
+        // Keep the title flush with the thumbnail width so long titles trim instead
+        // of widening the border past the viewport.
+        PreviewCaption.MaxWidth = HoverPreviewViewport.Width;
 
         bool wasVisible = _previewVisible;
         _previewVisible = true;
@@ -851,6 +856,7 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
     {
         _dwmPreview.Hide();
         HoverPreviewViewport.Visibility = Visibility.Collapsed;
+        PreviewCaption.Visibility = Visibility.Collapsed;
         LaunchInfoPanel.Visibility = Visibility.Visible;
         LaunchInfoName.Text = info.Title;
         LaunchInfoCommand.Text = info.Detail;
@@ -1169,7 +1175,8 @@ public partial class TaskGridView : System.Windows.Controls.UserControl
         double gridScale = Math.Min(1, Math.Min(w * 0.92 / 1470, h * 0.52 / 460));
         double gridAreaHeight = 460 * gridScale + 28 + 48;
         double topSpace = (h - gridAreaHeight) / 2;
-        _previewMaxH = Math.Clamp(topSpace - 48, 160, 320);
+        // Reserve ~30 DIP for the window-title strip shown under the thumbnail.
+        _previewMaxH = Math.Clamp(topSpace - 48 - 30, 160, 320);
         HoverPreview.MaxWidth = w * 0.45;
     }
 
